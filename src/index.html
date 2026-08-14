@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'; media-src 'self' blob:"
+    />
+    <title>Project Browser</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <!-- ========================= sidebar ========================= -->
+      <aside class="sidebar">
+        <div class="sidebar__brand">
+          <span class="dot" aria-hidden="true"></span>
+          Project Browser
+        </div>
+
+        <nav id="collections" class="collections"></nav>
+
+        <div class="sidebar__foot">
+          <button id="openDedupe" class="side-action">Sample cleanup</button>
+          <button id="openSettings" class="side-action">Settings</button>
+        </div>
+      </aside>
+
+      <!-- ========================== main =========================== -->
+      <main class="main">
+        <header class="topbar">
+          <button id="backBtn" class="round" title="Back" hidden>‹</button>
+          <input
+            id="search"
+            class="search"
+            type="search"
+            placeholder="Search projects, keys, notes"
+          />
+          <div class="topbar__right">
+            <button id="favFilter" class="pill" title="Favourites only">
+              Favourites
+            </button>
+            <button id="rescan" class="pill">Rescan</button>
+            <label class="switch" title="Keep the window above your DAW">
+              <input type="checkbox" id="alwaysOnTop" />
+              <span class="switch__track" aria-hidden="true"></span>
+              On top
+            </label>
+          </div>
+        </header>
+
+        <div id="view" class="view"></div>
+      </main>
+
+      <!-- ======================== transport ======================== -->
+      <footer class="player">
+        <div class="player__meta">
+          <button id="playPause" class="play" aria-label="Play">▶</button>
+          <div class="player__text">
+            <div id="nowPlaying" class="player__title">Nothing loaded</div>
+            <div id="nowTime" class="player__time">0:00 / 0:00</div>
+          </div>
+        </div>
+
+        <canvas id="wave" class="wave" height="88"></canvas>
+
+        <div class="player__right">
+          <input
+            id="volume"
+            class="slider"
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value="0.8"
+            aria-label="Volume"
+          />
+        </div>
+      </footer>
+    </div>
+
+    <!-- ========================= settings ========================= -->
+    <div id="scrim" class="scrim" hidden></div>
+    <aside id="sheet" class="sheet" role="dialog" aria-modal="true" hidden>
+      <div class="sheet__head">
+        <h2>Settings</h2>
+        <button id="closeSettings" class="pill">Close</button>
+      </div>
+
+      <section class="field">
+        <h3>Project folders</h3>
+        <p class="muted">
+          Only these are read. The scan goes as deep as your folders go.
+        </p>
+        <div id="rootList" class="roots"></div>
+        <button id="addRoot" class="pill pill--solid">Add folder</button>
+      </section>
+
+      <section class="field">
+        <h3>Folder names to skip</h3>
+        <p class="muted">Never opened, never listed. Comma separated.</p>
+        <input id="ignoreInput" class="input" type="text" />
+      </section>
+
+      <section class="field">
+        <h3>External and network drives</h3>
+        <p class="muted">
+          Turn on if bounces on a network share go unnoticed. Uses more CPU.
+        </p>
+        <label class="switch">
+          <input type="checkbox" id="pollWatching" />
+          <span class="switch__track" aria-hidden="true"></span>
+          Check the disk repeatedly
+        </label>
+      </section>
+
+      <section class="field">
+        <h3>Shortcuts and linked folders</h3>
+        <p class="muted">
+          A .lnk is an ordinary file and can't loop a scan. What can is a
+          junction or symlink — it looks like a real folder but points
+          elsewhere, sometimes at its own parent. Off skips both.
+        </p>
+        <label class="switch">
+          <input type="checkbox" id="followLinks" />
+          <span class="switch__track" aria-hidden="true"></span>
+          Follow shortcuts and linked folders
+        </label>
+      </section>
+
+      <section class="field">
+        <h3>Output folder</h3>
+        <p class="muted">
+          Where processed audio is written. Created inside your first project
+          folder, and skipped by the scan so its contents never come back as
+          renders.
+        </p>
+        <div id="outputPath" class="mono-box"></div>
+      </section>
+
+      <section class="field">
+        <h3>Where your data is stored</h3>
+        <div id="dataDir" class="mono-box"></div>
+        <button id="openDataDir" class="pill">Show in folder</button>
+      </section>
+    </aside>
+
+    <div id="toasts" class="toasts" aria-live="assertive"></div>
+
+    <script src="dsp.js"></script>
+    <script src="player.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

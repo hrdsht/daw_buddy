@@ -1,0 +1,17 @@
+{
+  "name": "project-browser",
+  "version": "0.1.0",
+  "description": "A local browser for music production sessions (Ableton + FL Studio)",
+  "main": "main.js",
+  "author": "Hrdsht",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron ."
+  },
+  "dependencies": {
+    "chokidar": "^3.6.0"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0"
+  }
+}
