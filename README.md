@@ -1,4 +1,4 @@
-# Project Browser
+# DAW Buddy
 
 A local desktop app that lists your music production project folders, reads the
 BPM straight out of the session file, shows how many backups each project has,
@@ -37,16 +37,16 @@ window to take effect.
 
 ## Part 2 — Get the app running
 
-**1. Put the `project-browser` folder somewhere sensible.** Your Downloads
+**1. Put the `daw-buddy` folder somewhere sensible.** Your Downloads
 folder is fine. Avoid OneDrive-synced folders — the file watcher and OneDrive
 fight over the same files and you get phantom events.
 
 **2. Point the terminal at that folder.** Type `cd ` (with the space), then drag
-the `project-browser` folder from Explorer/Finder onto the terminal window. It
+the `daw-buddy` folder from Explorer/Finder onto the terminal window. It
 pastes the path for you. Press Enter.
 
 ```
-cd C:\Users\hpkal\Downloads\project-browser
+cd C:\Users\hpkal\Downloads\daw-buddy
 ```
 
 **3. Download the app's dependencies.** This reads `package.json` and fetches
@@ -65,9 +65,9 @@ only do this once.
 npm start
 ```
 
-**From then on, just double-click `Project Browser.bat`.** It does all of the
+**From then on, just double-click `DAW Buddy.bat`.** It does all of the
 above for you — checks Node is installed, runs `npm install` if this is a fresh
-copy, and starts the app. On a Mac the equivalent is `Project Browser.command`,
+copy, and starts the app. On a Mac the equivalent is `DAW Buddy.command`,
 which needs `chmod +x` run on it once before macOS will let it launch.
 
 Keep the black window open while you use the app; closing it quits Project
@@ -85,7 +85,7 @@ To quit, close the window. To start it again, `cd` back into the folder and run
 ## Part 3 — What each file does
 
 ```
-project-browser/
+daw-buddy/
 ├── package.json      the shopping list of dependencies + the "npm start" command
 ├── main.js           the Node process. Owns the window and all file access.
 ├── preload.js        the security airlock between the two halves
@@ -199,8 +199,8 @@ real numbers. That's a limitation of how FL works, not a bug here.
 
 Notes and settings are stored in Electron's standard app-data location:
 
-- Windows: `C:\Users\<you>\AppData\Roaming\project-browser\`
-- macOS: `~/Library/Application Support/project-browser/`
+- Windows: `C:\Users\<you>\AppData\Roaming\daw-buddy\`
+- macOS: `~/Library/Application Support/daw-buddy/`
 
 You'll find `notes.json` and `settings.json` there. Both are plain text — open
 them in Notepad any time. Back up `notes.json` if the notes start mattering.

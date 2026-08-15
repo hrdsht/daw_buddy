@@ -435,6 +435,28 @@ body.is-mac .topbar {
   background: var(--raised);
 }
 
+/* A version inside an expanded group: indented, quieter, still fully usable. */
+.row--version {
+  height: 48px;
+  margin-left: 22px;
+  border-left: 1px solid var(--line);
+  padding-left: 16px;
+}
+
+.row--version .row__name {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.row--version:hover .row__name {
+  color: var(--text);
+}
+
+.row--version .row__sub {
+  font-size: 11px;
+}
+
 .row__main {
   min-width: 0;
 }
@@ -699,6 +721,22 @@ body.is-mac .topbar {
   color: var(--amber-ink);
 }
 
+.projectfile__icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  background: var(--raised);
+  color: var(--amber);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .filerow__name {
   font-size: 13.5px;
   font-weight: 500;
@@ -877,7 +915,7 @@ body.is-mac .topbar {
 .player {
   grid-area: player;
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr) 130px;
+  grid-template-columns: 280px minmax(0, 1fr) 280px;
   align-items: center;
   gap: 20px;
   padding: 0 20px;
@@ -937,7 +975,38 @@ body.is-mac .topbar {
 
 .player__right {
   display: flex;
+  align-items: center;
+  gap: 7px;
   justify-content: flex-end;
+}
+
+/* Audition toggles: small, quiet, and obviously off until they aren't. */
+.chip-btn {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--dim);
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.chip-btn:hover {
+  color: var(--muted);
+  border-color: var(--muted);
+}
+
+.chip-btn.is-on {
+  background: var(--amber);
+  border-color: var(--amber);
+  color: var(--amber-ink);
+}
+
+.chip-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 .slider {

@@ -11,6 +11,12 @@
 
 const { contextBridge, ipcRenderer } = require('electron');
 
+function subscribe(channel, callback) {
+  const listener = (event, data) => callback(data);
+  ipcRenderer.on(channel, listener);
+  return () => ipcRenderer.removeListener(channel, listener);
+}
+
 contextBridge.exposeInMainWorld('api', {
   getSettings: () => ipcRenderer.invoke('settings:get'),
   updateSettings: (patch) => ipcRenderer.invoke('settings:update', patch),
@@ -54,13 +60,21 @@ contextBridge.exposeInMainWorld('api', {
   renameApply: (planned) => ipcRenderer.invoke('tools:renameApply', planned),
   renameUndo: () => ipcRenderer.invoke('tools:renameUndo'),
 
+  qcScan: (folder, options) => ipcRenderer.invoke('qc:scan', folder, options),
+  onQcProgress: (callback) => subscribe('qc:progress', callback),
+  deepAudio: (folder) => ipcRenderer.invoke('audio:deep', folder),
+
+  silenceList: (folder) => ipcRenderer.invoke('silence:list', folder),
+  silenceAnalyse: (paths, options) =>
+    ipcRenderer.invoke('silence:analyse', paths, options),
+  silenceProcess: (paths, options) =>
+    ipcRenderer.invoke('silence:process', paths, options),
+  onSilenceProgress: (callback) => subscribe('silence:progress', callback),
+
   dedupeScan: () => ipcRenderer.invoke('dedupe:scan'),
   dedupeLink: (groups) => ipcRenderer.invoke('dedupe:link', groups),
 
-  onBounce: (callback) =>
-    ipcRenderer.on('bounce:detected', (event, bounce) => callback(bounce)),
-  onDedupeProgress: (callback) =>
-    ipcRenderer.on('dedupe:progress', (event, data) => callback(data)),
-  onNoteRenamed: (callback) =>
-    ipcRenderer.on('note:renamed', (event, data) => callback(data))
+  onBounce: (callback) => subscribe('bounce:detected', callback),
+  onDedupeProgress: (callback) => subscribe('dedupe:progress', callback),
+  onNoteRenamed: (callback) => subscribe('note:renamed', callback)
 });

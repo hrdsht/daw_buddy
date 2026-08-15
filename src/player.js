@@ -24,16 +24,183 @@ const Player = (() => {
   const volumeEl = document.getElementById('volume');
 
   let audioContext = null;
+  let sourceNode = null;
+  let dryGain = null;
+  let wetGain = null;
+  let convolver = null;
+  let shaper = null;
+  let droneOsc = null;
+  let droneGain = null;
+  let chainBuilt = false;
   let peaks = null;
   let current = null; // { path, name }
   let decoded = null; // AudioBuffer
   let listeners = [];
+  let loadSerial = 0;
 
   audio.volume = Number(volumeEl.value);
+
+  /* ------------------------- audition chain ---------------------- */
+
+  /**
+   * Playback runs through an optional reverb and soft clipper, and a separate
+   * oscillator can hold the root note underneath.
+   *
+   *   <audio> -> shaper -> dry ----+
+   *                    \-> convolver -> wet -+-> out
+   *   oscillator -> droneGain --------------/
+   *
+   * Built once, on first use. Creating an AudioContext before the user has
+   * interacted with the page gets it suspended by the browser.
+   */
+  function buildChain() {
+    if (!audioContext) audioContext = new AudioContext();
+    // Browsers start a context suspended until the user has interacted.
+    if (audioContext.state === 'suspended') audioContext.resume();
+    if (chainBuilt) return;
+
+    sourceNode = audioContext.createMediaElementSource(audio);
+
+    shaper = audioContext.createWaveShaper();
+    shaper.curve = null; // null = pass through untouched
+
+    convolver = audioContext.createConvolver();
+    convolver.buffer = makeImpulse(1.8, 2.2);
+
+    dryGain = audioContext.createGain();
+    wetGain = audioContext.createGain();
+    dryGain.gain.value = 1;
+    wetGain.gain.value = 0;
+
+    droneGain = audioContext.createGain();
+    droneGain.gain.value = 0;
+
+    sourceNode.connect(shaper);
+    shaper.connect(dryGain);
+    shaper.connect(convolver);
+    convolver.connect(wetGain);
+
+    dryGain.connect(audioContext.destination);
+    wetGain.connect(audioContext.destination);
+    droneGain.connect(audioContext.destination);
+
+    chainBuilt = true;
+  }
+
+  /**
+   * A reverb impulse, generated rather than loaded.
+   *
+   * Noise decaying exponentially is a crude but convincing tail — it's what a
+   * real impulse response mostly is once you strip the room's character out.
+   * Shipping an actual IR file would sound better and cost a few hundred KB;
+   * this is for auditioning a dry sample, not for mixing.
+   */
+  function makeImpulse(seconds, decay) {
+    const rate = audioContext.sampleRate;
+    const length = Math.floor(rate * seconds);
+    const impulse = audioContext.createBuffer(2, length, rate);
+
+    for (let channel = 0; channel < 2; channel += 1) {
+      const data = impulse.getChannelData(channel);
+      for (let i = 0; i < length; i += 1) {
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+      }
+    }
+    return impulse;
+  }
+
+  /**
+   * Soft clipping via tanh. Hard clipping squares off the peaks and sounds
+   * like damage; tanh bends them, which is what a saturator does.
+   */
+  function makeClipCurve(amount) {
+    const samples = 8192;
+    const curve = new Float32Array(samples);
+    const drive = 1 + amount * 12;
+
+    for (let i = 0; i < samples; i += 1) {
+      const x = (i * 2) / samples - 1;
+      curve[i] = Math.tanh(x * drive) / Math.tanh(drive);
+    }
+    return curve;
+  }
+
+  function setReverb(mix) {
+    buildChain();
+    wetGain.gain.value = mix;
+    dryGain.gain.value = 1 - mix * 0.4; // reverb adds, doesn't replace
+  }
+
+  function setSoftClip(amount) {
+    buildChain();
+    shaper.curve = amount > 0 ? makeClipCurve(amount) : null;
+  }
+
+  /**
+   * Holds the root note underneath whatever's playing, so a sample can be
+   * heard in musical context. Two detuned saws and a sub, which reads as a
+   * pad rather than a test tone.
+   */
+  const NOTE_OFFSETS = {
+    C: 0, 'C#': 1, D: 2, 'D#': 3, E: 4, F: 5,
+    'F#': 6, G: 7, 'G#': 8, A: 9, 'A#': 10, B: 11
+  };
+
+  function noteToFrequency(note, octave = 3) {
+    const semitone = NOTE_OFFSETS[note];
+    if (semitone === undefined) return null;
+    // A4 = 440Hz is MIDI 69; MIDI 12 is C0.
+    const midi = 12 * (octave + 1) + semitone;
+    return 440 * Math.pow(2, (midi - 69) / 12);
+  }
+
+  function startDrone(note, level = 0.12) {
+    buildChain();
+    stopDrone();
+
+    const frequency = noteToFrequency(note);
+    if (!frequency) return false;
+
+    droneOsc = [];
+    [0, -6, 12].forEach((cents, index) => {
+      const osc = audioContext.createOscillator();
+      osc.type = index === 2 ? 'sine' : 'sawtooth';
+      osc.frequency.value = index === 2 ? frequency / 2 : frequency;
+      osc.detune.value = cents;
+
+      const filter = audioContext.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 900;
+
+      osc.connect(filter);
+      filter.connect(droneGain);
+      osc.start();
+      droneOsc.push(osc);
+    });
+
+    // Fade in — an oscillator starting at full level clicks.
+    droneGain.gain.setValueAtTime(0, audioContext.currentTime);
+    droneGain.gain.linearRampToValueAtTime(level, audioContext.currentTime + 0.15);
+    return true;
+  }
+
+  function stopDrone() {
+    if (!droneOsc) return;
+    try {
+      droneGain.gain.cancelScheduledValues(audioContext.currentTime);
+      droneGain.gain.setValueAtTime(droneGain.gain.value, audioContext.currentTime);
+      droneGain.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.1);
+      droneOsc.forEach((osc) => osc.stop(audioContext.currentTime + 0.15));
+    } catch {
+      /* already stopped */
+    }
+    droneOsc = null;
+  }
 
   /* --------------------------- loading --------------------------- */
 
   async function load(file, { autoplay = true } = {}) {
+    const serial = ++loadSerial;
     current = { path: file.path, name: file.name };
     titleEl.textContent = file.name;
     timeEl.textContent = 'Loading…';
@@ -46,9 +213,10 @@ const Player = (() => {
     try {
       bytes = await window.api.readMedia(file.path);
     } catch (err) {
-      timeEl.textContent = 'Could not read file';
+      if (serial === loadSerial) timeEl.textContent = 'Could not read file';
       return null;
     }
+    if (serial !== loadSerial) return null;
 
     // One copy for the audio element, one for decoding — decodeAudioData
     // takes ownership of the buffer it's given and leaves it empty.
@@ -60,13 +228,16 @@ const Player = (() => {
 
     try {
       if (!audioContext) audioContext = new AudioContext();
-      decoded = await audioContext.decodeAudioData(bytes);
-      peaks = buildPeaks(decoded, 900);
+      const nextDecoded = await audioContext.decodeAudioData(bytes);
+      if (serial !== loadSerial) return null;
+      decoded = nextDecoded;
+      peaks = buildPeaks(nextDecoded, 900);
       draw();
     } catch (err) {
-      timeEl.textContent = 'Cannot decode this format';
+      if (serial === loadSerial) timeEl.textContent = 'Cannot decode this format';
     }
 
+    if (serial !== loadSerial) return null;
     if (autoplay) play();
     emit();
     return decoded;
@@ -216,6 +387,7 @@ const Player = (() => {
   /* -------------------------- transport -------------------------- */
 
   function play() {
+    if (audioContext && audioContext.state === 'suspended') audioContext.resume();
     audio.play().catch(() => {
       /* a load was cancelled by another load — harmless */
     });
@@ -286,6 +458,11 @@ const Player = (() => {
   return {
     load,
     toggle,
+    setReverb,
+    setSoftClip,
+    startDrone,
+    stopDrone,
+    isDroning: () => Boolean(droneOsc),
     getDecoded: () => decoded,
     getCurrent: () => current,
     onChange: (fn) => listeners.push(fn)

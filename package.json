@@ -1,12 +1,13 @@
 {
-  "name": "project-browser",
+  "name": "daw-buddy",
   "version": "0.1.0",
-  "description": "A local browser for music production sessions (Ableton + FL Studio)",
+  "description": "Browse, analyse and tidy your music production sessions",
   "main": "main.js",
   "author": "Hrdsht",
   "license": "MIT",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "test": "node test/regression.js"
   },
   "dependencies": {
     "chokidar": "^3.6.0"

@@ -1,4 +1,4 @@
-# Handover
+# DAW Buddy — handover
 
 You've been handed a working Electron app that someone else built, with a
 substantial list of known bugs and planned features. This document is the

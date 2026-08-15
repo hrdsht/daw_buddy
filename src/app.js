@@ -24,17 +24,25 @@ const scrimEl = $('scrim');
 let settings = null;
 let records = {};
 let entries = [];
+let groupedRows = [];
+let groupVersionsOn = true;
+let expanded = new Set();
 let browsing = null;
 let view = 'list';
 let openProject = null;
 let projectTab = 'renders';
 let selected = null;
 let filterRoot = null;
+let filterDaw = null;
 let favOnly = false;
 let sortBy = 'modified';
 let sortDir = -1;
-let noteTimer = null;
+const noteTimers = new Map();
 let dedupeState = { groups: [], scanned: 0, folders: 0, chosen: new Set() };
+let silenceProgressStatus = null;
+let qcProgressStatus = null;
+let dedupeProgressStatus = null;
+let activeNoteEditor = null;
 
 /* ============================= startup ============================= */
 
@@ -66,6 +74,7 @@ async function refresh() {
     : await window.api.scan();
 
   entries = result.entries || [];
+  groupedRows = result.grouped || [];
 
   // How many sessions share each folder, so a row can show "8 in folder".
   const perFolder = new Map();
@@ -118,6 +127,11 @@ function goProject(entry) {
   view = 'project';
   openProject = entry;
   projectTab = 'renders';
+  renameFolder = entry.folder;
+  silenceFolder = entry.folder;
+  silenceResults = [];
+  silenceChosen = new Set();
+  qcFolder = entry.folder;
   viewEl.scrollTop = 0;
   render();
 }
@@ -142,7 +156,8 @@ backBtn.addEventListener('click', () => {
 function renderCollections() {
   collectionsEl.innerHTML = '';
 
-  const all = collButton('All projects', entries.length);
+  const shown = groupVersionsOn && groupedRows.length ? groupedRows.length : entries.length;
+  const all = collButton('All projects', shown);
   if (!filterRoot && !favOnly) all.classList.add('is-on');
   all.addEventListener('click', () => {
     filterRoot = null;
@@ -163,6 +178,23 @@ function renderCollections() {
   });
   collectionsEl.append(favs);
 
+  // Grouping toggle. The raw file count stays visible next to it, so the
+  // number never looks like projects went missing.
+  const groupRow = el('button', 'coll');
+  groupRow.append(
+    el('span', 'coll__name', groupVersionsOn ? 'Grouping versions' : 'Every file')
+  );
+  groupRow.append(el('span', 'coll__count', `${entries.length} files`));
+  if (groupVersionsOn) groupRow.classList.add('is-on');
+  groupRow.addEventListener('click', () => {
+    groupVersionsOn = !groupVersionsOn;
+    expanded = new Set();
+    view = 'list';
+    render();
+    renderCollections();
+  });
+  collectionsEl.append(groupRow);
+
   if (settings.roots.length > 0) {
     collectionsEl.append(el('div', 'coll__label', 'Folders'));
     settings.roots.forEach((root) => {
@@ -178,6 +210,30 @@ function renderCollections() {
       collectionsEl.append(item);
     });
   }
+
+  // DAWs actually present. Never list one with zero projects.
+  const daws = new Map();
+  entries.forEach((entry) => {
+    if (!entry.daw) return;
+    daws.set(entry.daw, (daws.get(entry.daw) || 0) + 1);
+  });
+
+  if (daws.size > 1) {
+    collectionsEl.append(el('div', 'coll__label', 'DAWs'));
+    [...daws.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .forEach(([daw, count]) => {
+        const item = collButton(daw, count);
+        if (filterDaw === daw) item.classList.add('is-on');
+        item.addEventListener('click', () => {
+          filterDaw = filterDaw === daw ? null : daw;
+          view = 'list';
+          render();
+          renderCollections();
+        });
+        collectionsEl.append(item);
+      });
+  }
 }
 
 function collButton(name, count) {
@@ -191,14 +247,20 @@ function collButton(name, count) {
 
 function visible() {
   const query = searchEl.value.trim().toLowerCase();
+  const source = groupVersionsOn && groupedRows.length ? groupedRows : entries;
 
-  let list = entries.filter((entry) => {
+  let list = source.filter((entry) => {
     if (filterRoot && entry.root !== filterRoot) return false;
+    if (filterDaw && entry.daw !== filterDaw) return false;
     if (favOnly && !record(entry.path).favourite) return false;
     if (!query) return true;
 
     const rec = record(entry.path);
-    return [entry.name, entry.location, entry.daw, rec.note, rec.key, rec.camelot, entry.bpm]
+    const names = entry.versions
+      ? entry.versions.map((v) => v.name).join(' ')
+      : entry.name;
+
+    return [names, entry.location, entry.daw, rec.note, rec.key, rec.camelot, entry.bpm]
       .filter(Boolean)
       .join(' ')
       .toLowerCase()
@@ -271,7 +333,13 @@ function renderList() {
     );
   }
 
-  list.forEach((entry) => viewEl.append(buildRow(entry)));
+  list.forEach((entry) => {
+    viewEl.append(buildRow(entry));
+
+    if (entry.isGroup && expanded.has(entry.path)) {
+      entry.versions.forEach((version) => viewEl.append(buildVersionRow(version)));
+    }
+  });
 }
 
 function buildRow(entry) {
@@ -290,15 +358,23 @@ function buildRow(entry) {
     badge.title = 'A zip of the same name sits alongside — exported as a loop package';
     line.append(badge);
   }
-  if (entry.siblingCount > 1) {
-    const mates = el('button', 'badge badge--inside', `${entry.siblingCount} in folder`);
-    mates.title = 'Other sessions in the same folder';
-    mates.addEventListener('click', (event) => {
+  if (entry.isGroup && entry.versionCount > 1) {
+    const open = expanded.has(entry.path);
+    const badge = el(
+      'button',
+      'badge badge--inside',
+      `${open ? '▾' : '▸'} ${entry.versionCount} versions`
+    );
+    badge.title = 'Every version of this in the same folder';
+    badge.addEventListener('click', (event) => {
       event.stopPropagation();
-      searchEl.value = entry.location.split(' / ').pop() || '';
+      if (open) expanded.delete(entry.path);
+      else expanded.add(entry.path);
       render();
     });
-    line.append(mates);
+    line.append(badge);
+  } else if (!entry.isGroup && entry.siblingCount > 1 && !groupVersionsOn) {
+    line.append(el('span', 'badge', `${entry.siblingCount} in folder`));
   }
   main.append(line);
   main.append(
@@ -356,7 +432,9 @@ function buildRow(entry) {
     selected = entry.path;
     render();
   });
-  row.addEventListener('dblclick', () => goProject(entry));
+  row.addEventListener('dblclick', () =>
+    goProject(entry.isGroup ? entry.versions[0] : entry)
+  );
   row.title = entry.sessionPath;
   return row;
 }
@@ -419,13 +497,13 @@ function renderProjectPage() {
   const actions = el('div', 'page__actions');
 
   const open = el('button', 'pill pill--solid', 'Open project');
-  open.disabled = !entry.projectFile;
+  open.disabled = !entry.sessionPath;
   open.addEventListener('click', () => openWithGuard(entry));
   actions.append(open);
 
   const reveal = el('button', 'pill', `Show in ${settings.fileManager}`);
   reveal.addEventListener('click', () =>
-    window.api.reveal(entry.projectFile || entry.path)
+    window.api.reveal(entry.sessionPath)
   );
   actions.append(reveal);
 
@@ -467,9 +545,13 @@ function renderProjectPage() {
   const tabs = el('div', 'tabs');
   tabs.style.padding = '0 12px 18px';
   [
+    ['projectfiles', 'Project files'],
     ['renders', 'Renders'],
     ['notes', 'Notes & versions'],
     ['rename', 'Rename files'],
+    ['silence', 'Remove silence'],
+    ['qc', 'Check audio'],
+    ['allaudio', 'All audio'],
     ['tags', 'Strip ID3 tags']
   ].forEach(([key, label]) => {
     const tab = el('button', 'pill', label);
@@ -482,9 +564,13 @@ function renderProjectPage() {
   });
   viewEl.append(tabs);
 
+  if (projectTab === 'projectfiles') return renderProjectFilesTab(entry);
   if (projectTab === 'renders') return renderRendersTab(entry);
   if (projectTab === 'notes') return renderNotesTab(entry);
   if (projectTab === 'rename') return renderRenameTab(entry);
+  if (projectTab === 'silence') return renderSilenceTab(entry);
+  if (projectTab === 'qc') return renderQcTab(entry);
+  if (projectTab === 'allaudio') return renderAllAudioTab(entry);
   return renderTagsTab(entry);
 }
 
@@ -496,9 +582,87 @@ function fact(label, value) {
 }
 
 async function openWithGuard(entry) {
-  const result = await window.api.openProject(entry.projectFile, entry.name);
+  const result = await window.api.openProject(entry.sessionPath, entry.name);
   if (result.cancelled) return;
   if (result.error) toast('Could not open', result.error, true);
+}
+
+/* --------------------------- project files ------------------------ */
+
+function renderProjectFilesTab(entry) {
+  const section = el('div', 'section');
+  section.append(headRow('Project files', basename(entry.folder)));
+  section.append(
+    el(
+      'div',
+      'callout',
+      'Every DAW project file in this folder. Open the programmed version when you need to change the arrangement, or the bounced version when you need to render stems.'
+    )
+  );
+
+  const files = entries
+    .filter((candidate) => candidate.folder === entry.folder)
+    .slice()
+    .sort((a, b) => b.modified - a.modified);
+
+  if (files.length === 0) {
+    section.append(el('p', 'muted', 'No project files found in this folder.'));
+    viewEl.append(section);
+    return;
+  }
+
+  files.forEach((file) => {
+    const row = el('div', 'filerow');
+    row.append(
+      el('div', 'projectfile__icon', file.ext.replace('.', '').toUpperCase())
+    );
+
+    const middle = el('div');
+    middle.append(el('div', 'filerow__name', basename(file.sessionPath)));
+    middle.append(
+      el(
+        'div',
+        'filerow__meta',
+        [
+          file.daw,
+          file.bpm !== null ? `${formatBpm(file.bpm)} BPM` : null,
+          `${file.backupCount} save${file.backupCount === 1 ? '' : 's'}`,
+          timeAgo(file.modified),
+          formatBytes(file.size)
+        ]
+          .filter(Boolean)
+          .join('  ·  ')
+      )
+    );
+    row.append(middle);
+
+    row.append(
+      file.sessionPath === entry.sessionPath
+        ? el('span', 'badge badge--packaged', 'Viewing')
+        : el('span')
+    );
+
+    const actions = el('div', 'tabs');
+    const reveal = el('button', 'pill pill--sm', `Show in ${settings.fileManager}`);
+    reveal.addEventListener('click', (event) => {
+      event.stopPropagation();
+      window.api.reveal(file.sessionPath);
+    });
+
+    const open = el('button', 'pill pill--solid pill--sm', 'Open');
+    open.addEventListener('click', async (event) => {
+      event.stopPropagation();
+      await openWithGuard(file);
+    });
+    actions.append(reveal, open);
+    row.append(actions);
+
+    row.title = file.sessionPath;
+    row.addEventListener('dblclick', () => openWithGuard(file));
+    section.append(row);
+  });
+
+  viewEl.append(section);
 }
 
 /* ------------------------------ renders --------------------------- */
@@ -659,19 +823,25 @@ function renderNotesTab(entry) {
   const area = el('textarea', 'notes');
   area.placeholder = 'Mix notes, references, what to fix next time…';
   const status = el('div', 'notestatus', 'Loading…');
+  activeNoteEditor = { sessionPath: entry.sessionPath, area };
 
+  let dirty = false;
   window.api.loadNote(entry.sessionPath).then(({ text, file }) => {
-    area.value = text || '';
+    if (!dirty) area.value = text || '';
     status.textContent = file ? basename(file) : 'No note file yet';
   });
 
   area.addEventListener('input', () => {
+    dirty = true;
     status.textContent = 'Typing…';
-    if (noteTimer) clearTimeout(noteTimer);
-    noteTimer = setTimeout(async () => {
+    const prior = noteTimers.get(entry.sessionPath);
+    if (prior) clearTimeout(prior);
+    const timer = setTimeout(async () => {
+      noteTimers.delete(entry.sessionPath);
       const { file } = await window.api.saveNote(entry.sessionPath, area.value);
       status.textContent = file ? `Saved · ${basename(file)}` : 'Note cleared';
     }, 500);
+    noteTimers.set(entry.sessionPath, timer);
   });
 
   section.append(area, status);
@@ -709,6 +879,7 @@ function renderNotesTab(entry) {
 /* ------------------------------ rename ---------------------------- */
 
 let renameFolder = null;
+let renameMode = 'simple';
 
 function renderRenameTab(entry) {
   if (!renameFolder) renameFolder = entry.folder;
@@ -743,6 +914,31 @@ function renderRenameTab(entry) {
   section.append(folderBar);
 
   /* controls */
+  /* mode: simple or template */
+  const modeRow = el('div', 'tabs');
+  modeRow.style.marginBottom = '12px';
+  const simpleBtn = el(
+    'button',
+    `pill${renameMode === 'simple' ? ' is-on' : ''}`,
+    'Remove & add'
+  );
+  const templateBtn = el(
+    'button',
+    `pill${renameMode === 'template' ? ' is-on' : ''}`,
+    'Template'
+  );
+  modeRow.append(simpleBtn, templateBtn);
+  section.append(modeRow);
+
+  simpleBtn.addEventListener('click', () => {
+    renameMode = 'simple';
+    render();
+  });
+  templateBtn.addEventListener('click', () => {
+    renameMode = 'template';
+    render();
+  });
+
   const controls = el('div', 'grid2');
 
   const removeField = fieldInput('Remove this text');
@@ -776,6 +972,36 @@ function renderRenameTab(entry) {
   where.append(choice);
   section.append(where);
 
+  /* template mode controls */
+  const templateWrap = el('div');
+  const templateField = fieldInput('Template');
+  templateField.input.placeholder = '{project}_{name}_{n:02}';
+  templateField.input.value = '{project}_{name}_{n:02}';
+  templateWrap.append(templateField.wrap);
+
+  const tokens = el('div', 'callout');
+  tokens.append(el('div', 'page__kicker', 'Tokens'));
+  const tokenList = el('div', 'mono');
+  tokenList.style.cssText = 'font-size:11.5px;line-height:1.9;margin-top:6px';
+  [
+    ['{name}', 'the existing filename'],
+    ['{project}', entry.name],
+    ['{parent}', basename(renameFolder)],
+    ['{bpm}', entry.bpm !== null ? String(entry.bpm) : 'not read for this project'],
+    ['{key}', record(entry.path).camelot || 'analyse a render first'],
+    ['{date}', new Date().toISOString().slice(0, 10)],
+    ['{n}, {n:02}', 'a counter, optionally padded']
+  ].forEach(([token, meaning]) => {
+    const line = el('div');
+    line.append(el('span', null, token.padEnd(14)));
+    line.append(el('span', 'muted', ` ${meaning}`));
+    tokenList.append(line);
+  });
+  tokens.append(tokenList);
+  templateWrap.append(tokens);
+
+  if (renameMode === 'template') section.append(templateWrap);
+
   const summary = el('p', 'muted');
   const preview = el('div', 'preview');
   section.append(summary, preview);
@@ -805,12 +1031,25 @@ function renderRenameTab(entry) {
       return;
     }
 
-    plan = await window.api.renamePlan(files, {
-      operation: 'removeAndAdd',
-      remove: removeField.input.value,
-      add: addField.input.value,
-      position
-    });
+    plan = await window.api.renamePlan(
+      files,
+      renameMode === 'template'
+        ? {
+            operation: 'applyTemplate',
+            template: templateField.input.value,
+            projectName: entry.name,
+            parentFolder: basename(renameFolder),
+            bpm: entry.bpm,
+            key: record(entry.path).camelot || record(entry.path).key,
+            startAt: 1
+          }
+        : {
+            operation: 'removeAndAdd',
+            remove: removeField.input.value,
+            add: addField.input.value,
+            position
+          }
+    );
 
     preview.innerHTML = '';
     summary.textContent = `${plan.changing} of ${files.length} files would change${
@@ -836,9 +1075,13 @@ function renderRenameTab(entry) {
     applyBtn.disabled = plan.changing === 0;
   }
 
-  [removeField, addField].forEach((f) =>
+  [removeField, addField, templateField].forEach((f) =>
     f.input.addEventListener('input', () => build())
   );
+
+  // Hide whichever set of controls the current mode doesn't use.
+  controls.hidden = renameMode === 'template';
+  where.hidden = renameMode === 'template';
 
   applyBtn.addEventListener('click', async () => {
     if (!plan) return;
@@ -867,6 +1110,445 @@ function fieldInput(label) {
   input.type = 'text';
   wrap.append(input);
   return { wrap, input };
+}
+
+/* ----------------------------- silence ---------------------------- */
+
+let silenceFolder = null;
+let silenceResults = [];
+let silenceChosen = new Set();
+
+function renderSilenceTab(entry) {
+  if (!silenceFolder) silenceFolder = entry.folder;
+
+  const section = el('div', 'section');
+  section.append(headRow('Remove silence'));
+  section.append(
+    el(
+      'div',
+      'callout callout--warn',
+      'Trims trailing silence from WAV files. Your originals are never touched — trimmed copies are written to the output folder. Analyse first to see exactly what would be cut.'
+    )
+  );
+
+  /* folder */
+  const folderBar = el('div', 'callout');
+  folderBar.append(el('div', 'page__kicker', 'Reading WAVs from'));
+  const folderPath = el('div', 'mono', silenceFolder);
+  folderPath.style.cssText = 'margin:6px 0 10px;word-break:break-all';
+  folderBar.append(folderPath);
+
+  const bar = el('div', 'tabs');
+  const pick = el('button', 'pill pill--sm', 'Choose a different folder');
+  pick.addEventListener('click', async () => {
+    const chosen = await window.api.pickFolder();
+    if (chosen) {
+      silenceFolder = chosen;
+      silenceResults = [];
+      silenceChosen = new Set();
+      render();
+    }
+  });
+  const useProject = el('button', 'pill pill--sm', "This project's folder");
+  useProject.addEventListener('click', () => {
+    silenceFolder = entry.folder;
+    silenceResults = [];
+    silenceChosen = new Set();
+    render();
+  });
+  bar.append(pick, useProject);
+  folderBar.append(bar);
+  section.append(folderBar);
+
+  /* settings */
+  const controls = el('div', 'grid2');
+
+  const detectWrap = el('div', 'fieldrow');
+  detectWrap.append(el('label', null, 'Detection'));
+  const detectRow = el('div', 'tabs');
+  let detection = 'RMS';
+  const rmsBtn = el('button', 'pill is-on', 'RMS');
+  rmsBtn.title = 'Averages over a window. Ignores isolated clicks.';
+  const peakBtn = el('button', 'pill', 'Peak');
+  peakBtn.title = 'A single sample above the floor counts as audio.';
+  rmsBtn.addEventListener('click', () => {
+    detection = 'RMS';
+    rmsBtn.classList.add('is-on');
+    peakBtn.classList.remove('is-on');
+  });
+  peakBtn.addEventListener('click', () => {
+    detection = 'Peak';
+    peakBtn.classList.add('is-on');
+    rmsBtn.classList.remove('is-on');
+  });
+  detectRow.append(rmsBtn, peakBtn);
+  detectWrap.append(detectRow);
+  controls.append(detectWrap);
+
+  const threshold = fieldInput('Threshold (dB)');
+  threshold.input.value = '-72';
+  controls.append(threshold.wrap);
+
+  const tail = fieldInput('Leave a tail (ms)');
+  tail.input.value = '10';
+  tail.input.title =
+    'Cutting at the exact sample where audio drops below the threshold truncates a decaying waveform and clicks. A few ms of padding avoids that.';
+  controls.append(tail.wrap);
+
+  section.append(controls);
+
+  const actions = el('div', 'tabs');
+  actions.style.marginTop = '6px';
+  const analyseBtn = el('button', 'pill pill--solid', 'Analyse folder');
+  const processBtn = el('button', 'pill', 'Process selected');
+  processBtn.disabled = true;
+  actions.append(analyseBtn, processBtn);
+  section.append(actions);
+
+  const status = el('p', 'muted');
+  silenceProgressStatus = status;
+  status.style.marginTop = '12px';
+  const list = el('div');
+  section.append(status, list);
+  viewEl.append(section);
+
+  function options() {
+    return {
+      detection,
+      thresholdDb: Number(threshold.input.value) || -72,
+      tailMs: Number(tail.input.value) || 10
+    };
+  }
+
+  function paint() {
+    list.innerHTML = '';
+    const usable = silenceResults.filter((r) => !r.error && !r.skip);
+
+    if (silenceResults.length === 0) return;
+
+    const total = usable.reduce((sum, r) => sum + r.removable, 0);
+    status.textContent =
+      `${usable.length} of ${silenceResults.length} file(s) have trailing silence — ` +
+      `${total.toFixed(1)}s in total`;
+
+    silenceResults.forEach((result, index) => {
+      const row = el('div', 'dupe');
+
+      const check = el('input', 'check');
+      check.type = 'checkbox';
+      check.disabled = Boolean(result.error || result.skip);
+      check.checked = silenceChosen.has(index);
+      check.addEventListener('change', () => {
+        if (check.checked) silenceChosen.add(index);
+        else silenceChosen.delete(index);
+        processBtn.disabled = silenceChosen.size === 0;
+        processBtn.textContent = `Process selected (${silenceChosen.size})`;
+      });
+      row.append(check);
+
+      const middle = el('div');
+      middle.append(el('div', 'dupe__name', result.name || basename(result.path)));
+      middle.append(
+        el(
+          'div',
+          'dupe__where',
+          result.error
+            ? `Skipped — ${result.error}`
+            : result.skip
+              ? result.reason
+              : `${result.duration.toFixed(1)}s · ${result.sampleRate / 1000}k ${result.bits}-bit ${result.channels === 1 ? 'mono' : 'stereo'}`
+        )
+      );
+      row.append(middle);
+
+      row.append(
+        el('div', 'dupe__num', result.error || result.skip ? '—' : `${result.duration.toFixed(1)}s`)
+      );
+      row.append(
+        el(
+          'div',
+          'dupe__num dupe__num--waste',
+          result.error || result.skip ? '' : `−${result.removable.toFixed(2)}s`
+        )
+      );
+
+      list.append(row);
+    });
+  }
+
+  analyseBtn.addEventListener('click', async () => {
+    analyseBtn.disabled = true;
+    analyseBtn.textContent = 'Analysing…';
+    list.innerHTML = '';
+    silenceChosen = new Set();
+    processBtn.disabled = true;
+
+    try {
+      const files = await window.api.silenceList(silenceFolder);
+      if (files.length === 0) {
+        status.textContent = 'No WAV files in this folder.';
+        silenceResults = [];
+      } else {
+        status.textContent = `Reading ${files.length} file(s)…`;
+        silenceResults = await window.api.silenceAnalyse(
+          files.map((f) => f.path),
+          options()
+        );
+        // Everything with something to trim starts ticked.
+        silenceResults.forEach((r, i) => {
+          if (!r.error && !r.skip) silenceChosen.add(i);
+        });
+        processBtn.disabled = silenceChosen.size === 0;
+        processBtn.textContent = `Process selected (${silenceChosen.size})`;
+        paint();
+      }
+    } catch (err) {
+      status.textContent = err.message;
+    }
+
+    analyseBtn.disabled = false;
+    analyseBtn.textContent = 'Analyse folder';
+  });
+
+  processBtn.addEventListener('click', async () => {
+    const paths = [...silenceChosen].map((i) => silenceResults[i].path);
+    if (paths.length === 0) return;
+
+    processBtn.disabled = true;
+    processBtn.textContent = 'Processing…';
+
+    try {
+      const outcome = await window.api.silenceProcess(paths, options());
+      if (!outcome.cancelled) {
+        const done = outcome.results.filter((r) => r.success && r.modified);
+        const failed = outcome.results.filter((r) => !r.success);
+        const seconds = done.reduce((sum, r) => sum + (r.secondsRemoved || 0), 0);
+        toast(
+          'Silence removed',
+          `${done.length} file(s), ${seconds.toFixed(1)}s trimmed` +
+            (failed.length ? ` · ${failed.length} skipped` : ''),
+          failed.length > 0
+        );
+      }
+    } catch (err) {
+      toast('Could not process', err.message, true);
+    }
+
+    processBtn.disabled = false;
+    processBtn.textContent = `Process selected (${silenceChosen.size})`;
+  });
+
+  paint();
+}
+
+/* ------------------------------- QC ------------------------------- */
+
+let qcFolder = null;
+
+function renderQcTab(entry) {
+  if (!qcFolder) qcFolder = entry.folder;
+
+  const section = el('div', 'section');
+  section.append(headRow('Check audio'));
+  section.append(
+    el(
+      'div',
+      'callout',
+      'Reads every WAV in the folder and flags two things: files too quiet to sit in a mix, and loops whose length is not a whole number of beats — those drift or click when looped. Nothing is written.'
+    )
+  );
+
+  const folderBar = el('div', 'callout');
+  folderBar.append(el('div', 'page__kicker', 'Checking'));
+  const fp = el('div', 'mono', qcFolder);
+  fp.style.cssText = 'margin:6px 0 10px;word-break:break-all';
+  folderBar.append(fp);
+  const bar = el('div', 'tabs');
+  const pick = el('button', 'pill pill--sm', 'Choose folder');
+  pick.addEventListener('click', async () => {
+    const chosen = await window.api.pickFolder();
+    if (chosen) {
+      qcFolder = chosen;
+      render();
+    }
+  });
+  const useProject = el('button', 'pill pill--sm', "This project's folder");
+  useProject.addEventListener('click', () => {
+    qcFolder = entry.folder;
+    render();
+  });
+  bar.append(pick, useProject);
+  folderBar.append(bar);
+  section.append(folderBar);
+
+  const controls = el('div', 'grid2');
+  const quiet = fieldInput('Flag peaks below (dB)');
+  quiet.input.value = '-12';
+  const tol = fieldInput('Grid tolerance (% of a beat)');
+  tol.input.value = '2';
+  controls.append(quiet.wrap, tol.wrap);
+  section.append(controls);
+
+  const scanBtn = el('button', 'pill pill--solid', 'Check folder');
+  const actions = el('div', 'tabs');
+  actions.append(scanBtn);
+  section.append(actions);
+
+  const status = el('p', 'muted');
+  qcProgressStatus = status;
+  status.style.marginTop = '12px';
+  const list = el('div');
+  section.append(status, list);
+  viewEl.append(section);
+
+  scanBtn.addEventListener('click', async () => {
+    scanBtn.disabled = true;
+    scanBtn.textContent = 'Checking…';
+    list.innerHTML = '';
+
+    try {
+      const result = await window.api.qcScan(qcFolder, {
+        quietPeakDb: Number(quiet.input.value) || -12,
+        gridTolerance: (Number(tol.input.value) || 2) / 100
+      });
+
+      status.textContent =
+        `${result.scanned} file(s) checked · ${result.withIssues} with issues` +
+        (result.unreadable ? ` · ${result.unreadable} unreadable` : '');
+
+      const flagged = result.results.filter((r) => r.error || (r.issues && r.issues.length));
+      if (flagged.length === 0) {
+        list.append(el('p', 'muted', 'Nothing flagged — every file looks fine.'));
+      }
+
+      flagged.forEach((file) => {
+        const row = el('div', 'filerow');
+
+        const play = el('button', 'filerow__play', '▶');
+        play.addEventListener('click', (event) => {
+          event.stopPropagation();
+          Player.load({ path: file.path, name: file.name, ext: '.wav' });
+        });
+        row.append(play);
+
+        const middle = el('div');
+        middle.append(el('div', 'filerow__name', file.name));
+        middle.append(
+          el(
+            'div',
+            'filerow__meta',
+            file.error
+              ? file.error
+              : (file.issues || []).map((i) => i.detail).join('  ·  ')
+          )
+        );
+        row.append(middle);
+
+        const kinds = (file.issues || []).map((i) => i.kind);
+        row.append(
+          kinds.length
+            ? el('span', 'badge badge--packaged', kinds.join(' + '))
+            : el('span', 'badge', 'unreadable')
+        );
+        row.append(
+          el('span', 'cell', file.duration ? `${file.duration.toFixed(2)}s` : '')
+        );
+
+        row.dataset.path = file.path;
+        list.append(row);
+      });
+    } catch (err) {
+      status.textContent = err.message;
+    }
+
+    scanBtn.disabled = false;
+    scanBtn.textContent = 'Check folder';
+  });
+
+}
+
+/* --------------------------- all audio ---------------------------- */
+
+/**
+ * Every audio file below this project, however deep — the flattened view.
+ * Grouped by the folder each came from so it stays readable.
+ */
+function renderAllAudioTab(entry) {
+  const section = el('div', 'section');
+  section.append(headRow('All audio'));
+  section.append(
+    el(
+      'div',
+      'callout',
+      'Every audio file anywhere below this project folder, flattened into one list. Samples, Backup and Freeze are skipped — those hold source material, not renders.'
+    )
+  );
+
+  const list = el('div');
+  section.append(list);
+  viewEl.append(section);
+
+  list.append(el('p', 'muted', 'Looking…'));
+
+  window.api
+    .deepAudio(entry.folder)
+    .then((files) => {
+      list.innerHTML = '';
+      if (files.length === 0) {
+        list.append(el('p', 'muted', 'No audio anywhere below this folder.'));
+        return;
+      }
+
+      const byFolder = new Map();
+      files.forEach((file) => {
+        if (!byFolder.has(file.where)) byFolder.set(file.where, []);
+        byFolder.get(file.where).push(file);
+      });
+
+      const total = files.reduce((sum, f) => sum + f.size, 0);
+      list.append(
+        el(
+          'p',
+          'muted',
+          `${files.length} file(s) across ${byFolder.size} folder(s) · ${formatBytes(total)}`
+        )
+      );
+
+      for (const [folder, group] of byFolder) {
+        const heading = el('div', 'page__kicker', folder);
+        heading.style.margin = '16px 0 6px';
+        list.append(heading);
+
+        group.slice(0, 200).forEach((file) => {
+          const row = el('div', 'filerow');
+          const play = el('button', 'filerow__play', '▶');
+          play.addEventListener('click', (event) => {
+            event.stopPropagation();
+            Player.load(file);
+          });
+          row.append(play);
+
+          const middle = el('div');
+          middle.append(el('div', 'filerow__name', file.name));
+          middle.append(
+            el(
+              'div',
+              'filerow__meta',
+              `${file.ext.replace('.', '').toUpperCase()}  ·  ${formatBytes(file.size)}  ·  ${timeAgo(file.modified)}`
+            )
+          );
+          row.append(middle, el('span'), el('span'));
+
+          row.dataset.path = file.path;
+          row.addEventListener('click', () => Player.load(file));
+          list.append(row);
+        });
+      }
+    })
+    .catch((err) => {
+      list.innerHTML = '';
+      list.append(el('p', 'muted', err.message));
+    });
 }
 
 /* ------------------------------- tags ----------------------------- */
@@ -974,6 +1656,7 @@ function renderDedupe() {
   head.append(actions);
 
   const status = el('p', 'muted');
+  dedupeProgressStatus = status;
   status.style.marginTop = '12px';
   head.append(status);
 
@@ -1065,12 +1748,16 @@ function renderDedupe() {
     paint();
   });
 
-  window.api.onDedupeProgress(({ done, total }) => {
-    status.textContent = `Comparing ${done} of ${total} candidates…`;
-  });
 }
 
 /* ============================== records ============================ */
+
+/** "F# min" -> "F#". The drone only needs the root. */
+function rootNoteOf(rec) {
+  if (!rec || !rec.key) return null;
+  const match = String(rec.key).match(/^([A-G]#?)/);
+  return match ? match[1] : null;
+}
 
 function record(key) {
   return (
@@ -1207,6 +1894,66 @@ document.addEventListener('keydown', (event) => {
   }
 });
 
+window.addEventListener('beforeunload', () => {
+  if (!activeNoteEditor) return;
+  const timer = noteTimers.get(activeNoteEditor.sessionPath);
+  if (timer) {
+    clearTimeout(timer);
+    noteTimers.delete(activeNoteEditor.sessionPath);
+  }
+  // Invoking sends the request to the main process immediately. The main
+  // process tracks the resulting write and waits for it during shutdown.
+  window.api
+    .saveNote(activeNoteEditor.sessionPath, activeNoteEditor.area.value)
+    .catch(() => {});
+});
+
+/* ------------------------- audition controls ---------------------- */
+
+/**
+ * The drone needs a key, and the key comes from analysing a render — so the
+ * button stays disabled until there's something to play. Better than a button
+ * that silently does nothing.
+ */
+const droneBtn = $('droneBtn');
+const verbBtn = $('verbBtn');
+const clipBtn = $('clipBtn');
+
+droneBtn.addEventListener('click', () => {
+  if (Player.isDroning()) {
+    Player.stopDrone();
+    droneBtn.classList.remove('is-on');
+    return;
+  }
+
+  const entry = openProject || entries.find((e) => e.path === selected);
+  const rec = entry ? record(entry.path) : null;
+
+  if (!rec || !rootNoteOf(rec)) {
+    toast(
+      'No key yet',
+      'Analyse a render first — the drone plays the root note it finds.',
+      true
+    );
+    return;
+  }
+
+  if (Player.startDrone(rootNoteOf(rec))) {
+    droneBtn.classList.add('is-on');
+    toast('Drone', `Holding ${rootNoteOf(rec)} underneath`);
+  }
+});
+
+verbBtn.addEventListener('click', () => {
+  const on = verbBtn.classList.toggle('is-on');
+  Player.setReverb(on ? 0.35 : 0);
+});
+
+clipBtn.addEventListener('click', () => {
+  const on = clipBtn.classList.toggle('is-on');
+  Player.setSoftClip(on ? 0.4 : 0);
+});
+
 Player.onChange(({ path: playing }) => {
   document.querySelectorAll('.row, .filerow').forEach((node) => {
     node.classList.remove('is-playing');
@@ -1220,6 +1967,23 @@ Player.onChange(({ path: playing }) => {
 window.api.onBounce((bounce) => {
   toast('New bounce', `${bounce.label} · ${bounce.formats.join(' + ').toUpperCase()}`);
   if (view === 'list') refresh();
+});
+
+window.api.onSilenceProgress(({ done, total, phase }) => {
+  if (silenceProgressStatus) {
+    silenceProgressStatus.textContent =
+      `${phase === 'analyse' ? 'Analysing' : 'Processing'} ${done} of ${total}…`;
+  }
+});
+
+window.api.onQcProgress(({ done, total }) => {
+  if (qcProgressStatus) qcProgressStatus.textContent = `Reading ${done} of ${total}…`;
+});
+
+window.api.onDedupeProgress(({ done, total }) => {
+  if (dedupeProgressStatus) {
+    dedupeProgressStatus.textContent = `Comparing ${done} of ${total} candidates…`;
+  }
 });
 
 window.api.onNoteRenamed(() => {
