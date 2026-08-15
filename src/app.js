@@ -17,6 +17,23 @@ const favFilterEl = $('favFilter');
 const backBtn = $('backBtn');
 const sheetEl = $('sheet');
 const scrimEl = $('scrim');
+const themeToggleEl = $('themeToggle');
+
+function applyTheme(theme) {
+  const light = theme === 'light';
+  document.body.classList.toggle('theme-light', light);
+  themeToggleEl.textContent = light ? 'Dark mode' : 'Light mode';
+  themeToggleEl.setAttribute('aria-pressed', String(light));
+}
+
+const savedTheme = localStorage.getItem('dawBuddyTheme');
+applyTheme(savedTheme === 'light' ? 'light' : 'dark');
+
+themeToggleEl.addEventListener('click', () => {
+  const next = document.body.classList.contains('theme-light') ? 'dark' : 'light';
+  localStorage.setItem('dawBuddyTheme', next);
+  applyTheme(next);
+});
 
 /* ============================== state ============================== */
 
@@ -475,6 +492,19 @@ function renderProjectPage() {
   const rec = record(entry.path);
   viewEl.innerHTML = '';
 
+  const crumbs = el('div', 'breadcrumbs');
+  const backToProjects = el('button', 'breadcrumb__link', 'Projects');
+  backToProjects.addEventListener('click', () => goList(null));
+  crumbs.append(backToProjects);
+  const places = String(entry.location || '').split(/[\\/]/).filter(Boolean).slice(-3);
+  places.forEach((place) => {
+    crumbs.append(el('span', 'breadcrumb__sep', '/'));
+    crumbs.append(el('span', 'breadcrumb__part', place));
+  });
+  crumbs.append(el('span', 'breadcrumb__sep', '/'));
+  crumbs.append(el('span', 'breadcrumb__current', entry.name));
+  viewEl.append(crumbs);
+
   /* header */
   const head = el('div', 'page__head');
   const art = el('div', 'page__art', entry.bpm !== null ? formatBpm(entry.bpm) : '♪');
@@ -522,7 +552,7 @@ function renderProjectPage() {
   viewEl.append(actions);
 
   /* tabs */
-  const tabs = el('div', 'tabs');
+  const tabs = el('div', 'tabs project-tabs');
   tabs.style.padding = '0 12px 18px';
   const projectTabs = [
     ['projectfiles', 'Project files'],

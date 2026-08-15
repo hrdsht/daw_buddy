@@ -23,6 +23,7 @@ const dedupe = require('./lib/dedupe');
 const procs = require('./lib/procs');
 
 let mainWindow = null;
+let splashWindow = null;
 let store = null;
 let settings = null;
 let notes = null;
@@ -34,13 +35,42 @@ const isMac = process.platform === 'darwin';
 const dataDir = () => app.getPath('userData');
 const undoLog = () => path.join(dataDir(), 'rename-undo.json');
 
-function createWindow() {
+function createSplashWindow() {
+  const splash = new BrowserWindow({
+    width: 500,
+    height: 570,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: true,
+    show: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    backgroundColor: '#00000000',
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+
+  splash.loadFile(path.join(__dirname, 'src', 'splash.html'));
+  splash.once('ready-to-show', () => splash.show());
+  splash.on('closed', () => {
+    if (splashWindow === splash) splashWindow = null;
+  });
+  splashWindow = splash;
+  return splash;
+}
+
+function createWindow({ splash = null, splashStartedAt = 0 } = {}) {
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
     minWidth: 900,
     minHeight: 560,
-    backgroundColor: '#0d0d0e',
+    show: false,
+    backgroundColor: '#101310',
+    icon: path.join(__dirname, 'assets', 'dawbuddy-logo-v2.png'),
     alwaysOnTop: settings.get().alwaysOnTop,
     ...(isMac
       ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 18, y: 22 } }
@@ -53,6 +83,19 @@ function createWindow() {
   });
 
   mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
+  mainWindow.once('ready-to-show', () => {
+    const minimumSplashTime = splash ? 2500 : 0;
+    const elapsed = splashStartedAt ? Date.now() - splashStartedAt : minimumSplashTime;
+    const wait = Math.max(0, minimumSplashTime - elapsed);
+
+    setTimeout(() => {
+      if (splash && !splash.isDestroyed()) splash.close();
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    }, wait);
+  });
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
@@ -81,6 +124,9 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 app.whenReady().then(async () => {
+  const splashStartedAt = Date.now();
+  const splash = createSplashWindow();
+
   // Renaming the app moved the data folder. Bring the old one across before
   // anything reads from it, or it looks like every note vanished.
   await migrate(dataDir());
@@ -107,7 +153,7 @@ app.whenReady().then(async () => {
     }
   };
 
-  createWindow();
+  createWindow({ splash, splashStartedAt });
   restartWatcher();
 
   app.on('activate', () => {
