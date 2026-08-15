@@ -23,41 +23,42 @@ body {
 }
 
 .splash {
-  width: 430px;
-  padding: 18px 18px 22px;
+  position: relative;
+  width: 600px;
+  height: 600px;
+  overflow: hidden;
   border: 1px solid rgba(157, 222, 100, 0.22);
   border-radius: 32px;
   background: #070908;
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.65);
-  text-align: center;
   animation: arrive 420ms ease-out both;
 }
 
-.splash__logo {
+.splash__video {
   display: block;
-  width: 394px;
-  height: 394px;
-  border-radius: 22px;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
 }
 
-.splash__name {
-  margin-top: 12px;
-  color: #f4f7f2;
-  font-family: Consolas, "SFMono-Regular", monospace;
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-}
-
 .splash__status {
+  position: absolute;
+  right: 22px;
+  bottom: 20px;
+  left: 22px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  margin-top: 7px;
-  color: #8d968b;
+  width: max-content;
+  margin: 0 auto;
+  padding: 8px 13px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(5, 8, 5, 0.72);
+  color: #cbd4c9;
   font-size: 12px;
+  backdrop-filter: blur(12px);
 }
 
 .splash__status span {

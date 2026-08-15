@@ -808,6 +808,76 @@ body.is-mac .topbar {
   background: var(--amber);
 }
 
+.tool-back {
+  padding: 0 4px 14px;
+}
+
+.tool-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.tool-card {
+  display: flex;
+  min-height: 210px;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--raised);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+}
+
+.tool-card:hover {
+  border-color: rgba(157, 222, 100, 0.35);
+  background: var(--hover);
+  transform: translateY(-2px);
+}
+
+.tool-card__icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  margin-bottom: 28px;
+  border-radius: 11px;
+  background: rgba(157, 222, 100, 0.13);
+  color: var(--amber);
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.tool-card__copy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.tool-card__title {
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.tool-card__text {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.tool-card__open {
+  margin-top: 18px;
+  color: var(--amber);
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .filerow {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr) auto auto;
@@ -1207,6 +1277,14 @@ body.theme-light .toast {
   .theme-toggle,
   #favFilter {
     display: none;
+  }
+
+  .tool-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tool-card {
+    min-height: 0;
   }
 }
 

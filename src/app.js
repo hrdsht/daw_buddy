@@ -47,6 +47,7 @@ let browsing = null;
 let view = 'list';
 let openProject = null;
 let projectTab = 'projectfiles';
+let projectTool = null;
 let selected = null;
 let filterRoot = null;
 let filterDaw = null;
@@ -132,6 +133,7 @@ function render() {
   if (view === 'project') return renderProjectPage();
   if (view === 'dedupe') return renderDedupe();
   if (view === 'id3') return renderId3Editor();
+  if (view === 'silence') return renderStandaloneSilence();
   return renderList();
 }
 
@@ -147,6 +149,7 @@ function goProject(entry) {
   view = 'project';
   openProject = entry;
   projectTab = 'projectfiles';
+  projectTool = null;
   renameFolder = entry.folder;
   silenceFolder = entry.folder;
   silenceResults = [];
@@ -559,9 +562,7 @@ function renderProjectPage() {
     ['renders', 'Renders'],
     ['stems', 'Stems'],
     ['notes', 'Notes & versions'],
-    ['rename', 'Rename files'],
-    ['silence', 'Remove silence'],
-    ['qc', 'Check audio'],
+    ['tools', 'Tools'],
     ['allaudio', 'All audio']
   ];
   if (entry.videoCount > 0) projectTabs.splice(1, 0, ['videos', 'Videos']);
@@ -570,6 +571,7 @@ function renderProjectPage() {
     const tab = el('button', 'pill', label);
     if (projectTab === key) tab.classList.add('is-on');
     tab.addEventListener('click', () => {
+      if (key === 'tools') projectTool = null;
       projectTab = key;
       render();
     });
@@ -582,11 +584,73 @@ function renderProjectPage() {
   if (projectTab === 'renders') return renderRendersTab(entry);
   if (projectTab === 'stems') return renderStemsTab(entry);
   if (projectTab === 'notes') return renderNotesTab(entry);
-  if (projectTab === 'rename') return renderRenameTab(entry);
-  if (projectTab === 'silence') return renderSilenceTab(entry);
-  if (projectTab === 'qc') return renderQcTab(entry);
+  if (projectTab === 'tools') return renderProjectToolsTab(entry);
   if (projectTab === 'allaudio') return renderAllAudioTab(entry);
   return renderProjectFilesTab(entry);
+}
+
+function renderProjectToolsTab(entry) {
+  if (projectTool) {
+    const backBar = el('div', 'tool-back');
+    const back = el('button', 'breadcrumb__link', '← All tools');
+    back.addEventListener('click', () => {
+      projectTool = null;
+      render();
+    });
+    backBar.append(back);
+    viewEl.append(backBar);
+
+    if (projectTool === 'rename') return renderRenameTab(entry);
+    if (projectTool === 'silence') return renderSilenceTab(entry);
+    if (projectTool === 'qc') return renderQcTab(entry);
+  }
+
+  const section = el('div', 'section');
+  section.append(headRow('Tools'));
+  section.append(
+    el(
+      'div',
+      'callout',
+      'Choose a job when you need it. Keeping these utilities together leaves the project page focused on the music, files and versions.'
+    )
+  );
+
+  const grid = el('div', 'tool-grid');
+  [
+    {
+      key: 'rename',
+      icon: 'Aa',
+      title: 'Rename files',
+      text: 'Clean up or standardise many audio filenames at once, with a preview before anything changes.'
+    },
+    {
+      key: 'silence',
+      icon: '✂',
+      title: 'Strip silence',
+      text: 'Find trailing silence in WAV files and make trimmed copies without touching the originals.'
+    },
+    {
+      key: 'qc',
+      icon: '✓',
+      title: 'Check audio',
+      text: 'Flag quiet files, silent files and loops that may drift or click when repeated.'
+    }
+  ].forEach((tool) => {
+    const card = el('button', 'tool-card');
+    card.type = 'button';
+    card.append(el('span', 'tool-card__icon', tool.icon));
+    const copy = el('span', 'tool-card__copy');
+    copy.append(el('b', 'tool-card__title', tool.title));
+    copy.append(el('span', 'tool-card__text', tool.text));
+    card.append(copy, el('span', 'tool-card__open', 'Open →'));
+    card.addEventListener('click', () => {
+      projectTool = tool.key;
+      render();
+    });
+    grid.append(card);
+  });
+  section.append(grid);
+  viewEl.append(section);
 }
 
 /* ------------------------------ videos ---------------------------- */
@@ -1300,11 +1364,16 @@ let silenceFolder = null;
 let silenceResults = [];
 let silenceChosen = new Set();
 
-function renderSilenceTab(entry) {
-  if (!silenceFolder) silenceFolder = entry.folder;
+function renderStandaloneSilence() {
+  viewEl.innerHTML = '';
+  renderSilenceTab(null);
+}
+
+function renderSilenceTab(entry = null) {
+  if (!silenceFolder && entry) silenceFolder = entry.folder;
 
   const section = el('div', 'section');
-  section.append(headRow('Remove silence'));
+  section.append(headRow('Strip silence'));
   section.append(
     el(
       'div',
@@ -1316,12 +1385,16 @@ function renderSilenceTab(entry) {
   /* folder */
   const folderBar = el('div', 'callout');
   folderBar.append(el('div', 'page__kicker', 'Reading WAVs from'));
-  const folderPath = el('div', 'mono', silenceFolder);
+  const folderPath = el('div', 'mono', silenceFolder || 'Choose a folder to begin');
   folderPath.style.cssText = 'margin:6px 0 10px;word-break:break-all';
   folderBar.append(folderPath);
 
   const bar = el('div', 'tabs');
-  const pick = el('button', 'pill pill--sm', 'Choose a different folder');
+  const pick = el(
+    'button',
+    `pill${silenceFolder ? ' pill--sm' : ' pill--solid'}`,
+    silenceFolder ? 'Choose a different folder' : 'Choose folder'
+  );
   pick.addEventListener('click', async () => {
     const chosen = await window.api.pickFolder();
     if (chosen) {
@@ -1331,14 +1404,17 @@ function renderSilenceTab(entry) {
       render();
     }
   });
-  const useProject = el('button', 'pill pill--sm', "This project's folder");
-  useProject.addEventListener('click', () => {
-    silenceFolder = entry.folder;
-    silenceResults = [];
-    silenceChosen = new Set();
-    render();
-  });
-  bar.append(pick, useProject);
+  bar.append(pick);
+  if (entry) {
+    const useProject = el('button', 'pill pill--sm', "This project's folder");
+    useProject.addEventListener('click', () => {
+      silenceFolder = entry.folder;
+      silenceResults = [];
+      silenceChosen = new Set();
+      render();
+    });
+    bar.append(useProject);
+  }
   folderBar.append(bar);
   section.append(folderBar);
 
@@ -1382,6 +1458,7 @@ function renderSilenceTab(entry) {
   const actions = el('div', 'tabs');
   actions.style.marginTop = '6px';
   const analyseBtn = el('button', 'pill pill--solid', 'Analyse folder');
+  analyseBtn.disabled = !silenceFolder;
   const processBtn = el('button', 'pill', 'Process selected');
   processBtn.disabled = true;
   actions.append(analyseBtn, processBtn);
@@ -1390,6 +1467,7 @@ function renderSilenceTab(entry) {
   const status = el('p', 'muted');
   silenceProgressStatus = status;
   status.style.marginTop = '12px';
+  if (!silenceFolder) status.textContent = 'Choose any folder containing WAV files.';
   const list = el('div');
   section.append(status, list);
   viewEl.append(section);
@@ -1751,6 +1829,15 @@ $('openId3').addEventListener('click', () => {
   render();
 });
 
+$('openSilence').addEventListener('click', () => {
+  view = 'silence';
+  silenceFolder = null;
+  silenceResults = [];
+  silenceChosen = new Set();
+  viewEl.scrollTop = 0;
+  render();
+});
+
 function renderId3Editor() {
   viewEl.innerHTML = '';
   const section = el('div', 'section');
@@ -2028,9 +2115,13 @@ function renderDedupe() {
 
   const actions = el('div', 'tabs');
   const scanBtn = el('button', 'pill pill--solid', 'Scan for duplicates');
+  const selectAllBtn = el('button', 'pill', 'Select all');
+  const clearBtn = el('button', 'pill', 'Clear selection');
   const linkBtn = el('button', 'pill', 'Link selected');
+  selectAllBtn.disabled = true;
+  clearBtn.disabled = true;
   linkBtn.disabled = true;
-  actions.append(scanBtn, linkBtn);
+  actions.append(scanBtn, selectAllBtn, clearBtn, linkBtn);
   head.append(actions);
 
   const status = el('p', 'muted');
@@ -2041,6 +2132,16 @@ function renderDedupe() {
   const list = el('div');
   head.append(list);
   viewEl.append(head);
+
+  function updateSelectionControls() {
+    const count = dedupeState.chosen.size;
+    const total = dedupeState.groups.length;
+    selectAllBtn.disabled = total === 0 || count === total;
+    selectAllBtn.textContent = total ? `Select all (${total})` : 'Select all';
+    clearBtn.disabled = count === 0;
+    linkBtn.disabled = count === 0;
+    linkBtn.textContent = count ? `Link selected (${count})` : 'Link selected';
+  }
 
   function paint() {
     list.innerHTML = '';
@@ -2066,8 +2167,7 @@ function renderDedupe() {
       check.addEventListener('change', () => {
         if (check.checked) dedupeState.chosen.add(index);
         else dedupeState.chosen.delete(index);
-        linkBtn.disabled = dedupeState.chosen.size === 0;
-        linkBtn.textContent = `Link selected (${dedupeState.chosen.size})`;
+        updateSelectionControls();
       });
       row.append(check);
 
@@ -2101,12 +2201,24 @@ function renderDedupe() {
 
     scanBtn.disabled = false;
     scanBtn.textContent = 'Scan again';
-    linkBtn.disabled = true;
+    updateSelectionControls();
 
     if (result.groups.length === 0) {
       status.textContent = `Nothing duplicated. ${result.scanned} sample(s) checked across ${result.folders} Imported folder(s).`;
       return;
     }
+    paint();
+  });
+
+  selectAllBtn.addEventListener('click', () => {
+    dedupeState.chosen = new Set(dedupeState.groups.map((group, index) => index));
+    updateSelectionControls();
+    paint();
+  });
+
+  clearBtn.addEventListener('click', () => {
+    dedupeState.chosen = new Set();
+    updateSelectionControls();
     paint();
   });
 
@@ -2122,10 +2234,12 @@ function renderDedupe() {
       `${result.linked} copies replaced with links · ${formatBytes(result.reclaimed)} reclaimed`
     );
     dedupeState.chosen = new Set();
-    linkBtn.disabled = true;
+    updateSelectionControls();
     paint();
   });
 
+  updateSelectionControls();
+  paint();
 }
 
 /* ============================== records ============================ */

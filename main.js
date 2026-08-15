@@ -28,6 +28,7 @@ let store = null;
 let settings = null;
 let notes = null;
 let cache = null;
+let initialScanPromise = null;
 let quitting = false;
 const pendingNoteSaves = new Set();
 
@@ -36,9 +37,15 @@ const dataDir = () => app.getPath('userData');
 const undoLog = () => path.join(dataDir(), 'rename-undo.json');
 
 function createSplashWindow() {
+  let resolveFinished;
+  let settled = false;
+  const finished = new Promise((resolve) => {
+    resolveFinished = resolve;
+  });
+
   const splash = new BrowserWindow({
-    width: 500,
-    height: 570,
+    width: 640,
+    height: 640,
     frame: false,
     transparent: true,
     resizable: false,
@@ -48,21 +55,37 @@ function createSplashWindow() {
     skipTaskbar: true,
     backgroundColor: '#00000000',
     webPreferences: {
+      preload: path.join(__dirname, 'src', 'splash-preload.js'),
       contextIsolation: true,
       nodeIntegration: false
     }
   });
 
+  const finish = () => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(fallback);
+    ipcMain.removeListener('splash:finished', onFinished);
+    resolveFinished();
+  };
+  const onFinished = (event) => {
+    if (event.sender === splash.webContents) finish();
+  };
+  const fallback = setTimeout(finish, 12000);
+
+  ipcMain.on('splash:finished', onFinished);
+
   splash.loadFile(path.join(__dirname, 'src', 'splash.html'));
   splash.once('ready-to-show', () => splash.show());
   splash.on('closed', () => {
+    finish();
     if (splashWindow === splash) splashWindow = null;
   });
   splashWindow = splash;
-  return splash;
+  return { splash, finished };
 }
 
-function createWindow({ splash = null, splashStartedAt = 0 } = {}) {
+function createWindow({ splash = null, revealWhen = Promise.resolve() } = {}) {
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -84,17 +107,18 @@ function createWindow({ splash = null, splashStartedAt = 0 } = {}) {
 
   mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
   mainWindow.once('ready-to-show', () => {
-    const minimumSplashTime = splash ? 2500 : 0;
-    const elapsed = splashStartedAt ? Date.now() - splashStartedAt : minimumSplashTime;
-    const wait = Math.max(0, minimumSplashTime - elapsed);
-
-    setTimeout(() => {
-      if (splash && !splash.isDestroyed()) splash.close();
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.show();
-        mainWindow.focus();
-      }
-    }, wait);
+    Promise.resolve(revealWhen)
+      .catch((error) => console.error('[startup] Could not prepare the first view:', error.message))
+      .finally(() => {
+        // Give the renderer one paint after it receives the prefetched scan.
+        setTimeout(() => {
+          if (splash && !splash.isDestroyed()) splash.close();
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.show();
+            mainWindow.focus();
+          }
+        }, 100);
+      });
   });
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -124,8 +148,7 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 app.whenReady().then(async () => {
-  const splashStartedAt = Date.now();
-  const splash = createSplashWindow();
+  const splashState = createSplashWindow();
 
   // Renaming the app moved the data folder. Bring the old one across before
   // anything reads from it, or it looks like every note vanished.
@@ -145,6 +168,18 @@ app.whenReady().then(async () => {
 
   await ensureOutputFolder();
 
+  // Start the expensive first scan while the eight-second animation plays.
+  // The renderer will reuse this exact promise instead of scanning twice.
+  initialScanPromise = scanProjects().catch((error) => ({
+    entries: [],
+    grouped: [],
+    errors: [{ root: 'Startup scan', message: error.message }],
+    truncated: false,
+    foldersRead: 0,
+    roots: settings.get().roots,
+    cache: cache.stats()
+  }));
+
   notes = new NoteWriter();
   notes.onRenamed = (sessionPath, newFile) => {
     store.set(sessionPath, { noteFile: newFile });
@@ -153,7 +188,10 @@ app.whenReady().then(async () => {
     }
   };
 
-  createWindow({ splash, splashStartedAt });
+  createWindow({
+    splash: splashState.splash,
+    revealWhen: Promise.all([splashState.finished, initialScanPromise])
+  });
   restartWatcher();
 
   app.on('activate', () => {
@@ -362,7 +400,7 @@ ipcMain.handle('settings:removeRoot', async (event, root) => {
 
 /* ---------------------------- scanning ---------------------------- */
 
-ipcMain.handle('projects:scan', async () => {
+async function scanProjects() {
   const current = settings.get();
   if (current.roots.length === 0) return { entries: [], errors: [], roots: [] };
 
@@ -389,6 +427,16 @@ ipcMain.handle('projects:scan', async () => {
     roots: current.roots,
     cache: cache.stats()
   };
+}
+
+ipcMain.handle('projects:scan', async () => {
+  if (initialScanPromise) {
+    const prefetched = initialScanPromise;
+    const result = await prefetched;
+    if (initialScanPromise === prefetched) initialScanPromise = null;
+    return result;
+  }
+  return scanProjects();
 });
 
 ipcMain.handle('projects:browse', async (event, target) => {
