@@ -721,6 +721,13 @@ body.is-mac .topbar {
   color: var(--amber-ink);
 }
 
+.filerow__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
 .projectfile__icon {
   width: 34px;
   height: 34px;

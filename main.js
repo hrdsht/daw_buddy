@@ -11,6 +11,7 @@ const { Settings, isInside, samePath } = require('./lib/settings');
 const { startWatching, stopWatching } = require('./lib/watcher');
 const media = require('./lib/media');
 const renders = require('./lib/renders');
+const videos = require('./lib/videos');
 const { ParseCache } = require('./lib/cache');
 const { migrate } = require('./lib/migrate');
 const id3 = require('./lib/id3');
@@ -173,8 +174,7 @@ function restartWatcher() {
   startWatching(
     current.roots,
     (bounce) => {
-      // The hook for the email API later on. One event per render, however
-      // many formats it arrived in.
+      // One notification per render, however many formats it arrived in.
       console.log(
         `[bounce] ${bounce.label} rendered in "${bounce.project}" (${bounce.formats.join(' + ')})`
       );
@@ -478,6 +478,11 @@ ipcMain.handle('renders:all', async (event, folder) => {
   return renders.listAllAudio(folder);
 });
 
+ipcMain.handle('videos:list', async (event, folder) => {
+  guardApproved(folder);
+  return videos.listVideos(folder);
+});
+
 ipcMain.handle('media:list', async (event, folder) => {
   guardApproved(folder);
   const files = await media.listAudio(folder);
@@ -535,17 +540,15 @@ ipcMain.handle('daws:running', () => procs.runningDaws());
 /* ------------------------------ tools ----------------------------- */
 
 ipcMain.handle('tools:id3Inspect', async (event, folder) => {
-  guard(folder);
-  const files = await media.listAudio(folder, 1);
-  const mp3s = files.filter((f) => f.ext === '.mp3');
-  return Promise.all(mp3s.map((f) => id3.inspect(f.path)));
+  guardApproved(folder);
+  return id3.inspectFolder(folder);
 });
 
 ipcMain.handle('tools:id3Strip', async (event, paths) => {
   const results = [];
   for (const filePath of paths) {
     try {
-      guard(path.dirname(filePath));
+      guardApproved(filePath);
       if (path.extname(filePath).toLowerCase() !== '.mp3') {
         throw new Error('Only MP3 files can be stripped.');
       }
@@ -557,9 +560,27 @@ ipcMain.handle('tools:id3Strip', async (event, paths) => {
   return results;
 });
 
+ipcMain.handle('tools:id3Write', async (event, jobs) => {
+  if (!Array.isArray(jobs)) throw new Error('Invalid ID3 edit list.');
+  const results = [];
+  for (const job of jobs.slice(0, 10000)) {
+    try {
+      const filePath = job && job.path;
+      guardApproved(filePath);
+      if (path.extname(filePath).toLowerCase() !== '.mp3') {
+        throw new Error('ID3 metadata can only be written to MP3 files.');
+      }
+      results.push(await id3.write(filePath, id3.sanitiseFields(job.fields)));
+    } catch (err) {
+      results.push({ path: job && job.path, changed: false, error: err.message });
+    }
+  }
+  return results;
+});
+
 ipcMain.handle('tools:pickFolder', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
-    title: 'Choose a folder to rename files in',
+    title: 'Choose a folder',
     buttonLabel: 'Use this folder',
     properties: ['openDirectory']
   });

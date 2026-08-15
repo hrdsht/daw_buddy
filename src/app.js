@@ -4,8 +4,7 @@
  * Runs inside the window. No file access — everything goes through
  * window.api, defined in preload.js.
  *
- * Three views share the main pane: the project list, one project's page, and
- * the sample cleanup screen.
+ * The project list, project page and standalone tools share the main pane.
  */
 
 const $ = (id) => document.getElementById(id);
@@ -30,7 +29,7 @@ let expanded = new Set();
 let browsing = null;
 let view = 'list';
 let openProject = null;
-let projectTab = 'renders';
+let projectTab = 'projectfiles';
 let selected = null;
 let filterRoot = null;
 let filterDaw = null;
@@ -43,6 +42,9 @@ let silenceProgressStatus = null;
 let qcProgressStatus = null;
 let dedupeProgressStatus = null;
 let activeNoteEditor = null;
+let id3Folder = null;
+let id3Files = [];
+let id3Selected = new Set();
 
 /* ============================= startup ============================= */
 
@@ -112,6 +114,7 @@ function render() {
 
   if (view === 'project') return renderProjectPage();
   if (view === 'dedupe') return renderDedupe();
+  if (view === 'id3') return renderId3Editor();
   return renderList();
 }
 
@@ -126,7 +129,7 @@ function goList(folder) {
 function goProject(entry) {
   view = 'project';
   openProject = entry;
-  projectTab = 'renders';
+  projectTab = 'projectfiles';
   renameFolder = entry.folder;
   silenceFolder = entry.folder;
   silenceResults = [];
@@ -516,44 +519,24 @@ function renderProjectPage() {
   });
   actions.append(fav);
 
-  const stems = el('button', 'pill', rec.stemsPath ? 'Open stems' : 'Set stems folder');
-  stems.addEventListener('click', async () => {
-    if (rec.stemsPath) return window.api.reveal(rec.stemsPath);
-    const updated = await window.api.chooseStems(entry.path);
-    if (updated) {
-      records[entry.path] = updated;
-      render();
-    }
-  });
-  actions.append(stems);
-
-  if (rec.stemsPath) {
-    const clear = el('button', 'pill pill--sm', 'Change stems');
-    clear.addEventListener('click', async () => {
-      const updated = await window.api.chooseStems(entry.path);
-      if (updated) {
-        records[entry.path] = updated;
-        render();
-      }
-    });
-    actions.append(clear);
-  }
-
   viewEl.append(actions);
 
   /* tabs */
   const tabs = el('div', 'tabs');
   tabs.style.padding = '0 12px 18px';
-  [
+  const projectTabs = [
     ['projectfiles', 'Project files'],
     ['renders', 'Renders'],
+    ['stems', 'Stems'],
     ['notes', 'Notes & versions'],
     ['rename', 'Rename files'],
     ['silence', 'Remove silence'],
     ['qc', 'Check audio'],
-    ['allaudio', 'All audio'],
-    ['tags', 'Strip ID3 tags']
-  ].forEach(([key, label]) => {
+    ['allaudio', 'All audio']
+  ];
+  if (entry.videoCount > 0) projectTabs.splice(1, 0, ['videos', 'Videos']);
+
+  projectTabs.forEach(([key, label]) => {
     const tab = el('button', 'pill', label);
     if (projectTab === key) tab.classList.add('is-on');
     tab.addEventListener('click', () => {
@@ -565,13 +548,77 @@ function renderProjectPage() {
   viewEl.append(tabs);
 
   if (projectTab === 'projectfiles') return renderProjectFilesTab(entry);
+  if (projectTab === 'videos') return renderVideosTab(entry);
   if (projectTab === 'renders') return renderRendersTab(entry);
+  if (projectTab === 'stems') return renderStemsTab(entry);
   if (projectTab === 'notes') return renderNotesTab(entry);
   if (projectTab === 'rename') return renderRenameTab(entry);
   if (projectTab === 'silence') return renderSilenceTab(entry);
   if (projectTab === 'qc') return renderQcTab(entry);
   if (projectTab === 'allaudio') return renderAllAudioTab(entry);
-  return renderTagsTab(entry);
+  return renderProjectFilesTab(entry);
+}
+
+/* ------------------------------ videos ---------------------------- */
+
+function renderVideosTab(entry) {
+  const section = el('div', 'section');
+  section.append(headRow('Videos', basename(entry.folder)));
+
+  const list = el('div');
+  list.append(el('p', 'muted', 'Reading video files…'));
+  section.append(list);
+  viewEl.append(section);
+
+  window.api
+    .listVideos(entry.folder)
+    .then((files) => {
+      list.innerHTML = '';
+      if (!files.length) {
+        list.append(el('p', 'muted', 'No video files remain in this folder. Press Rescan to update the tab.'));
+        return;
+      }
+
+      files.forEach((file) => {
+        const row = el('div', 'filerow');
+        row.append(el('div', 'projectfile__icon', file.ext.replace('.', '').toUpperCase()));
+
+        const middle = el('div');
+        middle.append(el('div', 'filerow__name', file.name));
+        middle.append(
+          el(
+            'div',
+            'filerow__meta',
+            `${formatBytes(file.size)}  ·  ${timeAgo(file.modified)}`
+          )
+        );
+        row.append(middle, el('span'));
+
+        const actions = el('div', 'filerow__actions');
+        const reveal = el('button', 'pill pill--sm', `Show in ${settings.fileManager}`);
+        reveal.addEventListener('click', (event) => {
+          event.stopPropagation();
+          window.api.reveal(file.path);
+        });
+
+        const open = el('button', 'pill pill--solid pill--sm', 'Open');
+        open.addEventListener('click', async (event) => {
+          event.stopPropagation();
+          const error = await window.api.open(file.path);
+          if (error) toast('Could not open video', error, true);
+        });
+        actions.append(reveal, open);
+        row.append(actions);
+
+        row.title = file.path;
+        row.addEventListener('dblclick', () => window.api.open(file.path));
+        list.append(row);
+      });
+    })
+    .catch((error) => {
+      list.innerHTML = '';
+      list.append(el('p', 'muted', error.message));
+    });
 }
 
 function fact(label, value) {
@@ -638,7 +685,7 @@ function renderProjectFilesTab(entry) {
 
     row.append(
       file.sessionPath === entry.sessionPath
-        ? el('span', 'badge badge--packaged', 'Viewing')
+        ? el('span', 'badge badge--packaged', 'Current page')
         : el('span')
     );
 
@@ -763,7 +810,112 @@ function buildRenderRow(entry, render) {
   return row;
 }
 
-async function analyseRender(entry, render, buttonEl) {
+/* ------------------------------- stems --------------------------- */
+
+function renderStemsTab(entry) {
+  const section = el('div', 'section');
+  const rec = record(entry.path);
+  section.append(headRow('Stems', rec.stemsPath ? basename(rec.stemsPath) : 'No folder selected'));
+
+  const controls = el('div', 'tabs');
+  if (rec.stemsPath) {
+    const reveal = el('button', 'pill pill--solid', `Open folder in ${settings.fileManager}`);
+    reveal.addEventListener('click', () => window.api.reveal(rec.stemsPath));
+    controls.append(reveal);
+  }
+
+  const choose = el(
+    'button',
+    'pill',
+    rec.stemsPath ? 'Change stems folder' : 'Choose stems folder'
+  );
+  choose.addEventListener('click', async () => {
+    const updated = await window.api.chooseStems(entry.path);
+    if (updated) {
+      records[entry.path] = updated;
+      render();
+    }
+  });
+  controls.append(choose);
+  section.append(controls);
+
+  if (!rec.stemsPath) {
+    section.append(
+      el(
+        'div',
+        'callout',
+        'Choose the folder where you keep this project’s stems. Its audio files will then appear here.'
+      )
+    );
+    viewEl.append(section);
+    return;
+  }
+
+  const list = el('div');
+  list.append(el('p', 'muted', 'Reading stems folder…'));
+  section.append(list);
+  viewEl.append(section);
+  loadStems(entry, rec.stemsPath, list);
+}
+
+async function loadStems(entry, folder, container) {
+  const files = await window.api.listAllAudio(folder);
+  container.innerHTML = '';
+
+  if (!files.length) {
+    container.append(el('p', 'muted', 'No WAV, MP3, AIFF, FLAC or OGG files found in this folder.'));
+    return;
+  }
+
+  files.forEach((file) => container.append(buildStemRow(entry, file)));
+}
+
+function buildStemRow(entry, file) {
+  const row = el('div', 'filerow');
+  const play = el('button', 'filerow__play', '▶');
+  play.addEventListener('click', (event) => {
+    event.stopPropagation();
+    Player.load(file);
+  });
+  row.append(play);
+
+  const middle = el('div');
+  middle.append(el('div', 'filerow__name', file.name));
+  middle.append(
+    el(
+      'div',
+      'filerow__meta',
+      [file.ext.replace('.', '').toUpperCase(), file.folder, formatBytes(file.size), timeAgo(file.modified)]
+        .filter(Boolean)
+        .join('  ·  ')
+    )
+  );
+  row.append(middle, el('span'));
+
+  const actions = el('div', 'filerow__actions');
+  actions.append(analyseAudioButton(entry, file));
+  const reveal = el('button', 'pill pill--sm', `Show in ${settings.fileManager}`);
+  reveal.addEventListener('click', (event) => {
+    event.stopPropagation();
+    window.api.reveal(file.path);
+  });
+  actions.append(reveal);
+  row.append(actions);
+  row.dataset.path = file.path;
+  row.addEventListener('click', () => Player.load(file));
+  return row;
+}
+
+function analyseAudioButton(entry, file) {
+  const button = el('button', 'pill pill--sm', 'Analyse');
+  button.addEventListener('click', async (event) => {
+    event.stopPropagation();
+    await analyseRender(entry, { primary: file }, button, { refresh: false });
+  });
+  return button;
+}
+
+async function analyseRender(entry, render, buttonEl, { refresh = true } = {}) {
   buttonEl.disabled = true;
   buttonEl.textContent = 'Reading…';
 
@@ -803,7 +955,7 @@ async function analyseRender(entry, render, buttonEl) {
         : '')
   );
 
-  render();
+  if (refresh) render();
 }
 
 /* ------------------------------- notes ---------------------------- */
@@ -1450,11 +1602,21 @@ function renderQcTab(entry) {
             ? el('span', 'badge badge--packaged', kinds.join(' + '))
             : el('span', 'badge', 'unreadable')
         );
-        row.append(
-          el('span', 'cell', file.duration ? `${file.duration.toFixed(2)}s` : '')
-        );
+        const actions = el('div', 'filerow__actions');
+        if (file.duration) actions.append(el('span', 'cell', `${file.duration.toFixed(2)}s`));
+        if (!file.error) {
+          actions.append(
+            analyseAudioButton(entry, { path: file.path, name: file.name, ext: '.wav' })
+          );
+        }
+        row.append(actions);
 
         row.dataset.path = file.path;
+        if (!file.error) {
+          row.addEventListener('click', () =>
+            Player.load({ path: file.path, name: file.name, ext: '.wav' })
+          );
+        }
         list.append(row);
       });
     } catch (err) {
@@ -1537,7 +1699,7 @@ function renderAllAudioTab(entry) {
               `${file.ext.replace('.', '').toUpperCase()}  ·  ${formatBytes(file.size)}  ·  ${timeAgo(file.modified)}`
             )
           );
-          row.append(middle, el('span'), el('span'));
+          row.append(middle, el('span'), analyseAudioButton(entry, file));
 
           row.dataset.path = file.path;
           row.addEventListener('click', () => Player.load(file));
@@ -1551,81 +1713,267 @@ function renderAllAudioTab(entry) {
     });
 }
 
-/* ------------------------------- tags ----------------------------- */
+/* ============================= ID3 editor ========================== */
 
-function renderTagsTab(entry) {
+$('openId3').addEventListener('click', () => {
+  view = 'id3';
+  viewEl.scrollTop = 0;
+  render();
+});
+
+function renderId3Editor() {
+  viewEl.innerHTML = '';
   const section = el('div', 'section');
-  section.append(headRow('Strip ID3 tags'));
+  section.append(headRow('ID3 editor', id3Folder ? basename(id3Folder) : null));
   section.append(
     el(
       'div',
       'callout',
-      'Removes artwork and metadata from the MP3s in this folder. The audio is untouched — only the tag blocks at the start and end are cut off.'
+      'Choose a sample-pack folder. DAW Buddy finds MP3s in its subfolders and lets you replace their metadata with clean information or remove it completely. WAV, FLAC and AIFF files are left alone because ID3 is an MP3 tagging system.'
     )
   );
 
-  const summary = el('p', 'muted');
-  const list = el('div', 'preview');
-  const actions = el('div', 'tabs');
-  actions.style.marginTop = '14px';
-  const stripBtn = el('button', 'pill pill--danger', 'Strip tags');
-  actions.append(stripBtn);
-  section.append(summary, list, actions);
+  const folderActions = el('div', 'tabs');
+  const chooseBtn = el('button', 'pill pill--solid', id3Folder ? 'Change folder' : 'Choose folder');
+  const revealBtn = el('button', 'pill', `Open folder in ${settings.fileManager}`);
+  revealBtn.hidden = !id3Folder;
+  revealBtn.addEventListener('click', () => window.api.reveal(id3Folder));
+  folderActions.append(chooseBtn, revealBtn);
+  section.append(folderActions);
+
+  const editor = el('div', 'callout');
+  editor.append(el('div', 'page__kicker', 'Clean metadata to write'));
+  editor.append(
+    el(
+      'p',
+      'muted',
+      'These fields replace the existing tag, including unwanted author information and artwork. Blank fields are removed. Use {filename} to make each Title match its filename.'
+    )
+  );
+
+  const fieldsGrid = el('div', 'grid2');
+  const title = fieldInput('Title');
+  title.input.value = '{filename}';
+  const artist = fieldInput('Artist');
+  const album = fieldInput('Album');
+  const albumArtist = fieldInput('Album artist');
+  const composer = fieldInput('Composer / author');
+  const publisher = fieldInput('Publisher');
+  const copyright = fieldInput('Copyright');
+  const genre = fieldInput('Genre');
+  const year = fieldInput('Year');
+  const comment = fieldInput('Comment');
+  [title, artist, album, albumArtist, composer, publisher, copyright, genre, year, comment].forEach((field) =>
+    fieldsGrid.append(field.wrap)
+  );
+  editor.append(fieldsGrid);
+  section.append(editor);
+
+  const selectionActions = el('div', 'tabs');
+  const allBtn = el('button', 'pill pill--sm', 'Select all');
+  const taggedBtn = el('button', 'pill pill--sm', 'Select tagged');
+  const noneBtn = el('button', 'pill pill--sm', 'Select none');
+  const writeBtn = el('button', 'pill pill--solid', 'Write clean metadata');
+  const removeBtn = el('button', 'pill pill--danger', 'Remove all metadata');
+  writeBtn.disabled = true;
+  removeBtn.disabled = true;
+  selectionActions.append(allBtn, taggedBtn, noneBtn, writeBtn, removeBtn);
+  section.append(selectionActions);
+
+  const status = el('p', 'muted', id3Folder ? 'Checking MP3s…' : 'Choose a folder to begin.');
+  const list = el('div');
+  section.append(status, list);
   viewEl.append(section);
 
-  let tagged = [];
+  function selectedFiles() {
+    return id3Files.filter((file) => id3Selected.has(file.path) && !file.error);
+  }
+
+  function updateButtons() {
+    const count = selectedFiles().length;
+    writeBtn.disabled = count === 0;
+    removeBtn.disabled = count === 0;
+    writeBtn.textContent = count ? `Write metadata (${count})` : 'Write clean metadata';
+    removeBtn.textContent = count ? `Remove metadata (${count})` : 'Remove all metadata';
+  }
+
+  function paintFiles() {
+    list.innerHTML = '';
+    if (!id3Files.length) {
+      if (id3Folder) list.append(el('p', 'muted', 'No MP3 files found in this folder or its subfolders.'));
+      updateButtons();
+      return;
+    }
+
+    const tagged = id3Files.filter((file) => file.bytesRemovable > 0).length;
+    const unreadable = id3Files.filter((file) => file.error).length;
+    status.textContent =
+      `${id3Files.length} MP3(s) · ${tagged} carrying metadata · ${id3Selected.size} selected` +
+      (unreadable ? ` · ${unreadable} unreadable` : '');
+
+    id3Files.slice(0, 500).forEach((file) => {
+      const row = el('div', 'filerow');
+      const check = el('input', 'check');
+      check.type = 'checkbox';
+      check.disabled = Boolean(file.error);
+      check.checked = id3Selected.has(file.path);
+      check.addEventListener('click', (event) => event.stopPropagation());
+      check.addEventListener('change', () => {
+        if (check.checked) id3Selected.add(file.path);
+        else id3Selected.delete(file.path);
+        paintFiles();
+      });
+      row.append(check);
+
+      const middle = el('div');
+      middle.append(el('div', 'filerow__name', file.name));
+      middle.append(
+        el(
+          'div',
+          'filerow__meta',
+          file.error ? file.error : id3FieldSummary(file.fields, file.bytesRemovable)
+        )
+      );
+      row.append(middle);
+      row.append(
+        file.bytesRemovable > 0
+          ? el('span', 'badge badge--packaged', 'tagged')
+          : el('span', 'badge', 'clean')
+      );
+
+      const actions = el('div', 'filerow__actions');
+      actions.append(el('span', 'cell', formatBytes(file.size)));
+      const reveal = el('button', 'pill pill--sm', `Show in ${settings.fileManager}`);
+      reveal.addEventListener('click', (event) => {
+        event.stopPropagation();
+        window.api.reveal(file.path);
+      });
+      actions.append(reveal);
+      row.append(actions);
+      row.addEventListener('click', () => {
+        if (file.error) return;
+        if (id3Selected.has(file.path)) id3Selected.delete(file.path);
+        else id3Selected.add(file.path);
+        paintFiles();
+      });
+      list.append(row);
+    });
+    if (id3Files.length > 500) {
+      list.append(
+        el(
+          'p',
+          'muted',
+          `Showing the first 500 files to keep the window fast. Selection buttons still apply to all ${id3Files.length}.`
+        )
+      );
+    }
+    updateButtons();
+  }
 
   async function scan() {
-    summary.textContent = 'Checking MP3s…';
+    if (!id3Folder) return;
+    status.textContent = 'Reading MP3 metadata…';
     list.innerHTML = '';
     try {
-      const found = await window.api.id3Inspect(entry.folder);
-      tagged = found.filter((f) => f.bytesRemovable > 0);
-
-      if (found.length === 0) {
-        summary.textContent = 'No MP3 files in this folder.';
-        stripBtn.disabled = true;
-        return;
-      }
-      if (tagged.length === 0) {
-        summary.textContent = `${found.length} MP3(s), none carrying tags.`;
-        stripBtn.disabled = true;
-        return;
-      }
-
-      const total = tagged.reduce((sum, f) => sum + f.bytesRemovable, 0);
-      summary.textContent = `${tagged.length} of ${found.length} MP3(s) carrying ${formatBytes(total)} of tags`;
-      stripBtn.disabled = false;
-
-      tagged.forEach((file) => {
-        const node = el('div', 'prev');
-        node.append(el('div', 'prev__to prev__to--same', file.name));
-        const parts = [];
-        if (file.hasV2) parts.push(`ID3v2 ×${file.v2Count}`);
-        if (file.hasV1) parts.push('ID3v1');
-        node.append(
-          el('div', 'prev__to', `${parts.join(' + ')} — ${formatBytes(file.bytesRemovable)}`)
-        );
-        list.append(node);
-      });
-    } catch (err) {
-      summary.textContent = err.message;
-      stripBtn.disabled = true;
+      id3Files = await window.api.id3Inspect(id3Folder);
+      id3Selected = new Set(
+        id3Files.filter((file) => !file.error && file.bytesRemovable > 0).map((file) => file.path)
+      );
+      paintFiles();
+    } catch (error) {
+      status.textContent = error.message;
+      id3Files = [];
+      id3Selected = new Set();
+      updateButtons();
     }
   }
 
-  stripBtn.addEventListener('click', async () => {
-    stripBtn.disabled = true;
-    stripBtn.textContent = 'Working…';
-    const results = await window.api.id3Strip(tagged.map((f) => f.path));
-    const changed = results.filter((r) => r.changed);
-    const saved = changed.reduce((sum, r) => sum + r.removed, 0);
-    toast('Tags stripped', `${changed.length} file(s), ${formatBytes(saved)} removed`);
-    stripBtn.textContent = 'Strip tags';
-    scan();
+  chooseBtn.addEventListener('click', async () => {
+    const chosen = await window.api.pickFolder();
+    if (!chosen) return;
+    id3Folder = chosen;
+    id3Files = [];
+    id3Selected = new Set();
+    render();
   });
 
-  scan();
+  allBtn.addEventListener('click', () => {
+    id3Selected = new Set(id3Files.filter((file) => !file.error).map((file) => file.path));
+    paintFiles();
+  });
+  taggedBtn.addEventListener('click', () => {
+    id3Selected = new Set(
+      id3Files.filter((file) => !file.error && file.bytesRemovable > 0).map((file) => file.path)
+    );
+    paintFiles();
+  });
+  noneBtn.addEventListener('click', () => {
+    id3Selected = new Set();
+    paintFiles();
+  });
+
+  writeBtn.addEventListener('click', async () => {
+    const chosen = selectedFiles();
+    if (!chosen.length) return;
+    if (!window.confirm(`Replace the metadata in ${chosen.length} selected MP3 file(s)?\n\nThe audio itself will not change.`)) return;
+
+    writeBtn.disabled = true;
+    removeBtn.disabled = true;
+    writeBtn.textContent = 'Writing…';
+    const jobs = chosen.map((file) => {
+      const filename = file.name.replace(/\.mp3$/i, '');
+      return {
+        path: file.path,
+        fields: {
+          title: title.input.value.replace(/{filename}/g, filename),
+          artist: artist.input.value,
+          album: album.input.value,
+          albumArtist: albumArtist.input.value,
+          composer: composer.input.value,
+          publisher: publisher.input.value,
+          copyright: copyright.input.value,
+          genre: genre.input.value,
+          year: year.input.value,
+          comment: comment.input.value
+        }
+      };
+    });
+    const results = await window.api.id3Write(jobs);
+    const changed = results.filter((result) => result.changed).length;
+    const failed = results.filter((result) => result.error).length;
+    toast('Metadata written', `${changed} file(s)` + (failed ? ` · ${failed} failed` : ''), failed > 0);
+    await scan();
+  });
+
+  removeBtn.addEventListener('click', async () => {
+    const chosen = selectedFiles();
+    if (!chosen.length) return;
+    if (!window.confirm(`Remove all metadata from ${chosen.length} selected MP3 file(s)?\n\nThe audio itself will not change.`)) return;
+
+    writeBtn.disabled = true;
+    removeBtn.disabled = true;
+    removeBtn.textContent = 'Removing…';
+    const results = await window.api.id3Strip(chosen.map((file) => file.path));
+    const changed = results.filter((result) => result.changed).length;
+    const failed = results.filter((result) => result.error).length;
+    toast('Metadata removed', `${changed} file(s)` + (failed ? ` · ${failed} failed` : ''), failed > 0);
+    await scan();
+  });
+
+  if (id3Folder) scan();
+}
+
+function id3FieldSummary(fields, bytes) {
+  const labels = [
+    fields && fields.title ? `Title: ${fields.title}` : null,
+    fields && fields.artist ? `Artist: ${fields.artist}` : null,
+    fields && fields.album ? `Album: ${fields.album}` : null,
+    fields && fields.composer ? `Author: ${fields.composer}` : null,
+    fields && fields.genre ? `Genre: ${fields.genre}` : null,
+    fields && fields.year ? `Year: ${fields.year}` : null
+  ].filter(Boolean);
+  if (labels.length) return labels.join('  ·  ');
+  return bytes > 0 ? 'Metadata present (no common text fields)' : 'No metadata';
 }
 
 /* ============================== dedupe ============================= */
