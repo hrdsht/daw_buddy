@@ -37,6 +37,294 @@
 - `Presets` added to the never-a-project list — five wasted levels on every
   Ableton project.
 
+## KSHMR feature gap analysis (from the XLNT Show walkthrough)
+
+Source: member-only video, summarised by Gemini into a built/missing table.
+Checked against the codebase — the table is broadly right, with two errors
+worth knowing.
+
+### Two things marked "Built" that you can't actually reach
+
+**Template renaming tokens.** `applyTemplate` exists in `lib/renamer.js` and
+works — `{project}_{name}_{n:02}`, `{bpm}`, `{key}`, `{date}` all tested. But
+there are **zero references to it in `src/app.js`**. The Rename tab only
+exposes Remove/Add with prefix-or-suffix. The engine is finished and has no
+button. Cheapest high-value work on this whole list.
+
+**Deep subfolder view.** `listAllAudio` exists in `lib/renders.js` and also
+has zero UI references. KSHMR's version flattens every audio file across all
+nested folders into one list. The function is written; it needs a view.
+
+Lesson worth carrying: "built" in the notes has meant "the module works", not
+"you can use it". Those are different, and only the second one counts.
+
+### Missing, ordered by value per hour of work
+
+| Feature | Effort | Notes |
+|---|---|---|
+| **Harmonic reference drone** | Low | We already detect the root note. A Web Audio oscillator on that pitch, toggle on the player. Small change, big feel — auditioning a vocal against a held root is genuinely useful. |
+| **Too-quiet file scanner** | Low | Reuses the RMS measurement in `silence.js` verbatim. Different threshold, different verdict. Nearly free. |
+| **Off-grid loop scanner** | Low | `duration × bpm / 60` should land near a whole number of beats. Flag files that don't. We have both duration and detected tempo already. |
+| **Audition soft clipper** | Low | `WaveShaperNode` with a tanh curve. Twenty lines. |
+| **Audition reverb** | Medium | `ConvolverNode` needs an impulse response. Can be synthesised — decaying noise burst — rather than shipping an IR file. |
+| **Waveform drag-to-trim** | Medium | The waveform and the WAV writer both exist. This is the UI in between: drag handles, then write the trimmed region. Arguably more useful than most of this list, and Gemini's table omits it entirely despite listing it in the walkthrough. |
+| **Asterisk note tagging** | Medium | `Kick_01 *clips at 2s*.wav` — note carried in the filename, parsed out for display. Clever because the note survives outside any app. Fits naturally with the renamer. |
+| **Bounce email** | Medium | The hook is already there in `main.js`. The work is credentials, not code — see caution below. |
+| **Mini tray window** | Medium | Electron `Tray` plus a compact always-on-top window sharing player state. Fits the existing "On top" workflow. |
+| **Dual-pane comparison** | High | Split browser, drag files between keep and reject. Moves files, so it needs the same preview-and-undo treatment as the renamer. |
+| **AI descriptive naming** | High | KSHMR's generates contextual names — Granite, Avalanche, Nordic. A fixed adjective dictionary is a much weaker thing wearing the same name. Worth being honest that we'd be building the weaker version unless a model is involved. |
+
+### Caution on the email hook
+
+Sending mail means storing an SMTP password in `settings.json` in plain text.
+That file already sits in your app data folder unencrypted.
+
+Two safer routes: an app-specific password rather than your real one, or skip
+mail entirely and POST to a webhook — Discord, Slack, Zapier — where the
+secret is a revocable URL rather than an account credential. Given the point
+is telling collaborators a bounce exists, a webhook probably fits better than
+email anyway.
+
+### What we have that the video didn't show
+
+Worth noting so it doesn't get lost: multi-DAW parsing beyond Ableton, the FL
+26 tempo workaround, hard-link de-duplication, cross-platform support, and the
+parse cache. Those aren't in KSHMR's tool as far as the walkthrough showed.
+
+---
+
+## N0. Club similar session names into one project with versions
+
+Six rows for what is one piece of work:
+
+```
+Nava bharat jodo 3            75 BPM   18h ago
+Nava bharat jodo 3 bounced_3  75 BPM    1d ago
+Nava bharat jodo 3 bounced_2  75 BPM    1d ago
+Nava bharat jodo 3 bounced    75 BPM    2d ago
+Nava bharat jodo 2            75 BPM    2d ago
+Nava bharat jodo              75 BPM    2d ago
+```
+
+Same folder, same tempo, same song. Should be **one row reading "Nava bharat
+jodo", newest date, expandable to six versions.**
+
+### The rule, and the safeguard that makes it safe
+
+Reduce a name to a stem by stripping, from the end, repeatedly:
+
+- trailing numbers and version markers — `3`, `_2`, `v4`
+- state words — `bounced`, `final`, `master`, `mixdown`, `mix`, `export`,
+  `rough`, `edit`, `wip`, `copy`
+
+`Nava bharat jodo 3 bounced_3` → strip `_3` → strip `bounced` → strip `3` →
+**`Nava bharat jodo`**.
+
+**The safeguard: never strip unless the result matches a sibling.** Stripping
+blindly would turn a project genuinely called "Studio 54" into "Studio", and a
+one-off named "Take 2" into "Take". Only collapse a name when the stem
+actually matches another session **in the same folder** — grouping happens
+only where there's evidence for it, and a lone file always keeps its full
+name.
+
+### Same folder only — deliberately
+
+From the same screenshot:
+
+```
+Adi - Kannamaniye   ADI - Olave / … / Adi - Kannamaniye · FL Studio
+Adi - Kanmaniye     ADI - Olave / … / Adi - Kanmaniye Project · Ableton
+Adi - Kannamaniye   ADI - Olave / … / Adi - Drums Programming · Ableton
+```
+
+Nearly the same name — one is a typo variant — across three folders and two
+DAWs. Fuzzy-matching across folders would merge these, and possibly merge
+things that only look alike. Folder boundaries are a real signal about intent;
+same-folder-only keeps the rule honest.
+
+### What the grouped row shows
+
+| Field | Value |
+|---|---|
+| Name | the shared stem |
+| Badge | `6 versions` — click to expand in place |
+| BPM | the newest version's |
+| Date | the newest version's |
+| Saves | the folder's backup count, as now |
+| Play | live if any version has a render |
+
+Expanded, each version is its own row: full filename, own date, own BPM, and
+its own Open button.
+
+### Must not break
+
+- **Notes stay per session file.** Each version keeps its own note and its own
+  txt file. Grouping is a display concern only — it must not touch the data
+  model, which is keyed on the session path.
+- **Renders still match per version.** `Nava bharat jodo 3 bounced_3` finds
+  its own render, not the group's.
+- **A toggle to switch grouping off**, next to the DAW filters. Some days you
+  want all 678.
+- The count in the sidebar should show groups, with the raw number available —
+  "412 projects (678 files)".
+
+### Open question
+
+`Yogi babu intro opt 2` and `Yogi babu intro opt 3` reduce to the same stem,
+but "opt" suggests deliberate alternatives rather than versions of one thing.
+Group them or not? Leaning group-with-expand, since nothing is lost and one
+click shows both — but worth your call.
+
+---
+
+## NEXT UP — from 14 Aug testing
+
+### N1. BUG: "Audio 70" and "No render found" on the same page
+
+Screenshot: `Nava bharat jodo 3` shows **Audio 70** in the facts line, and
+immediately below, "No render found matching Nava bharat jodo 3".
+
+Two different matchers disagreeing:
+
+- the row/page count comes from `countAudioFor` in `scanner.js` — a cheap
+  global name match over every audio stem the walk indexed, ignoring location
+- the render list comes from `findRenders` in `renders.js` — location-aware,
+  walks the project folder and ancestor render folders, and lets a more
+  specific sibling name win
+
+Likely cause: the count matches loosely on a shorter name (the folder is
+`Nava Bharat Jodo`, the session is `Nava bharat jodo 3`) while the page
+demands the full one. Needs checking against the real folder rather than
+guessed.
+
+**Fix direction: one matcher, used by both.** Have the scan run the real
+match once and store the count, or drop the count from the row entirely. A
+number the page then contradicts is worse than no number at all.
+
+### N2. Project files box on the project page
+
+A fourth selectable box alongside Renders / Notes / Rename / Strip tags,
+listing **the other session files in this folder**.
+
+Behaviour:
+
+- The box lists every `.als` / `.flp` / etc. in the same folder — the eight
+  Yogi files, the three Bangalore entry files
+- Click one → it becomes the selected project, showing its own versions
+- Click a session file → its renders list, mp3 and wav, exactly as the
+  Renders tab does now
+
+This is the same information the "N in folder" row badge hints at, but
+reachable from inside a project rather than only from the list. It's how you'd
+move between eight versions of the same idea without going back out to the
+list and searching.
+
+Note the wording distinction to keep straight in the UI: **versions** are the
+other session files in the folder; **renders** are the audio each one
+produced. Conflating those two is what made the old model wrong in the first
+place.
+
+### N2b. DAW filters in the left pane
+
+A DAWS section in the sidebar, below FOLDERS, one row per DAW with a count:
+
+```
+COLLECTIONS
+  All projects      678
+  Favourites          0
+
+DAWS
+  Ableton           512
+  FL Studio         160
+  REAPER              6
+
+FOLDERS
+  Jump              678
+```
+
+- Built from what the scan actually found — never list a DAW with zero
+  projects. A REAPER row on a machine with no REAPER projects is noise.
+- Click to filter, click again to clear, same behaviour as the folder rows.
+- Stacks with the folder filter: Ableton **and** Jump narrows to both.
+- Also worth adding as a sort option on the Name column header, so the list
+  can be grouped by DAW without filtering.
+
+Cheap to build — `entry.daw` is already on every row.
+
+### N2c. Location breadcrumb is truncating
+
+Visible in the same screenshot:
+
+```
+ADI - Olave / Adi - Drums Programming / Adi - Kannamaniye / Adi - Kannamaniye Project · Abl…
+```
+
+The DAW name gets cut off because the path ate the width. Two fixes worth
+doing together:
+
+- Move the DAW out of the breadcrumb — once there's a DAW filter and column
+  it's redundant there anyway
+- Truncate the path from the **middle**, not the end. The last folder is the
+  most useful part and it's currently the first thing lost:
+  `ADI - Olave / … / Adi - Kannamaniye Project`
+
+### N3. Colour palette in Settings — with measured contrast
+
+One accent per VIBGYOR family, all chosen to sit on near-black without
+glowing. **Live preview: applying on click, not on save.** It's only setting
+variables on `:root`, and you'll know in a second whether green feels right.
+
+Contrast measured against the real background (`#0d0d0e`) and against both
+candidate ink colours. WCAG wants 4.5:1 for normal text, 3:1 for large text
+and UI:
+
+| Family | Hex | As text on bg | Dark ink on fill | White ink on fill |
+|---|---|---|---|---|
+| Violet | `#9B6DFF` | 5.6:1 | **5.5:1** | 3.5:1 |
+| Indigo | `#7C83FF` | 6.1:1 | **5.9:1** | 3.2:1 |
+| Blue | `#3EA6FF` | 7.5:1 | **7.3:1** | 2.6:1 |
+| Green | `#2FD46B` | 9.9:1 | **9.7:1** | 2.0:1 |
+| Yellow | `#F2CE4B` | 12.7:1 | **12.4:1** | 1.5:1 |
+| Orange | `#F0A63A` | 9.5:1 | **9.3:1** | 2.1:1 |
+| Red | `#F0574B` | 5.7:1 | **5.6:1** | 3.4:1 |
+
+**Correction to an earlier assumption.** I said violet, indigo and blue would
+need white ink on their fills. Measured, that's wrong — white ink fails on
+every single one, badly (2.0 to 3.5), while dark ink passes 4.5:1 on all
+seven. These accents are light and saturated enough that dark ink always wins.
+
+So the design is simpler than expected: **one shared dark ink** (`#12100a`)
+across the whole palette, no per-colour ink field needed. Every accent also
+clears 4.5:1 as text on the background, so accent-coloured text is safe
+everywhere too.
+
+Amber sits between yellow and orange, so it takes the orange slot rather than
+being an eighth option — `#F0A63A` is the current colour exactly, and stays
+the default.
+
+**Each palette entry still carries four values**, just not the one I expected:
+
+```
+accent      the fill and accent text
+ink         #12100a — shared, dark, passes on all seven
+hover       accent lightened ~10% for hover on solid buttons
+soft        accent at 14% alpha, for badges and tinted rows
+```
+
+**The key colour still collides.** Musical key and Camelot use sage green
+deliberately so tempo and key never blur together, and choosing green as the
+accent merges them. Derive the key colour by rotating the accent's hue far
+enough away — that keeps them distinct whatever is chosen, and looks better
+than a fixed neutral sitting next to a strong accent. Needs a check that the
+derived colour also clears 4.5:1; worth measuring rather than assuming, given
+the above.
+
+Also to check when built: the waveform gradient, the play button, the meter
+fill and the focus ring all read the accent, so all four need looking at on
+the darkest option (violet) and the brightest (yellow) before it ships.
+
+---
+
 ## STILL TO BUILD
 
 - **Silence removal.** Needs the WAV encoder (RIFF chunks, 16/24-bit and

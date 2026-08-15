@@ -6,7 +6,7 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'; media-src 'self' blob:"
     />
-    <title>Project Browser</title>
+    <title>DAW Buddy</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -21,7 +21,7 @@
       <aside class="sidebar">
         <div class="sidebar__brand">
           <span class="dot" aria-hidden="true"></span>
-          Project Browser
+          DAW Buddy
         </div>
 
         <nav id="collections" class="collections"></nav>
@@ -71,6 +71,15 @@
         <canvas id="wave" class="wave" height="88"></canvas>
 
         <div class="player__right">
+          <button id="droneBtn" class="chip-btn" title="Hold the root note underneath">
+            Drone
+          </button>
+          <button id="verbBtn" class="chip-btn" title="Audition reverb">
+            Verb
+          </button>
+          <button id="clipBtn" class="chip-btn" title="Soft clipper">
+            Clip
+          </button>
           <input
             id="volume"
             class="slider"

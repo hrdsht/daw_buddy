@@ -103,7 +103,9 @@ const HOP = 1024;
 
 function spectra(samples, sampleRate, onProgress) {
   const window = hann(FRAME);
-  const frames = Math.max(0, Math.floor((samples.length - FRAME) / HOP));
+  const frames = samples.length < FRAME
+    ? 0
+    : 1 + Math.floor((samples.length - FRAME) / HOP);
   const out = [];
 
   const real = new Float64Array(FRAME);

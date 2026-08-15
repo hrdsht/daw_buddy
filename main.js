@@ -7,13 +7,17 @@ const fsp = require('fs/promises');
 const { scanRoots, scanFolder } = require('./lib/scanner');
 const { ProjectStore } = require('./lib/notes');
 const { NoteWriter } = require('./lib/notetext');
-const { Settings, isInside } = require('./lib/settings');
+const { Settings, isInside, samePath } = require('./lib/settings');
 const { startWatching, stopWatching } = require('./lib/watcher');
 const media = require('./lib/media');
 const renders = require('./lib/renders');
 const { ParseCache } = require('./lib/cache');
+const { migrate } = require('./lib/migrate');
 const id3 = require('./lib/id3');
 const renamer = require('./lib/renamer');
+const silence = require('./lib/silence');
+const audioqc = require('./lib/audioqc');
+const { groupVersions } = require('./lib/versions');
 const dedupe = require('./lib/dedupe');
 const procs = require('./lib/procs');
 
@@ -22,6 +26,8 @@ let store = null;
 let settings = null;
 let notes = null;
 let cache = null;
+let quitting = false;
+const pendingNoteSaves = new Set();
 
 const isMac = process.platform === 'darwin';
 const dataDir = () => app.getPath('userData');
@@ -51,12 +57,41 @@ function createWindow() {
   });
 }
 
+/**
+ * One instance only.
+ *
+ * Two copies running means two processes both writing notes.json, and
+ * last-write-wins silently loses whichever finished first. That's a quiet way
+ * to lose notes, so a second launch focuses the existing window instead.
+ *
+ * It also clears up the Chromium "Unable to move the cache: Access is denied"
+ * errors, which are the second instance failing to take the lock on the
+ * shader cache — harmless in themselves, but a symptom of the real problem.
+ */
+if (!app.requestSingleInstanceLock()) {
+  console.log('[app] DAW Buddy is already running — focusing that window.');
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (!mainWindow) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  });
+}
+
 app.whenReady().then(async () => {
+  // Renaming the app moved the data folder. Bring the old one across before
+  // anything reads from it, or it looks like every note vanished.
+  await migrate(dataDir());
+
   settings = new Settings(path.join(dataDir(), 'settings.json'));
   settings.load();
 
   store = new ProjectStore(path.join(dataDir(), 'notes.json'));
   await store.load();
+  Object.values(store.all()).forEach((record) => {
+    if (record && record.stemsPath) pickedFolders.add(path.resolve(record.stemsPath));
+  });
 
   cache = new ParseCache(path.join(dataDir(), 'cache.json'));
   await cache.load();
@@ -80,10 +115,26 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
+  if (!isMac) {
+    stopWatching();
+    app.quit();
+  }
+});
+
+app.on('before-quit', (event) => {
+  if (quitting) return;
+  event.preventDefault();
+  quitting = true;
   stopWatching();
-  if (store) store.flush();
-  if (cache) cache.save();
-  if (!isMac) app.quit();
+
+  Promise.allSettled([...pendingNoteSaves])
+    .then(() =>
+      Promise.allSettled([
+        store ? store.flush() : Promise.resolve(),
+        cache ? cache.save() : Promise.resolve()
+      ])
+    )
+    .finally(() => app.quit());
 });
 
 /**
@@ -96,7 +147,7 @@ async function ensureOutputFolder() {
   if (current.roots.length === 0) return null;
 
   let target = current.outputFolder;
-  if (!target) target = path.join(current.roots[0], 'Project Browser Output');
+  if (!target) target = path.join(current.roots[0], 'DAW Buddy Output');
 
   try {
     await fsp.mkdir(target, { recursive: true });
@@ -142,9 +193,10 @@ function restartWatcher() {
  * tools modify files.
  */
 function withinRoots(target) {
+  if (typeof target !== 'string' || !target) return null;
   return settings
     .get()
-    .roots.find((root) => target === root || isInside(target, root));
+    .roots.find((root) => samePath(target, root) || isInside(target, root));
 }
 
 /**
@@ -154,6 +206,24 @@ function withinRoots(target) {
  * to distinguish from a path the window made up.
  */
 const pickedFolders = new Set();
+
+function pickedBaseFor(target) {
+  const resolved = path.resolve(target);
+  for (const folder of pickedFolders) {
+    if (samePath(resolved, folder) || isInside(resolved, folder)) return folder;
+  }
+  return null;
+}
+
+function approvedBaseFor(target) {
+  return withinRoots(target) || pickedBaseFor(target);
+}
+
+function guardApproved(target) {
+  const base = approvedBaseFor(target);
+  if (!base) throw new Error('That path is outside your approved folders.');
+  return base;
+}
 
 function guard(target) {
   if (!withinRoots(target)) {
@@ -178,10 +248,19 @@ const fullSettings = () => ({
 ipcMain.handle('settings:get', () => fullSettings());
 
 ipcMain.handle('settings:update', (event, patch) => {
-  const before = settings.get();
-  const after = settings.update(patch);
+  patch = patch && typeof patch === 'object' ? patch : {};
+  const allowed = {};
+  if (typeof patch.alwaysOnTop === 'boolean') allowed.alwaysOnTop = patch.alwaysOnTop;
+  if (typeof patch.pollWatching === 'boolean') allowed.pollWatching = patch.pollWatching;
+  if (typeof patch.followLinks === 'boolean') allowed.followLinks = patch.followLinks;
+  if (Array.isArray(patch.ignore)) {
+    allowed.ignore = patch.ignore.filter((name) => typeof name === 'string');
+  }
 
-  if (patch.alwaysOnTop !== undefined && mainWindow) {
+  const before = settings.get();
+  const after = settings.update(allowed);
+
+  if (allowed.alwaysOnTop !== undefined && mainWindow) {
     mainWindow.setAlwaysOnTop(after.alwaysOnTop);
   }
   if (
@@ -212,12 +291,25 @@ ipcMain.handle('settings:addRoot', async () => {
     }
   }
 
-  if (changed) restartWatcher();
+  if (changed) {
+    await ensureOutputFolder();
+    restartWatcher();
+  }
   return { settings: fullSettings(), messages };
 });
 
-ipcMain.handle('settings:removeRoot', (event, root) => {
+ipcMain.handle('settings:removeRoot', async (event, root) => {
   settings.removeRoot(root);
+  const current = settings.get();
+  if (
+    current.outputFolder &&
+    !current.roots.some(
+      (remaining) => samePath(current.outputFolder, remaining) || isInside(current.outputFolder, remaining)
+    )
+  ) {
+    settings.update({ outputFolder: null });
+    await ensureOutputFolder();
+  }
   restartWatcher();
   return fullSettings();
 });
@@ -244,6 +336,7 @@ ipcMain.handle('projects:scan', async () => {
 
   return {
     entries,
+    grouped: groupVersions(entries),
     errors,
     truncated,
     foldersRead,
@@ -267,14 +360,25 @@ ipcMain.handle('projects:browse', async (event, target) => {
     followLinks: current.followLinks,
     cache
   });
-  return { entries, errors, truncated, root, browsing: target };
+  return { entries, grouped: groupVersions(entries), errors, truncated, root, browsing: target };
 });
 
 /* ----------------------------- records ---------------------------- */
 
 ipcMain.handle('records:all', () => store.all());
 
-ipcMain.handle('records:set', (event, key, patch) => store.set(key, patch));
+ipcMain.handle('records:set', (event, key, patch) => {
+  guardApproved(key);
+  patch = patch && typeof patch === 'object' ? patch : {};
+  const allowed = {};
+  [
+    'key', 'camelot', 'keyConfidence', 'keyAlternate', 'detectedBpm',
+    'analysedFrom', 'favourite'
+  ].forEach((field) => {
+    if (Object.prototype.hasOwnProperty.call(patch, field)) allowed[field] = patch[field];
+  });
+  return store.set(key, allowed);
+});
 
 ipcMain.handle('records:chooseStems', async (event, projectPath) => {
   const result = await dialog.showOpenDialog(mainWindow, {
@@ -283,7 +387,10 @@ ipcMain.handle('records:chooseStems', async (event, projectPath) => {
     properties: ['openDirectory']
   });
   if (result.canceled || result.filePaths.length === 0) return null;
-  return store.set(projectPath, { stemsPath: result.filePaths[0] });
+  guardApproved(projectPath);
+  const chosen = path.resolve(result.filePaths[0]);
+  pickedFolders.add(chosen);
+  return store.set(projectPath, { stemsPath: chosen });
 });
 
 /* ------------------------------ notes ----------------------------- */
@@ -293,12 +400,21 @@ ipcMain.handle('records:chooseStems', async (event, projectPath) => {
  * The text file lives beside the project and is renamed as you edit.
  */
 ipcMain.handle('notes:load', async (event, sessionPath) => {
+  guardApproved(sessionPath);
   const record = store.get(sessionPath);
 
   // If the app lost track of the file — moved machine, edited by hand — go
   // and look for it rather than starting a second one.
   let file = record.noteFile;
   if (!file) file = await notes.find(sessionPath);
+  if (
+    file &&
+    (!approvedBaseFor(file) ||
+      !samePath(path.dirname(file), path.dirname(sessionPath)) ||
+      path.extname(file).toLowerCase() !== '.txt')
+  ) {
+    file = null;
+  }
 
   let text = record.note || '';
   if (file) {
@@ -311,20 +427,37 @@ ipcMain.handle('notes:load', async (event, sessionPath) => {
   return { text, file };
 });
 
-ipcMain.handle('notes:save', async (event, sessionPath, text) => {
+ipcMain.handle('notes:save', (event, sessionPath, text) => {
+  const task = saveNote(sessionPath, text);
+  pendingNoteSaves.add(task);
+  task.then(
+    () => pendingNoteSaves.delete(task),
+    () => pendingNoteSaves.delete(task)
+  );
+  return task;
+});
+
+async function saveNote(sessionPath, text) {
   guard(path.dirname(sessionPath));
   const record = store.get(sessionPath);
+  const existingFile =
+    record.noteFile &&
+    approvedBaseFor(record.noteFile) &&
+    samePath(path.dirname(record.noteFile), path.dirname(sessionPath)) &&
+    path.extname(record.noteFile).toLowerCase() === '.txt'
+    ? record.noteFile
+    : null;
 
   let file = null;
   try {
-    file = await notes.save(sessionPath, text, record.noteFile);
+    file = await notes.save(sessionPath, text, existingFile);
   } catch (err) {
     console.error('[notes] Could not write note file:', err.message);
   }
 
   store.set(sessionPath, { note: text, noteFile: file });
   return { file };
-});
+}
 
 /* ------------------------------ media ----------------------------- */
 
@@ -334,19 +467,25 @@ ipcMain.handle('notes:save', async (event, sessionPath, text) => {
  * "Bangalore entry 1.als", not to "Bangalore entry.als".
  */
 ipcMain.handle('renders:find', async (event, sessionPath, root, extras, siblings) => {
-  return renders.findRenders(sessionPath, root, extras || [], siblings || []);
+  guardApproved(sessionPath);
+  guardApproved(root);
+  const approvedExtras = (extras || []).filter((folder) => approvedBaseFor(folder));
+  return renders.findRenders(sessionPath, root, approvedExtras, siblings || []);
 });
 
-ipcMain.handle('renders:all', async (event, folder) =>
-  renders.listAllAudio(folder)
-);
+ipcMain.handle('renders:all', async (event, folder) => {
+  guardApproved(folder);
+  return renders.listAllAudio(folder);
+});
 
 ipcMain.handle('media:list', async (event, folder) => {
+  guardApproved(folder);
   const files = await media.listAudio(folder);
   return { files, renders: media.groupRenders(files) };
 });
 
 ipcMain.handle('media:read', async (event, filePath) => {
+  guardApproved(filePath);
   const buf = await media.readFile(filePath);
   return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
 });
@@ -359,6 +498,7 @@ ipcMain.handle('media:read', async (event, filePath) => {
  * the worst possible time for it.
  */
 ipcMain.handle('shell:openProject', async (event, target, projectName) => {
+  guardApproved(target);
   const running = await procs.runningDaws();
 
   if (running.length > 0) {
@@ -379,11 +519,13 @@ ipcMain.handle('shell:openProject', async (event, target, projectName) => {
   return { opened: !error, error: error || null };
 });
 
-ipcMain.handle('shell:reveal', (event, target) =>
-  shell.showItemInFolder(target)
-);
+ipcMain.handle('shell:reveal', (event, target) => {
+  if (!samePath(target, dataDir())) guardApproved(target);
+  return shell.showItemInFolder(target);
+});
 
 ipcMain.handle('shell:open', async (event, target) => {
+  guardApproved(target);
   const error = await shell.openPath(target);
   return error || null;
 });
@@ -404,6 +546,9 @@ ipcMain.handle('tools:id3Strip', async (event, paths) => {
   for (const filePath of paths) {
     try {
       guard(path.dirname(filePath));
+      if (path.extname(filePath).toLowerCase() !== '.mp3') {
+        throw new Error('Only MP3 files can be stripped.');
+      }
       results.push(await id3.strip(filePath));
     } catch (err) {
       results.push({ path: filePath, changed: false, error: err.message });
@@ -419,13 +564,13 @@ ipcMain.handle('tools:pickFolder', async () => {
     properties: ['openDirectory']
   });
   if (result.canceled || result.filePaths.length === 0) return null;
-  return result.filePaths[0];
+  const chosen = path.resolve(result.filePaths[0]);
+  pickedFolders.add(chosen);
+  return chosen;
 });
 
 ipcMain.handle('tools:renameList', async (event, folder, extensions) => {
-  if (!withinRoots(folder) && !pickedFolders.has(folder)) {
-    throw new Error('Choose that folder with the picker first.');
-  }
+  guardApproved(folder);
   return renamer.listFiles(folder, extensions);
 });
 
@@ -434,10 +579,13 @@ ipcMain.handle('tools:renamePlan', (event, files, options) =>
 );
 
 ipcMain.handle('tools:renameApply', async (event, planned) => {
+  if (!planned || !Array.isArray(planned.rows)) throw new Error('Invalid rename plan.');
+  const renameable = new Set(['.wav', '.mp3', '.aiff', '.aif', '.flac']);
   planned.rows.forEach((row) => {
     const dir = path.dirname(row.path);
-    if (!withinRoots(dir) && !pickedFolders.has(dir)) {
-      throw new Error('That folder was not chosen with the picker.');
+    guardApproved(dir);
+    if (!renameable.has(path.extname(row.path).toLowerCase())) {
+      throw new Error('Only audio files can be renamed here.');
     }
   });
   return renamer.apply(planned, undoLog());
@@ -450,6 +598,91 @@ ipcMain.handle('tools:renameUndo', () => renamer.undo(undoLog()));
 ipcMain.handle('output:get', () => settings.get().outputFolder);
 
 ipcMain.handle('output:ensure', () => ensureOutputFolder());
+
+/* --------------------------- silence ------------------------------ */
+
+/** Any WAV in the folder. Only WAV — the tool refuses everything else. */
+ipcMain.handle('silence:list', async (event, folder) => {
+  guardApproved(folder);
+
+  const files = await media.listAudio(folder, 1);
+  return files
+    .filter((file) => file.ext === '.wav')
+    .map((file) => ({ path: file.path, name: file.name, size: file.size }));
+});
+
+/**
+ * Dry run. Measures what would be trimmed and writes nothing, so the numbers
+ * on screen come from the same measurement the real pass will use.
+ */
+ipcMain.handle('silence:analyse', async (event, paths, options) => {
+  const results = [];
+  for (let i = 0; i < paths.length; i += 1) {
+    guardApproved(paths[i]);
+    results.push(await silence.analyse(paths[i], options));
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('silence:progress', {
+        done: i + 1,
+        total: paths.length,
+        phase: 'analyse'
+      });
+    }
+  }
+  return results;
+});
+
+ipcMain.handle('silence:process', async (event, paths, options) => {
+  const outputRoot = await ensureOutputFolder();
+  if (!outputRoot) {
+    throw new Error('No output folder — add a project folder in Settings first.');
+  }
+
+  const { response } = await dialog.showMessageBox(mainWindow, {
+    type: 'question',
+    buttons: ['Cancel', 'Process'],
+    defaultId: 1,
+    cancelId: 0,
+    title: 'Remove silence',
+    message: `Process ${paths.length} file(s)?`,
+    detail: `Trimmed copies are written to:\n${outputRoot}\n\nYour originals are not touched.`
+  });
+  if (response !== 1) return { cancelled: true, results: [] };
+
+  const results = [];
+  for (let i = 0; i < paths.length; i += 1) {
+    const sourceRoot = guardApproved(paths[i]);
+    results.push(
+      await silence.removeSilence(paths[i], outputRoot, { ...options, sourceRoot })
+    );
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('silence:progress', {
+        done: i + 1,
+        total: paths.length,
+        phase: 'process'
+      });
+    }
+  }
+
+  return { cancelled: false, results, outputRoot };
+});
+
+/* ---------------------------- audio QC ---------------------------- */
+
+ipcMain.handle('qc:scan', async (event, folder, options) => {
+  guardApproved(folder);
+  return audioqc.scanFolder(folder, options, (done, total) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('qc:progress', { done, total });
+    }
+  });
+});
+
+/* ------------------------ deep audio list ------------------------- */
+
+ipcMain.handle('audio:deep', async (event, folder) => {
+  guardApproved(folder);
+  return renders.listAllAudio(folder);
+});
 
 ipcMain.handle('dedupe:scan', async () => {
   const roots = settings.get().roots;
