@@ -52,6 +52,18 @@ Required outcome:
 Do not proceed to the theme selector or the next reference-workflow feature
 until this view has been manually checked in the running app.
 
+## Next build — vocal timeline round trip
+
+After repairing the Matches layout, the first new feature is the accepted
+**Vocal timeline round trip** proposal ([0005](0005-vocal-timeline-round-trip.md)).
+It splits a long vocal into active phrases, records every original position in
+a sample-accurate manifest, and rebuilds externally converted phrases onto the
+original timeline without touching any source file.
+
+The initial build is WAV-first and strict about timing mismatches. Visual
+waveform overlay, pinning and time-stretching are a later phase; the first
+version must report drift rather than silently damaging or overlapping speech.
+
 ## Reference feature audit
 
 This is the complete remaining gap collected from the reference workflow
@@ -174,11 +186,12 @@ performance should still be observed during user testing.
 ## Decision
 
 Continue from the audited status instead of blindly following the old tier
-order. First repair the broken **Matches** results layout. After that, the
-safest small visual addition is the **preset theme selector**. The next major
-reference-workflow feature is the **waveform trimmer**, followed by asterisk
-notes and the dual-pane comparison only after its move/undo rules are
-specified. Each feature must be `tsc`-clean, tested where practical and
+order. First repair the broken **Matches** results layout, then implement the
+accepted **Vocal timeline round trip** ([0005](0005-vocal-timeline-round-trip.md)).
+After that, the safest small visual addition is the **preset theme selector**.
+The next major reference-workflow feature is the **waveform trimmer**, followed
+by asterisk notes and the dual-pane comparison only after its move/undo rules
+are specified. Each feature must be `tsc`-clean, tested where practical and
 manually clicked through in the running app.
 
 ## Consequences
