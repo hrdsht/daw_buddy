@@ -7,6 +7,7 @@
 
 import { Player } from './player';
 import { DSP } from './dsp';
+import { parseQuery, hasQuery, matchesQuery } from './search';
 
 const $ = (id: string): any => document.getElementById(id);
 
@@ -270,25 +271,16 @@ function collButton(name, count) {
 /* ============================== the list =========================== */
 
 function visible() {
-  const query = searchEl.value.trim().toLowerCase();
+  const q = parseQuery(searchEl.value);
+  const active = hasQuery(q);
   const source = groupVersionsOn && groupedRows.length ? groupedRows : entries;
 
   let list = source.filter((entry) => {
     if (filterRoot && entry.root !== filterRoot) return false;
     if (filterDaw && entry.daw !== filterDaw) return false;
     if (favOnly && !record(entry.path).favourite) return false;
-    if (!query) return true;
-
-    const rec = record(entry.path);
-    const names = entry.versions
-      ? entry.versions.map((v) => v.name).join(' ')
-      : entry.name;
-
-    return [names, entry.location, entry.daw, rec.note, rec.key, rec.camelot, entry.bpm]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase()
-      .includes(query);
+    if (!active) return true;
+    return matchesQuery(entry, record(entry.path), q);
   });
 
   return list.slice().sort((a, b) => {
