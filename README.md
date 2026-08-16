@@ -8,13 +8,20 @@ and tells you when a new bounce lands on disk.
 Numbered and bounced session files in the same folder are treated as versions of
 one song, so opening version 4 can still find a render made from version 3. An
 animated splash plays while the first scan runs, project utilities live on a
-focused Tools page, and there's a standalone Strip-silence workflow for any
-folder you point at.
+focused Tools page, and standalone sidebar tools handle sample cleanup, ID3
+editing, bulk renaming, disk-space insights, audio finishing, and silence
+removal. Disk insights is read-only. Audio finishing and Strip silence always
+create new copies and leave the original audio untouched.
 
 You tell it which folders to look at, in Settings. It never scans your whole
 computer — the only folders ever opened are the ones on your list. Nothing
 leaves your machine: no server, no account, no internet call except the two font
 files the window loads.
+
+The first launch builds a complete project catalogue. Later launches show that
+catalogue immediately and verify changes quietly in the background. The Windows
+launcher also reuses the compiled app unless code or assets have changed, so a
+normal launch does not rebuild everything.
 
 ---
 
@@ -74,7 +81,7 @@ This compiles the TypeScript, bundles the window, and launches the app.
 
 **From then on, just double-click the launcher** instead of using a terminal:
 
-- **Windows:** `scripts\DAW Buddy.bat`
+- **Windows:** `DAW Buddy.bat`
 - **macOS:** `scripts/DAW Buddy.command` — run `chmod +x "scripts/DAW Buddy.command"`
   once so macOS will let it launch
 

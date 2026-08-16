@@ -8,6 +8,7 @@
 import { Player } from './player';
 import { parseQuery, hasQuery, matchesQuery } from './search';
 import { findMatches } from './matching';
+import { droneNoteFor } from './drone';
 
 const $ = (id: string): any => document.getElementById(id);
 
@@ -51,6 +52,7 @@ let openProject = null;
 let projectTab = 'projectfiles';
 let projectTool = null;
 let selected = null;
+let activeAuditionPath = null;
 let filterRoot = null;
 let filterDaw = null;
 let favOnly = false;
@@ -59,9 +61,16 @@ let sortDir = -1;
 const noteTimers = new Map();
 let dedupeState = { groups: [], scanned: 0, folders: 0, chosen: new Set<number>() };
 let silenceProgressStatus = null;
+let finishProgressStatus = null;
 let qcProgressStatus = null;
 let dedupeProgressStatus = null;
+let diskProgressStatus = null;
+let diskState = null;
+let diskScanning = false;
 let activeNoteEditor = null;
+let finishFolder = null;
+let finishResults = [];
+let finishChosen = new Set<number>();
 let id3Folder = null;
 let id3Files = [];
 let id3Selected = new Set();
@@ -101,6 +110,14 @@ async function refresh() {
     ? await window.api.browse(browsing)
     : await window.api.scan();
 
+  applyProjectResult(result);
+}
+
+function applyProjectResult(result, { background = false } = {}) {
+  // Do not replace a folder-specific browsing view with the root catalogue.
+  // The next trip back to All projects will request the verified root list.
+  if (background && browsing) return;
+
   entries = result.entries || [];
   groupedRows = result.grouped || [];
 
@@ -113,7 +130,8 @@ async function refresh() {
 
   if (result.cache) {
     console.log(
-      `[scan] ${entries.length} sessions · ${result.foldersRead} folders read · ` +
+      `[${result.fromIndex ? 'index' : 'scan'}] ${entries.length} sessions · ` +
+        `${result.foldersRead} folders read · ` +
         `cache ${result.cache.hits} hit / ${result.cache.misses} parsed`
     );
   }
@@ -140,8 +158,10 @@ function render() {
 
   if (view === 'project') return renderProjectPage();
   if (view === 'dedupe') return renderDedupe();
+  if (view === 'disk') return renderDiskInsights();
   if (view === 'id3') return renderId3Editor();
   if (view === 'rename') return renderStandaloneRename();
+  if (view === 'finish') return renderAudioFinishing();
   if (view === 'silence') return renderStandaloneSilence();
   return renderList();
 }
@@ -157,6 +177,7 @@ function goList(folder) {
 function goProject(entry) {
   view = 'project';
   openProject = entry;
+  activeAuditionPath = entry.path;
   projectTab = 'projectfiles';
   projectTool = null;
   renameFolder = entry.folder;
@@ -491,6 +512,10 @@ function buildRow(entry) {
 }
 
 async function playNewest(entry) {
+  // The Play button stops the row click from bubbling. Record the project
+  // explicitly so the drone follows this audio, not an older highlighted row.
+  selected = entry.path;
+  activeAuditionPath = entry.path;
   const result = await window.api.findRenders(
     entry.sessionPath,
     entry.root,
@@ -1536,6 +1561,261 @@ function fieldInput(label) {
   return { wrap, input };
 }
 
+/* ------------------------- audio finishing ----------------------- */
+
+$('openFinish').addEventListener('click', () => {
+  view = 'finish';
+  viewEl.scrollTop = 0;
+  render();
+});
+
+function renderAudioFinishing() {
+  viewEl.innerHTML = '';
+
+  const section = el('div', 'section');
+  section.append(headRow('Audio finishing'));
+  section.append(
+    el(
+      'div',
+      'callout callout--warn',
+      'Normalizes WAV peak level and optionally trims long files to an exact beat/bar length. Finished copies are written to the output folder; originals are never changed. Short files are never stretched or padded.'
+    )
+  );
+
+  const folderBar = el('div', 'callout');
+  folderBar.append(el('div', 'page__kicker', 'Reading WAVs from'));
+  const folderPath = el('div', 'mono', finishFolder || 'Choose a folder to begin');
+  folderPath.style.cssText = 'margin:6px 0 10px;word-break:break-all';
+  folderBar.append(folderPath);
+  const choose = el(
+    'button',
+    `pill${finishFolder ? ' pill--sm' : ' pill--solid'}`,
+    finishFolder ? 'Choose a different folder' : 'Choose folder'
+  );
+  choose.addEventListener('click', async () => {
+    const chosen = await window.api.pickFolder();
+    if (!chosen) return;
+    finishFolder = chosen;
+    finishResults = [];
+    finishChosen = new Set();
+    render();
+  });
+  folderBar.append(choose);
+  section.append(folderBar);
+
+  let normalize = true;
+  let trimToBars = true;
+  const modeRow = el('div', 'tabs');
+  const normalizeBtn = el('button', 'pill is-on', 'Normalize peak');
+  const trimBtn = el('button', 'pill is-on', 'Fit to bars');
+  modeRow.append(normalizeBtn, trimBtn);
+  section.append(modeRow);
+
+  const controls = el('div', 'grid2');
+  const peak = fieldInput('Target peak (dB)');
+  peak.input.type = 'number';
+  peak.input.step = '0.1';
+  peak.input.value = '-1';
+  const bpm = fieldInput('BPM');
+  bpm.input.type = 'number';
+  bpm.input.min = '20';
+  bpm.input.max = '400';
+  bpm.input.value = '120';
+  const bars = fieldInput('Bars');
+  bars.input.type = 'number';
+  bars.input.min = '1';
+  bars.input.value = '4';
+  const beats = fieldInput('Beats per bar');
+  beats.input.type = 'number';
+  beats.input.min = '1';
+  beats.input.value = '4';
+  controls.append(peak.wrap, bpm.wrap, bars.wrap, beats.wrap);
+  section.append(controls);
+
+  const actions = el('div', 'tabs');
+  const analyseBtn = el('button', 'pill pill--solid', 'Analyse folder');
+  const selectAllBtn = el('button', 'pill', 'Select all');
+  const clearBtn = el('button', 'pill', 'Clear selection');
+  const processBtn = el('button', 'pill', 'Create finished copies');
+  analyseBtn.disabled = !finishFolder;
+  selectAllBtn.disabled = true;
+  clearBtn.disabled = true;
+  processBtn.disabled = true;
+  actions.append(analyseBtn, selectAllBtn, clearBtn, processBtn);
+  section.append(actions);
+
+  const status = el('p', 'muted');
+  finishProgressStatus = status;
+  status.style.marginTop = '12px';
+  if (!finishFolder) status.textContent = 'Choose any folder containing WAV files.';
+  const list = el('div');
+  section.append(status, list);
+  viewEl.append(section);
+
+  function currentOptions() {
+    return {
+      normalize,
+      trimToBars,
+      targetPeakDb: Number(peak.input.value),
+      bpm: Number(bpm.input.value),
+      bars: Number(bars.input.value),
+      beatsPerBar: Number(beats.input.value)
+    };
+  }
+
+  function updateButtons() {
+    const selectable = finishResults.filter((result) => !result.error && result.changing).length;
+    selectAllBtn.disabled = selectable === 0 || finishChosen.size === selectable;
+    clearBtn.disabled = finishChosen.size === 0;
+    processBtn.disabled = finishChosen.size === 0;
+    processBtn.textContent = finishChosen.size
+      ? `Create finished copies (${finishChosen.size})`
+      : 'Create finished copies';
+  }
+
+  function paint() {
+    list.innerHTML = '';
+    if (!finishResults.length) {
+      updateButtons();
+      return;
+    }
+
+    const changing = finishResults.filter((result) => !result.error && result.changing);
+    status.textContent = `${changing.length} of ${finishResults.length} file(s) would change`;
+
+    finishResults.forEach((result, index) => {
+      const row = el('div', 'dupe');
+      const check = el('input', 'check');
+      check.type = 'checkbox';
+      check.disabled = Boolean(result.error || !result.changing);
+      check.checked = finishChosen.has(index);
+      check.addEventListener('change', () => {
+        if (check.checked) finishChosen.add(index);
+        else finishChosen.delete(index);
+        updateButtons();
+      });
+      row.append(check);
+
+      const middle = el('div');
+      middle.append(el('div', 'dupe__name', result.name || basename(result.path)));
+      const details = result.error
+        ? `Skipped — ${result.error}`
+        : [
+            `${result.duration.toFixed(2)}s`,
+            Number.isFinite(result.peakDb) ? `${result.peakDb.toFixed(1)} dB peak` : 'silent',
+            result.tooShort ? 'shorter than requested length' : null,
+            result.gainLimited ? 'boost limited to +24 dB' : null
+          ].filter(Boolean).join(' · ');
+      middle.append(el('div', 'dupe__where', details));
+      row.append(middle);
+      row.append(
+        el(
+          'div',
+          'dupe__num',
+          result.error || !normalize ? '—' : `${result.gainDb >= 0 ? '+' : ''}${result.gainDb.toFixed(1)} dB`
+        )
+      );
+      row.append(
+        el(
+          'div',
+          'dupe__num dupe__num--waste',
+          result.error || !trimToBars || result.trimSeconds <= 0
+            ? '—'
+            : `-${result.trimSeconds.toFixed(2)}s`
+        )
+      );
+      list.append(row);
+    });
+    updateButtons();
+  }
+
+  function invalidate() {
+    finishResults = [];
+    finishChosen = new Set();
+    status.textContent = 'Settings changed — analyse again to preview the result.';
+    paint();
+  }
+
+  normalizeBtn.addEventListener('click', () => {
+    normalize = !normalize;
+    normalizeBtn.classList.toggle('is-on', normalize);
+    peak.input.disabled = !normalize;
+    invalidate();
+  });
+  trimBtn.addEventListener('click', () => {
+    trimToBars = !trimToBars;
+    trimBtn.classList.toggle('is-on', trimToBars);
+    [bpm.input, bars.input, beats.input].forEach((input) => { input.disabled = !trimToBars; });
+    invalidate();
+  });
+  [peak.input, bpm.input, bars.input, beats.input].forEach((input) => {
+    input.addEventListener('input', invalidate);
+  });
+
+  analyseBtn.addEventListener('click', async () => {
+    if (!finishFolder) return;
+    if (!normalize && !trimToBars) {
+      toast('Choose an action', 'Turn on Normalize peak, Fit to bars, or both.', true);
+      return;
+    }
+    if (trimToBars && (!(Number(bpm.input.value) > 0) || !(Number(bars.input.value) > 0))) {
+      toast('Check the musical length', 'BPM and Bars must be greater than zero.', true);
+      return;
+    }
+
+    analyseBtn.disabled = true;
+    analyseBtn.textContent = 'Analysing…';
+    finishResults = [];
+    finishChosen = new Set();
+    list.innerHTML = '';
+    try {
+      const files = await window.api.finishList(finishFolder);
+      finishResults = await window.api.finishAnalyse(files.map((file) => file.path), currentOptions());
+      finishChosen = new Set(
+        finishResults
+          .map((result, index) => (!result.error && result.changing ? index : -1))
+          .filter((index) => index >= 0)
+      );
+      paint();
+    } catch (error) {
+      status.textContent = error.message || String(error);
+    } finally {
+      analyseBtn.disabled = false;
+      analyseBtn.textContent = 'Analyse folder';
+    }
+  });
+
+  selectAllBtn.addEventListener('click', () => {
+    finishChosen = new Set(
+      finishResults
+        .map((result, index) => (!result.error && result.changing ? index : -1))
+        .filter((index) => index >= 0)
+    );
+    paint();
+  });
+  clearBtn.addEventListener('click', () => {
+    finishChosen = new Set();
+    paint();
+  });
+  processBtn.addEventListener('click', async () => {
+    const paths = [...finishChosen].map((index) => finishResults[index].path);
+    if (!paths.length) return;
+    processBtn.disabled = true;
+    processBtn.textContent = 'Processing…';
+    const result = await window.api.finishProcess(paths, currentOptions());
+    if (!result.cancelled) {
+      const changed = result.results.filter((item) => item.modified).length;
+      const failed = result.results.filter((item) => !item.success).length;
+      toast('Finished copies created', `${changed} file(s)` + (failed ? ` · ${failed} failed` : ''), failed > 0);
+      if (changed) status.textContent = `Finished copies are in ${result.outputRoot}`;
+    }
+    processBtn.disabled = false;
+    updateButtons();
+  });
+
+  paint();
+}
+
 /* ----------------------------- silence ---------------------------- */
 
 let silenceFolder = null;
@@ -1556,7 +1836,7 @@ function renderSilenceTab(entry = null) {
     el(
       'div',
       'callout callout--warn',
-      'Trims trailing silence from WAV files. Your originals are never touched — trimmed copies are written to the output folder. Analyse first to see exactly what would be cut.'
+      'Trims silence from the beginning, end or both sides of WAV files. Your originals are never touched — trimmed copies are written to the output folder. Analyse first to see exactly what would be cut.'
     )
   );
 
@@ -1599,6 +1879,27 @@ function renderSilenceTab(entry = null) {
   /* settings */
   const controls = el('div', 'grid2');
 
+  const whereWrap = el('div', 'fieldrow');
+  whereWrap.append(el('label', null, 'Remove silence from'));
+  const whereRow = el('div', 'tabs');
+  let where = 'Both';
+  const startBtn = el('button', 'pill', 'Beginning');
+  const endBtn = el('button', 'pill', 'End');
+  const bothBtn = el('button', 'pill is-on', 'Both');
+  function setWhere(next) {
+    where = next;
+    startBtn.classList.toggle('is-on', next === 'Start');
+    endBtn.classList.toggle('is-on', next === 'End');
+    bothBtn.classList.toggle('is-on', next === 'Both');
+    invalidateSilencePreview();
+  }
+  startBtn.addEventListener('click', () => setWhere('Start'));
+  endBtn.addEventListener('click', () => setWhere('End'));
+  bothBtn.addEventListener('click', () => setWhere('Both'));
+  whereRow.append(startBtn, endBtn, bothBtn);
+  whereWrap.append(whereRow);
+  controls.append(whereWrap);
+
   const detectWrap = el('div', 'fieldrow');
   detectWrap.append(el('label', null, 'Detection'));
   const detectRow = el('div', 'tabs');
@@ -1611,11 +1912,13 @@ function renderSilenceTab(entry = null) {
     detection = 'RMS';
     rmsBtn.classList.add('is-on');
     peakBtn.classList.remove('is-on');
+    invalidateSilencePreview();
   });
   peakBtn.addEventListener('click', () => {
     detection = 'Peak';
     peakBtn.classList.add('is-on');
     rmsBtn.classList.remove('is-on');
+    invalidateSilencePreview();
   });
   detectRow.append(rmsBtn, peakBtn);
   detectWrap.append(detectRow);
@@ -1625,7 +1928,7 @@ function renderSilenceTab(entry = null) {
   threshold.input.value = '-72';
   controls.append(threshold.wrap);
 
-  const tail = fieldInput('Leave a tail (ms)');
+  const tail = fieldInput('Leave safety padding (ms)');
   tail.input.value = '10';
   tail.input.title =
     'Cutting at the exact sample where audio drops below the threshold truncates a decaying waveform and clicks. A few ms of padding avoids that.';
@@ -1653,7 +1956,9 @@ function renderSilenceTab(entry = null) {
   function options() {
     return {
       detection,
+      where,
       thresholdDb: Number(threshold.input.value) || -72,
+      headMs: Number(tail.input.value) || 10,
       tailMs: Number(tail.input.value) || 10
     };
   }
@@ -1666,7 +1971,7 @@ function renderSilenceTab(entry = null) {
 
     const total = usable.reduce((sum, r) => sum + r.removable, 0);
     status.textContent =
-      `${usable.length} of ${silenceResults.length} file(s) have trailing silence — ` +
+      `${usable.length} of ${silenceResults.length} file(s) have removable silence — ` +
       `${total.toFixed(1)}s in total`;
 
     silenceResults.forEach((result, index) => {
@@ -1700,19 +2005,40 @@ function renderSilenceTab(entry = null) {
       row.append(middle);
 
       row.append(
-        el('div', 'dupe__num', result.error || result.skip ? '—' : `${result.duration.toFixed(1)}s`)
+        el(
+          'div',
+          'dupe__num',
+          result.error || result.skip
+            ? '—'
+            : `Start −${result.leadingRemovable.toFixed(2)}s`
+        )
       );
       row.append(
         el(
           'div',
           'dupe__num dupe__num--waste',
-          result.error || result.skip ? '' : `−${result.removable.toFixed(2)}s`
+          result.error || result.skip
+            ? ''
+            : `End −${result.trailingRemovable.toFixed(2)}s`
         )
       );
 
       list.append(row);
     });
   }
+
+  function invalidateSilencePreview() {
+    if (!silenceResults.length) return;
+    silenceResults = [];
+    silenceChosen = new Set();
+    processBtn.disabled = true;
+    processBtn.textContent = 'Process selected';
+    list.innerHTML = '';
+    status.textContent = 'Settings changed — analyse again to preview the cut.';
+  }
+
+  threshold.input.addEventListener('input', invalidateSilencePreview);
+  tail.input.addEventListener('input', invalidateSilencePreview);
 
   analyseBtn.addEventListener('click', async () => {
     analyseBtn.disabled = true;
@@ -2280,6 +2606,136 @@ function id3FieldSummary(fields, bytes) {
   return bytes > 0 ? 'Metadata present (no common text fields)' : 'No metadata';
 }
 
+/* ========================== disk insights ========================= */
+
+$('openDisk').addEventListener('click', () => {
+  view = 'disk';
+  viewEl.scrollTop = 0;
+  render();
+});
+
+function renderDiskInsights() {
+  viewEl.innerHTML = '';
+
+  const section = el('div', 'section');
+  section.append(headRow('Disk insights'));
+  section.append(
+    el(
+      'div',
+      'callout',
+      'A read-only size check of the folders that contain your DAW project files. Nothing is changed or deleted. Junctions and cloud links are skipped, and the scan stops safely at 250,000 files.'
+    )
+  );
+
+  const actions = el('div', 'tabs');
+  const scanBtn = el('button', 'pill pill--solid', diskState ? 'Scan again' : 'Scan disk usage');
+  const cancelBtn = el('button', 'pill', 'Cancel scan');
+  cancelBtn.hidden = !diskScanning;
+  scanBtn.disabled = diskScanning;
+  actions.append(scanBtn, cancelBtn);
+  section.append(actions);
+
+  const status = el('p', 'muted');
+  status.style.marginTop = '12px';
+  diskProgressStatus = status;
+  section.append(status);
+
+  const results = el('div');
+  section.append(results);
+  viewEl.append(section);
+
+  function paint() {
+    results.innerHTML = '';
+    if (!diskState) {
+      status.textContent = diskScanning
+        ? 'Preparing folder scan…'
+        : 'Run the scan to find your largest project and Imported-sample folders.';
+      return;
+    }
+
+    const measured = diskState.projects.reduce((sum, item) => sum + item.bytes, 0);
+    const flags = [
+      diskState.cancelled ? 'cancelled early' : null,
+      diskState.truncated ? 'stopped at the 250,000-file safety limit' : null,
+      diskState.errors ? `${diskState.errors} unreadable folder/file(s)` : null
+    ].filter(Boolean);
+    status.textContent =
+      `${diskState.foldersScanned} of ${diskState.totalFolders} folder(s) measured · ` +
+      `${diskState.filesScanned} files · ${formatBytes(measured)}` +
+      (flags.length ? ` · ${flags.join(' · ')}` : '');
+
+    results.append(diskInsightList('Largest project folders', diskState.projects));
+    if (diskState.imported.length) {
+      results.append(diskInsightList('Largest Samples / Imported folders', diskState.imported));
+    }
+  }
+
+  scanBtn.addEventListener('click', async () => {
+    const folders = [...new Set(entries.map((entry) => entry.folder).filter(Boolean))];
+    if (!folders.length) {
+      toast('Nothing to scan', 'No project folders are currently indexed.', true);
+      return;
+    }
+
+    diskScanning = true;
+    diskState = null;
+    scanBtn.disabled = true;
+    scanBtn.textContent = 'Scanning…';
+    cancelBtn.hidden = false;
+    paint();
+
+    try {
+      diskState = await window.api.diskScan(folders);
+    } catch (error) {
+      toast('Disk scan failed', error.message || String(error), true);
+    } finally {
+      diskScanning = false;
+      renderDiskInsights();
+    }
+  });
+
+  cancelBtn.addEventListener('click', async () => {
+    cancelBtn.disabled = true;
+    cancelBtn.textContent = 'Cancelling…';
+    status.textContent = 'Stopping after the current folder read…';
+    await window.api.diskCancel();
+  });
+
+  paint();
+}
+
+function diskInsightList(title, items) {
+  const block = el('div');
+  const heading = el('h3', null, title);
+  heading.style.margin = '28px 0 10px';
+  block.append(heading);
+
+  if (!items.length) {
+    block.append(el('p', 'muted', 'No folders measured.'));
+    return block;
+  }
+
+  items.slice(0, 100).forEach((item) => {
+    const row = el('div', 'filerow');
+    row.append(el('span'));
+
+    const middle = el('div', 'filerow__main');
+    middle.append(el('div', 'filerow__name', item.name || basename(item.folder)));
+    middle.append(
+      el('div', 'filerow__meta', `${item.folder}  ·  ${item.files} file(s)`)
+    );
+    row.append(middle);
+    row.append(el('div', 'dupe__num dupe__num--waste', formatBytes(item.bytes)));
+
+    const reveal = el('button', 'pill pill--sm', `Show in ${settings.fileManager}`);
+    reveal.addEventListener('click', () => window.api.reveal(item.folder));
+    row.append(reveal);
+    block.append(row);
+  });
+
+  return block;
+}
+
 /* ============================== dedupe ============================= */
 
 $('openDedupe').addEventListener('click', () => {
@@ -2430,13 +2886,6 @@ function renderDedupe() {
 }
 
 /* ============================== records ============================ */
-
-/** "F# min" -> "F#". The drone only needs the root. */
-function rootNoteOf(rec) {
-  if (!rec || !rec.key) return null;
-  const match = String(rec.key).match(/^([A-G]#?)/);
-  return match ? match[1] : null;
-}
 
 function record(key) {
   return (
@@ -2622,10 +3071,14 @@ droneBtn.addEventListener('click', () => {
     return;
   }
 
-  const entry = openProject || entries.find((e) => e.path === selected);
-  const rec = entry ? record(entry.path) : null;
+  const note = droneNoteFor(
+    records,
+    activeAuditionPath,
+    openProject && openProject.path,
+    selected
+  );
 
-  if (!rec || !rootNoteOf(rec)) {
+  if (!note) {
     toast(
       'No key yet',
       'Analyse a render first — the drone plays the root note it finds.',
@@ -2634,9 +3087,9 @@ droneBtn.addEventListener('click', () => {
     return;
   }
 
-  if (Player.startDrone(rootNoteOf(rec))) {
+  if (Player.startDrone(note)) {
     droneBtn.classList.add('is-on');
-    toast('Drone', `Holding ${rootNoteOf(rec)} underneath`);
+    toast('Drone', `Holding ${note} underneath`);
   }
 });
 
@@ -2672,6 +3125,17 @@ window.api.onSilenceProgress(({ done, total, phase }) => {
   }
 });
 
+window.api.onProjectsUpdated((result) => {
+  applyProjectResult(result, { background: true });
+});
+
+window.api.onFinishProgress(({ done, total, phase }) => {
+  if (finishProgressStatus) {
+    finishProgressStatus.textContent =
+      `${phase === 'analyse' ? 'Analysing' : 'Processing'} ${done} of ${total}…`;
+  }
+});
+
 window.api.onQcProgress(({ done, total }) => {
   if (qcProgressStatus) qcProgressStatus.textContent = `Reading ${done} of ${total}…`;
 });
@@ -2679,6 +3143,14 @@ window.api.onQcProgress(({ done, total }) => {
 window.api.onDedupeProgress(({ done, total }) => {
   if (dedupeProgressStatus) {
     dedupeProgressStatus.textContent = `Comparing ${done} of ${total} candidates…`;
+  }
+});
+
+window.api.onDiskProgress(({ foldersDone, totalFolders, filesScanned, maxFiles }) => {
+  if (diskProgressStatus && diskScanning) {
+    diskProgressStatus.textContent =
+      `Measured ${foldersDone} of ${totalFolders} folder(s) · ` +
+      `${filesScanned} of ${maxFiles} maximum files…`;
   }
 });
 

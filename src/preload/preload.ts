@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('api', {
 
   scan: () => ipcRenderer.invoke('projects:scan'),
   browse: (folder) => ipcRenderer.invoke('projects:browse', folder),
+  onProjectsUpdated: (callback) => subscribe('projects:updated', callback),
 
   getRecords: () => ipcRenderer.invoke('records:all'),
   setRecord: (key, patch) => ipcRenderer.invoke('records:set', key, patch),
@@ -66,12 +67,21 @@ contextBridge.exposeInMainWorld('api', {
   onQcProgress: (callback) => subscribe('qc:progress', callback),
   deepAudio: (folder) => ipcRenderer.invoke('audio:deep', folder),
 
+  diskScan: (folders) => ipcRenderer.invoke('disk:scan', folders),
+  diskCancel: () => ipcRenderer.invoke('disk:cancel'),
+  onDiskProgress: (callback) => subscribe('disk:progress', callback),
+
   silenceList: (folder) => ipcRenderer.invoke('silence:list', folder),
   silenceAnalyse: (paths, options) =>
     ipcRenderer.invoke('silence:analyse', paths, options),
   silenceProcess: (paths, options) =>
     ipcRenderer.invoke('silence:process', paths, options),
   onSilenceProgress: (callback) => subscribe('silence:progress', callback),
+
+  finishList: (folder) => ipcRenderer.invoke('finish:list', folder),
+  finishAnalyse: (paths, options) => ipcRenderer.invoke('finish:analyse', paths, options),
+  finishProcess: (paths, options) => ipcRenderer.invoke('finish:process', paths, options),
+  onFinishProgress: (callback) => subscribe('finish:progress', callback),
 
   dedupeScan: () => ipcRenderer.invoke('dedupe:scan'),
   dedupeLink: (groups) => ipcRenderer.invoke('dedupe:link', groups),

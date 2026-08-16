@@ -10,11 +10,13 @@ missing.
 ## Summary
 
 This change set adds a standalone Bulk renamer, makes version grouping
-unambiguous in the sidebar, and automatically analyses the newest matching
-render for musical key and tempo when Play is clicked in the project list.
-Audio analysis now runs in a Web Worker so it does not block playback or the
-renderer UI. A root-level Windows launcher is also retained for the
-non-technical user.
+unambiguous in the sidebar, automatically analyses the newest matching render
+for musical key and tempo, adds bounded Disk insights, provides safe WAV
+normalization/musical trimming, and extends silence removal to the beginning,
+end or both sides. It also adds a persistent project catalogue for fast startup
+and fixes the drone using a stale project's key. Audio analysis runs in a Web
+Worker so it does not block playback or the renderer UI. A root-level Windows
+launcher is also retained.
 
 ## User-facing changes
 
@@ -95,6 +97,64 @@ The repository's main launcher lives at `scripts/DAW Buddy.bat`. A tiny
 root-level `DAW Buddy.bat` forwards to it so the user can continue launching
 the app from the folder root exactly as before.
 
+`npm start` now uses `scripts/launch.js`. A missing or stale `dist` build is
+compiled automatically; an unchanged daily launch starts Electron directly.
+`npm run start:dev` retains the explicit build-then-launch development flow.
+
+### 6. Disk insights
+
+- Read-only sidebar tool ranking indexed project folders and
+  `Samples/Imported` folders by size.
+- Reports progress, supports cancellation, skips links/junctions and stops at
+  a visible 250,000-file safety limit.
+
+Files: `src/main/lib/disk.ts`, main/preload IPC, renderer Disk view.
+
+### 7. Audio finishing
+
+- Standalone WAV tool for peak normalization and optional BPM/bar-length
+  trimming.
+- Caps extreme boosts at +24 dB, never pads or stretches short files, writes
+  atomic ` - finished.wav` copies below the output folder and preserves the
+  source.
+
+Files: `src/main/lib/finisher.ts`, main/preload IPC, renderer Audio finishing view.
+
+### 8. Beginning/end silence removal
+
+- Strip silence now offers Beginning, End and Both modes.
+- Uses the existing Peak/RMS threshold logic and retains configurable safety
+  padding on both sides to protect attacks and decays.
+- Preview reports beginning and ending removals separately; processing still
+  writes safe copies only.
+
+Files: `src/main/lib/silence.ts`, renderer Strip silence view.
+
+### 9. Fast startup catalogue
+
+- The existing parse cache still protects BPM extraction by path, modified
+  time, size and parser version.
+- A separate `project-index.json` stores the last complete project catalogue.
+- The first launch or a changed roots/ignore configuration performs the full
+  scan before showing the list and then creates the index.
+- Later launches return the saved catalogue immediately, verify the folders in
+  the background and send the refreshed list to the renderer when complete.
+- Truncated or errored scans never replace the last-known-good catalogue.
+
+Files: `src/main/lib/projectindex.ts`, main/preload project update IPC,
+renderer startup handling.
+
+### 10. Drone follows the playing project
+
+The list Play button stops its click from bubbling into the row, so the old
+highlighted project could remain selected after new audio began playing. The
+analyser stored the correct new key, but the drone read the old selection.
+Playback now records its project context explicitly, and the drone resolves
+that context before any older selection. Flat key spellings are normalized for
+the oscillator as well.
+
+Files: `src/renderer/drone.ts`, `src/renderer/app.ts`.
+
 ## Validation
 
 The following were run successfully from the installed repository:
@@ -104,11 +164,18 @@ The following were run successfully from the installed repository:
 - `npm run build`
 - `git diff --check`
 
-The suite currently reports 28 passing checks. New coverage includes:
+The suite currently reports 38 passing checks. New coverage includes:
 
 - the Nava Bharat Jodo version-grouping regression;
 - a deterministic synthetic A-minor track with 120-BPM pulses, expected to
   return `A min`, Camelot `8A`, and a tempo within 115–125 BPM.
+- disk ranking and hard-budget truncation;
+- normalization plus exact musical trimming while preserving the source;
+- short-audio no-padding protection;
+- beginning/end and beginning-only silence removal.
+- persistent project-catalogue restore and settings invalidation;
+- playing-project drone priority over a stale selected project, plus flat-key
+  normalization.
 
 The renderer build now emits three bundles:
 
@@ -131,10 +198,7 @@ The renderer build now emits three bundles:
 3. **Dual-pane sample comparison**
    Side-by-side Keep/Reject or source/destination folders with safe file moves,
    undo and collision handling.
-4. **Disk-space insights**
-   Bounded folder-size scan showing large projects and Imported folders. Must
-   be cancellable and performance-tested against the real project drive.
-5. **This-week dashboard**
+4. **This-week dashboard**
    Recently modified projects, newest bounces and unfinished notes. Most source
    data already exists.
 
@@ -144,9 +208,6 @@ The renderer build now emits three bundles:
 - Separate always-on-top pop-out notes window.
 - Asterisk notes parsed from filenames and displayed as clean annotations.
 - AI/contextual descriptive sample naming with selectable alternatives.
-- Normalizer and BPM/bar-quantized trimming tools.
-- Leading-silence inspection and trimming; the current destructive-safe tool
-  focuses on trailing silence and writes copies.
 - Missing-sample / cloud-sync detection for Ableton-style project folders.
 - Producer time-zone/collaboration scheduler.
 - DAW auto-bounce and quick-save automation/macros.
@@ -174,5 +235,4 @@ and remains opt-in.
 1. Multi-section analysis/beat-switch reporting.
 2. Renderer smoke test around Play → worker → saved result.
 3. This-week dashboard (smallest user-facing win).
-4. Disk-space insights with cancellation and a hard file budget.
-5. Waveform trimming, then dual-pane comparison.
+4. Waveform trimming, then dual-pane comparison.
