@@ -29,6 +29,29 @@ too-quiet scanners (`audioqc.ts` + the QC tab) are all built. Structured search
 was added this session (`search.ts`, tested). **The remaining real work is
 Tier 3 onward** — those features below are marked with their true status.
 
+## Immediate priority — repair the Matches view
+
+The **Matches** tab is currently a release-blocking UI defect and comes before
+new feature work. Match results are rendering as extremely narrow white cards
+against the dark interface, forcing paths and labels to wrap one word at a
+time. The result is visually inconsistent and largely unreadable.
+
+Required outcome:
+
+- use the same dark panel/card surfaces and semantic theme colours as the rest
+  of the app—no hard-coded white result backgrounds;
+- render each match as a normal full-width row or a responsive multi-column
+  card with a sensible minimum width;
+- keep project name, key, BPM, location and match reason visually distinct;
+- truncate long locations on one line with the full path available on hover;
+- retain readable text/background contrast in Dark, Light and future AMOLED
+  modes;
+- verify at the app's minimum window width and at the user's usual maximized
+  desktop size.
+
+Do not proceed to the theme selector or the next reference-workflow feature
+until this view has been manually checked in the running app.
+
 ## Reference feature audit
 
 This is the complete remaining gap collected from the reference workflow
@@ -151,11 +174,12 @@ performance should still be observed during user testing.
 ## Decision
 
 Continue from the audited status instead of blindly following the old tier
-order. The safest small visual addition is the **preset theme selector**. The
-next major reference-workflow feature is the **waveform trimmer**, followed by
-asterisk notes and the dual-pane comparison only after its move/undo rules are
-specified. Each feature must be `tsc`-clean, tested where practical and manually
-clicked through in the running app.
+order. First repair the broken **Matches** results layout. After that, the
+safest small visual addition is the **preset theme selector**. The next major
+reference-workflow feature is the **waveform trimmer**, followed by asterisk
+notes and the dual-pane comparison only after its move/undo rules are
+specified. Each feature must be `tsc`-clean, tested where practical and
+manually clicked through in the running app.
 
 ## Consequences
 
