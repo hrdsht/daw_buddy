@@ -182,6 +182,7 @@ performance should still be observed during user testing.
 | **Waveform drag-to-trim** | The waveform and WAV writer both exist; this is the UI in between. | Large, interaction-heavy UI — best done with the app running to verify. |
 | **AI descriptive naming** | Contextual names rather than a fixed adjective list. | Needs a model/API call and a provider decision; out of scope until that's chosen. |
 | **Theme selector** | Makes the app feel personal without changing its workflow. | Start with five curated accent swatches plus Dark/Light/AMOLED; custom colour later. |
+| **Android remote companion** | Retrieve a render or prepared stems bundle from the studio computer and hand it to another phone app. | Proposed in [0006](0006-android-remote-companion.md). Read-only, encrypted and paired; LAN/private-VPN beta before any hosted remote service. |
 
 ## Decision
 
