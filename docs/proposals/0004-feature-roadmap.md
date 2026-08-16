@@ -53,19 +53,26 @@ _Drone, off-grid scanner and too-quiet scanner: **all already built**._
 
 ## Tier 3 — Differentiators
 
-| Feature | Why | Effort |
+| Feature | Why | Status |
 |---|---|---|
-| **Cross-project key/tempo matching** | "Show everything in the same key & tempo" — a mashup/collab superpower. Both values already computed. | Medium |
-| **Disk-space insights** | Which projects / `Samples/Imported` folders eat the most space. Pairs with the de-duper. | Medium |
-| **Bounce webhook** | POST to Discord/Slack on a new bounce — a revocable URL, safer than storing an SMTP password. | Medium |
+| **Cross-project key/tempo matching** | Mashup/collab superpower. | **Done** — `matching.ts` + "Matches" tab, tested |
+| **Bounce webhook** | POST to Discord/Slack on a new bounce. | **Done** — `webhook.ts` + Settings field, tested |
+| **Disk-space insights** | Which projects / `Samples/Imported` folders eat the most space. | Deferred — see below |
+
+**Disk-space insights (deferred).** Needs a full-drive size walk (stat every
+file), which is heavy and can't be perf-verified without the real drive.
+Approach when built: bounded recursive walk per root (reuse the dedupe walk),
+sum bytes per top-level project folder, return top-N sorted, **loud** if the
+file cap is hit. Pure `aggregate()` step is unit-testable; the walk and a
+"Disk" view are the main-side + UI work.
 
 ## Tier 4 — Bigger bets (later)
 
-| Feature | Why | Effort |
+| Feature | Why | Notes |
 |---|---|---|
-| **Waveform drag-to-trim** | The waveform and WAV writer both exist; this is the UI in between. | High |
-| **AI descriptive naming** | Contextual names (Granite, Avalanche) rather than a fixed adjective list — needs a model. | High |
-| **"This week" dashboard** | What you worked on recently, at a glance. | Medium |
+| **"This week" dashboard** | What you worked on recently, at a glance. | Cheapest of the three — all data already scanned; a filtered/sorted view. Good next pick. |
+| **Waveform drag-to-trim** | The waveform and WAV writer both exist; this is the UI in between. | Large, interaction-heavy UI — best done with the app running to verify. |
+| **AI descriptive naming** | Contextual names rather than a fixed adjective list. | Needs a model/API call and a provider decision; out of scope until that's chosen. |
 
 ## Decision
 
