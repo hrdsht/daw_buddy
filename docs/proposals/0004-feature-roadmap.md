@@ -20,7 +20,19 @@ The renderer has **no tests** and `app.ts` is one ~2700-line file
 of renderer smoke tests before piling on features, so each new feature lands on
 something verifiable.
 
+## Status audit (2026-08-16)
+
+A read of the code shows **most of Tiers 1–2 already exist** — the roadmap
+over-proposed. Version grouping (`versions.ts` + the grouping toggle), the DAW
+sidebar filters, the harmonic drone (`Player.startDrone`), and the off-grid +
+too-quiet scanners (`audioqc.ts` + the QC tab) are all built. Structured search
+was added this session (`search.ts`, tested). **The remaining real work is
+Tier 3 onward** — those features below are marked with their true status.
+
 ## Tier 1 — Make the core genuinely great
+
+_Search: **done** (this session). Version grouping and DAW filters: **already
+built**._
 
 | Feature | Why | Effort |
 |---|---|---|
@@ -29,6 +41,9 @@ something verifiable.
 | **DAW filters + render-matcher fix** (N2b, N1) | Sidebar filter per DAW (`entry.daw` already present); make the row count and the render list use one matcher. | Low |
 
 ## Tier 2 — Cash in the existing DSP
+
+_Drone, off-grid scanner and too-quiet scanner: **all already built**._
+
 
 | Feature | Why | Effort |
 |---|---|---|
