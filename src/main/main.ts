@@ -133,6 +133,16 @@ function createWindow({ splash = null, revealWhen = Promise.resolve() }: any = {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+  // Windows and Linux expose extra mouse buttons as browser app commands.
+  // DAW Buddy is a single-page app, so forward them to its own history.
+  mainWindow.on('app-command', (event, command) => {
+    if (command !== 'browser-backward' && command !== 'browser-forward') return;
+    event.preventDefault();
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.webContents.send(
+      command === 'browser-backward' ? 'navigation:back' : 'navigation:forward'
+    );
+  });
 }
 
 /**

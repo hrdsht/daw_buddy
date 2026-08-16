@@ -9,6 +9,7 @@ import { Player } from './player';
 import { parseQuery, hasQuery, matchesQuery } from './search';
 import { findMatches } from './matching';
 import { droneNoteFor } from './drone';
+import { NavigationHistory } from './navigation';
 
 const $ = (id: string): any => document.getElementById(id);
 
@@ -79,6 +80,7 @@ let analysisRequestId = 0;
 const pendingAnalysis = new Map();
 const activePlayAnalysis = new Map();
 const analysisJobs = new Map();
+const navigationHistory = new NavigationHistory();
 
 /* ============================= startup ============================= */
 
@@ -166,7 +168,74 @@ function render() {
   return renderList();
 }
 
+function captureLocation() {
+  return {
+    view,
+    browsing,
+    openProject,
+    projectTab,
+    projectTool,
+    filterRoot,
+    filterDaw,
+    favOnly,
+    groupVersionsOn,
+    selected,
+    search: searchEl.value,
+    entries,
+    groupedRows,
+    scrollTop: viewEl.scrollTop
+  };
+}
+
+function restoreLocation(location) {
+  view = location.view;
+  browsing = location.browsing;
+  openProject = location.openProject;
+  projectTab = location.projectTab;
+  projectTool = location.projectTool;
+  filterRoot = location.filterRoot;
+  filterDaw = location.filterDaw;
+  favOnly = location.favOnly;
+  groupVersionsOn = location.groupVersionsOn;
+  selected = location.selected;
+  searchEl.value = location.search || '';
+  entries = location.entries || entries;
+  groupedRows = location.groupedRows || groupedRows;
+  favFilterEl.classList.toggle('is-on', favOnly);
+  renderCollections();
+  render();
+  requestAnimationFrame(() => {
+    viewEl.scrollTop = location.scrollTop || 0;
+  });
+}
+
+function navigateBack() {
+  const location = navigationHistory.backFrom(captureLocation());
+  if (location) return restoreLocation(location);
+
+  // Fallback for a page reached before history tracking was initialized.
+  if (view !== 'list') {
+    view = 'list';
+    openProject = null;
+    render();
+    return;
+  }
+  if (!browsing) return;
+  const parent = browsing.split(/[\\/]/).slice(0, -1).join(sep());
+  const stillInside = settings.roots.some(
+    (root) => parent && (parent === root || parent.startsWith(root))
+  );
+  browsing = stillInside ? parent : null;
+  refresh();
+}
+
+function navigateForward() {
+  const location = navigationHistory.forwardFrom(captureLocation());
+  if (location) restoreLocation(location);
+}
+
 function goList(folder) {
+  navigationHistory.visit(captureLocation());
   view = 'list';
   browsing = folder || null;
   openProject = null;
@@ -175,6 +244,7 @@ function goList(folder) {
 }
 
 function goProject(entry) {
+  navigationHistory.visit(captureLocation());
   view = 'project';
   openProject = entry;
   activeAuditionPath = entry.path;
@@ -189,20 +259,7 @@ function goProject(entry) {
   render();
 }
 
-backBtn.addEventListener('click', () => {
-  if (view !== 'list') {
-    view = 'list';
-    openProject = null;
-    render();
-    return;
-  }
-  // Walking back out of a folder: drop the last segment.
-  const parent = browsing ? browsing.split(/[\\/]/).slice(0, -1).join(sep()) : null;
-  const stillInside = settings.roots.some(
-    (root) => parent && (parent === root || parent.startsWith(root))
-  );
-  goList(stillInside ? parent : null);
-});
+backBtn.addEventListener('click', navigateBack);
 
 /* ============================== sidebar ============================ */
 
@@ -1564,6 +1621,7 @@ function fieldInput(label) {
 /* ------------------------- audio finishing ----------------------- */
 
 $('openFinish').addEventListener('click', () => {
+  navigationHistory.visit(captureLocation());
   view = 'finish';
   viewEl.scrollTop = 0;
   render();
@@ -2328,12 +2386,14 @@ function renderAllAudioTab(entry) {
 /* ============================= ID3 editor ========================== */
 
 $('openId3').addEventListener('click', () => {
+  navigationHistory.visit(captureLocation());
   view = 'id3';
   viewEl.scrollTop = 0;
   render();
 });
 
 $('openRename').addEventListener('click', () => {
+  navigationHistory.visit(captureLocation());
   view = 'rename';
   renameFolder = null;
   viewEl.scrollTop = 0;
@@ -2341,6 +2401,7 @@ $('openRename').addEventListener('click', () => {
 });
 
 $('openSilence').addEventListener('click', () => {
+  navigationHistory.visit(captureLocation());
   view = 'silence';
   silenceFolder = null;
   silenceResults = [];
@@ -2609,6 +2670,7 @@ function id3FieldSummary(fields, bytes) {
 /* ========================== disk insights ========================= */
 
 $('openDisk').addEventListener('click', () => {
+  navigationHistory.visit(captureLocation());
   view = 'disk';
   viewEl.scrollTop = 0;
   render();
@@ -2739,6 +2801,7 @@ function diskInsightList(title, items) {
 /* ============================== dedupe ============================= */
 
 $('openDedupe').addEventListener('click', () => {
+  navigationHistory.visit(captureLocation());
   view = 'dedupe';
   render();
 });
@@ -3028,10 +3091,7 @@ favFilterEl.addEventListener('click', () => {
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
     if (!sheetEl.hidden) return closeSheet();
-    if (view !== 'list') {
-      view = 'list';
-      render();
-    }
+    if (view !== 'list') navigateBack();
   }
   if (event.key === ' ' && event.target === document.body) {
     event.preventDefault();
@@ -3092,6 +3152,30 @@ droneBtn.addEventListener('click', () => {
     toast('Drone', `Holding ${note} underneath`);
   }
 });
+
+let lastMouseNavigation = { direction: '', at: 0 };
+function handleMouseNavigation(direction) {
+  const now = performance.now();
+  // Some Logitech/Chromium combinations emit both app-command and mouseup.
+  if (lastMouseNavigation.direction === direction && now - lastMouseNavigation.at < 80) return;
+  lastMouseNavigation = { direction, at: now };
+  if (direction === 'back') navigateBack();
+  else navigateForward();
+}
+
+window.api.onNavigateBack(() => handleMouseNavigation('back'));
+window.api.onNavigateForward(() => handleMouseNavigation('forward'));
+
+// Fallback for devices/drivers that expose buttons 4/5 directly to Chromium.
+window.addEventListener(
+  'mouseup',
+  (event) => {
+    if (event.button !== 3 && event.button !== 4) return;
+    event.preventDefault();
+    handleMouseNavigation(event.button === 3 ? 'back' : 'forward');
+  },
+  { capture: true }
+);
 
 verbBtn.addEventListener('click', () => {
   const on = verbBtn.classList.toggle('is-on');

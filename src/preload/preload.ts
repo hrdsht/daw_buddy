@@ -26,6 +26,8 @@ contextBridge.exposeInMainWorld('api', {
   scan: () => ipcRenderer.invoke('projects:scan'),
   browse: (folder) => ipcRenderer.invoke('projects:browse', folder),
   onProjectsUpdated: (callback) => subscribe('projects:updated', callback),
+  onNavigateBack: (callback) => subscribe('navigation:back', callback),
+  onNavigateForward: (callback) => subscribe('navigation:forward', callback),
 
   getRecords: () => ipcRenderer.invoke('records:all'),
   setRecord: (key, patch) => ipcRenderer.invoke('records:set', key, patch),

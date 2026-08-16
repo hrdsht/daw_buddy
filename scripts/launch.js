@@ -42,11 +42,31 @@ function needsBuild() {
   return inputs.some((input) => newestMtime(input) > builtAt);
 }
 
+function runNpm(args, stdio = 'inherit') {
+  // npm is a .cmd file on Windows. Recent Node versions reject spawning a
+  // .cmd directly with EINVAL, so prefer npm's JavaScript entry point (which
+  // npm exposes while running `npm start`). Keep a cmd.exe fallback for users
+  // who launch this script directly with Node.
+  if (process.env.npm_execpath) {
+    return spawnSync(process.execPath, [process.env.npm_execpath, ...args], {
+      cwd: root,
+      stdio
+    });
+  }
+  if (process.platform === 'win32') {
+    return spawnSync(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', 'npm', ...args], {
+      cwd: root,
+      stdio
+    });
+  }
+  return spawnSync('npm', args, { cwd: root, stdio });
+}
+
 function launch() {
   if (needsBuild()) {
     console.log('  Updating the app build (only needed after code changes)...');
-    const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-    const result = spawnSync(npm, ['run', 'build'], { cwd: root, stdio: 'inherit' });
+    const result = runNpm(['run', 'build']);
+    if (result.error) console.error(`  Build could not start: ${result.error.message}`);
     if (result.status !== 0) process.exit(result.status || 1);
   }
 
@@ -61,4 +81,4 @@ function launch() {
 
 if (require.main === module) launch();
 
-module.exports = { newestMtime, needsBuild, launch };
+module.exports = { newestMtime, needsBuild, runNpm, launch };
