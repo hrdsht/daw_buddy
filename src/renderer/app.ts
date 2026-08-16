@@ -1873,13 +1873,13 @@ function renderId3Editor() {
     el(
       'p',
       'muted',
-      'These fields replace the existing tag, including unwanted author information and artwork. Blank fields are removed. Use {filename} to make each Title match its filename.'
+      'These fields replace the existing tag, including unwanted author information and artwork. Blank fields are removed — except Title, which defaults to each file’s own name. Type a Title to set the same one on every file (include {filename} to keep the name too).'
     )
   );
 
   const fieldsGrid = el('div', 'grid2');
   const title = fieldInput('Title');
-  title.input.value = '{filename}';
+  title.input.placeholder = 'Each file keeps its own name';
   const artist = fieldInput('Artist');
   const album = fieldInput('Album');
   const albumArtist = fieldInput('Album artist');
@@ -2051,7 +2051,9 @@ function renderId3Editor() {
       return {
         path: file.path,
         fields: {
-          title: title.input.value.replace(/{filename}/g, filename),
+          title: title.input.value.trim()
+            ? title.input.value.replace(/{filename}/g, filename)
+            : filename,
           artist: artist.input.value,
           album: album.input.value,
           albumArtist: albumArtist.input.value,
