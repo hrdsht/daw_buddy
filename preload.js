@@ -38,6 +38,7 @@ contextBridge.exposeInMainWorld('api', {
   findRenders: (sessionPath, root, extras, siblings) =>
     ipcRenderer.invoke('renders:find', sessionPath, root, extras, siblings),
   listAllAudio: (folder) => ipcRenderer.invoke('renders:all', folder),
+  listVideos: (folder) => ipcRenderer.invoke('videos:list', folder),
   getOutputFolder: () => ipcRenderer.invoke('output:get'),
 
   listMedia: (folder) => ipcRenderer.invoke('media:list', folder),
@@ -51,6 +52,7 @@ contextBridge.exposeInMainWorld('api', {
 
   id3Inspect: (folder) => ipcRenderer.invoke('tools:id3Inspect', folder),
   id3Strip: (paths) => ipcRenderer.invoke('tools:id3Strip', paths),
+  id3Write: (jobs) => ipcRenderer.invoke('tools:id3Write', jobs),
 
   pickFolder: () => ipcRenderer.invoke('tools:pickFolder'),
   renameList: (folder, extensions) =>

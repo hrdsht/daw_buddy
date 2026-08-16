@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self'; media-src 'self'; script-src 'self'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DAW Buddy</title>
+    <link rel="stylesheet" href="splash.css" />
+  </head>
+  <body>
+    <main class="splash" aria-label="DAW Buddy is starting">
+      <video
+        id="splashVideo"
+        class="splash__video"
+        src="../assets/splash screen.mp4"
+        autoplay
+        muted
+        playsinline
+        preload="auto"
+      ></video>
+      <div class="splash__status"><span></span>Scanning your projects…</div>
+    </main>
+    <script src="splash.js"></script>
+  </body>
+</html>

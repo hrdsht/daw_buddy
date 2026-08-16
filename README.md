@@ -1,8 +1,19 @@
 # DAW Buddy
 
+Current source build: **0.2.0**
+
 A local desktop app that lists your music production project folders, reads the
 BPM straight out of the session file, shows how many backups each project has,
 keeps per-project mix notes, and tells you when a new bounce lands on disk.
+Each project opens on a list of its DAW files, while separate Renders and Stems
+pages let you audition related audio without leaving the app. Numbered and
+bounced session files in the same folder are treated as versions of one song,
+so opening version 4 can still find a render made from version 3.
+
+Build 0.2.0 adds the animated startup screen and scans projects behind it,
+groups project utilities into a focused Tools page, provides a standalone
+Strip silence workflow for any chosen folder, and adds Select all controls to
+Sample cleanup.
 
 You tell it which folders to look at, in Settings. It never scans your whole
 computer — the only folders ever opened are the ones on your list.
@@ -219,19 +230,8 @@ however long the render takes. Without that setting you'd get an alert for a
 44-byte file. With it, chokidar waits until the file size stops changing for
 3 seconds before saying anything.
 
-**When you're ready to hook up email**, the place to do it is in `main.js`, in
-`beginWatching`. Right now it looks like this:
-
-```js
-startWatching(rootPath, (bounce) => {
-  console.log(`[bounce] New file detected in "${bounce.project}": ${bounce.name}`);
-  // ...
-});
-```
-
-That `bounce` object has `file`, `name`, `project`, and `detectedAt`. Sending an
-email becomes one `await sendEmail(bounce)` call on the next line — everything
-else is already in place.
+Bounce alerts deliberately stay local: DAW Buddy does not send files,
+notifications or account details over email.
 
 ---
 

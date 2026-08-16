@@ -11,6 +11,7 @@ const { Settings, isInside, samePath } = require('./lib/settings');
 const { startWatching, stopWatching } = require('./lib/watcher');
 const media = require('./lib/media');
 const renders = require('./lib/renders');
+const videos = require('./lib/videos');
 const { ParseCache } = require('./lib/cache');
 const { migrate } = require('./lib/migrate');
 const id3 = require('./lib/id3');
@@ -22,10 +23,12 @@ const dedupe = require('./lib/dedupe');
 const procs = require('./lib/procs');
 
 let mainWindow = null;
+let splashWindow = null;
 let store = null;
 let settings = null;
 let notes = null;
 let cache = null;
+let initialScanPromise = null;
 let quitting = false;
 const pendingNoteSaves = new Set();
 
@@ -33,13 +36,64 @@ const isMac = process.platform === 'darwin';
 const dataDir = () => app.getPath('userData');
 const undoLog = () => path.join(dataDir(), 'rename-undo.json');
 
-function createWindow() {
+function createSplashWindow() {
+  let resolveFinished;
+  let settled = false;
+  const finished = new Promise((resolve) => {
+    resolveFinished = resolve;
+  });
+
+  const splash = new BrowserWindow({
+    width: 640,
+    height: 640,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: true,
+    show: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    backgroundColor: '#00000000',
+    webPreferences: {
+      preload: path.join(__dirname, 'src', 'splash-preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+
+  const finish = () => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(fallback);
+    ipcMain.removeListener('splash:finished', onFinished);
+    resolveFinished();
+  };
+  const onFinished = (event) => {
+    if (event.sender === splash.webContents) finish();
+  };
+  const fallback = setTimeout(finish, 12000);
+
+  ipcMain.on('splash:finished', onFinished);
+
+  splash.loadFile(path.join(__dirname, 'src', 'splash.html'));
+  splash.once('ready-to-show', () => splash.show());
+  splash.on('closed', () => {
+    finish();
+    if (splashWindow === splash) splashWindow = null;
+  });
+  splashWindow = splash;
+  return { splash, finished };
+}
+
+function createWindow({ splash = null, revealWhen = Promise.resolve() } = {}) {
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
     minWidth: 900,
     minHeight: 560,
-    backgroundColor: '#0d0d0e',
+    show: false,
+    backgroundColor: '#101310',
+    icon: path.join(__dirname, 'assets', 'dawbuddy-logo-v2.png'),
     alwaysOnTop: settings.get().alwaysOnTop,
     ...(isMac
       ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 18, y: 22 } }
@@ -52,6 +106,20 @@ function createWindow() {
   });
 
   mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
+  mainWindow.once('ready-to-show', () => {
+    Promise.resolve(revealWhen)
+      .catch((error) => console.error('[startup] Could not prepare the first view:', error.message))
+      .finally(() => {
+        // Give the renderer one paint after it receives the prefetched scan.
+        setTimeout(() => {
+          if (splash && !splash.isDestroyed()) splash.close();
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.show();
+            mainWindow.focus();
+          }
+        }, 100);
+      });
+  });
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
@@ -80,6 +148,8 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 app.whenReady().then(async () => {
+  const splashState = createSplashWindow();
+
   // Renaming the app moved the data folder. Bring the old one across before
   // anything reads from it, or it looks like every note vanished.
   await migrate(dataDir());
@@ -98,6 +168,18 @@ app.whenReady().then(async () => {
 
   await ensureOutputFolder();
 
+  // Start the expensive first scan while the eight-second animation plays.
+  // The renderer will reuse this exact promise instead of scanning twice.
+  initialScanPromise = scanProjects().catch((error) => ({
+    entries: [],
+    grouped: [],
+    errors: [{ root: 'Startup scan', message: error.message }],
+    truncated: false,
+    foldersRead: 0,
+    roots: settings.get().roots,
+    cache: cache.stats()
+  }));
+
   notes = new NoteWriter();
   notes.onRenamed = (sessionPath, newFile) => {
     store.set(sessionPath, { noteFile: newFile });
@@ -106,7 +188,10 @@ app.whenReady().then(async () => {
     }
   };
 
-  createWindow();
+  createWindow({
+    splash: splashState.splash,
+    revealWhen: Promise.all([splashState.finished, initialScanPromise])
+  });
   restartWatcher();
 
   app.on('activate', () => {
@@ -173,8 +258,7 @@ function restartWatcher() {
   startWatching(
     current.roots,
     (bounce) => {
-      // The hook for the email API later on. One event per render, however
-      // many formats it arrived in.
+      // One notification per render, however many formats it arrived in.
       console.log(
         `[bounce] ${bounce.label} rendered in "${bounce.project}" (${bounce.formats.join(' + ')})`
       );
@@ -316,7 +400,7 @@ ipcMain.handle('settings:removeRoot', async (event, root) => {
 
 /* ---------------------------- scanning ---------------------------- */
 
-ipcMain.handle('projects:scan', async () => {
+async function scanProjects() {
   const current = settings.get();
   if (current.roots.length === 0) return { entries: [], errors: [], roots: [] };
 
@@ -343,6 +427,16 @@ ipcMain.handle('projects:scan', async () => {
     roots: current.roots,
     cache: cache.stats()
   };
+}
+
+ipcMain.handle('projects:scan', async () => {
+  if (initialScanPromise) {
+    const prefetched = initialScanPromise;
+    const result = await prefetched;
+    if (initialScanPromise === prefetched) initialScanPromise = null;
+    return result;
+  }
+  return scanProjects();
 });
 
 ipcMain.handle('projects:browse', async (event, target) => {
@@ -478,6 +572,11 @@ ipcMain.handle('renders:all', async (event, folder) => {
   return renders.listAllAudio(folder);
 });
 
+ipcMain.handle('videos:list', async (event, folder) => {
+  guardApproved(folder);
+  return videos.listVideos(folder);
+});
+
 ipcMain.handle('media:list', async (event, folder) => {
   guardApproved(folder);
   const files = await media.listAudio(folder);
@@ -535,17 +634,15 @@ ipcMain.handle('daws:running', () => procs.runningDaws());
 /* ------------------------------ tools ----------------------------- */
 
 ipcMain.handle('tools:id3Inspect', async (event, folder) => {
-  guard(folder);
-  const files = await media.listAudio(folder, 1);
-  const mp3s = files.filter((f) => f.ext === '.mp3');
-  return Promise.all(mp3s.map((f) => id3.inspect(f.path)));
+  guardApproved(folder);
+  return id3.inspectFolder(folder);
 });
 
 ipcMain.handle('tools:id3Strip', async (event, paths) => {
   const results = [];
   for (const filePath of paths) {
     try {
-      guard(path.dirname(filePath));
+      guardApproved(filePath);
       if (path.extname(filePath).toLowerCase() !== '.mp3') {
         throw new Error('Only MP3 files can be stripped.');
       }
@@ -557,9 +654,27 @@ ipcMain.handle('tools:id3Strip', async (event, paths) => {
   return results;
 });
 
+ipcMain.handle('tools:id3Write', async (event, jobs) => {
+  if (!Array.isArray(jobs)) throw new Error('Invalid ID3 edit list.');
+  const results = [];
+  for (const job of jobs.slice(0, 10000)) {
+    try {
+      const filePath = job && job.path;
+      guardApproved(filePath);
+      if (path.extname(filePath).toLowerCase() !== '.mp3') {
+        throw new Error('ID3 metadata can only be written to MP3 files.');
+      }
+      results.push(await id3.write(filePath, id3.sanitiseFields(job.fields)));
+    } catch (err) {
+      results.push({ path: job && job.path, changed: false, error: err.message });
+    }
+  }
+  return results;
+});
+
 ipcMain.handle('tools:pickFolder', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
-    title: 'Choose a folder to rename files in',
+    title: 'Choose a folder',
     buttonLabel: 'Use this folder',
     properties: ['openDirectory']
   });

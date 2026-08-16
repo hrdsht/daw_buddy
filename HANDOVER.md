@@ -23,16 +23,18 @@ npm install
 npm start
 ```
 
-Node LTS required. Or double-click `Project Browser.bat` on Windows, which
-does both. `Project Browser.command` is the macOS equivalent and needs
+Node LTS required. Or double-click `DAW Buddy.bat` on Windows, which
+does both. `DAW Buddy.command` is the macOS equivalent and needs
 `chmod +x` once.
 
 ## What it does
 
 Scans configured folders for DAW projects, reads the tempo out of the session
 files, shows a health bar from backup counts, plays and analyses renders for
-musical key, and keeps per-project notes. Plus a bulk renamer, an ID3 tag
-stripper, and a sample de-duplicator.
+musical key, and keeps per-project notes. A project opens on its DAW-file list;
+related numbered versions share a render search, and the Stems page lists and
+plays audio from the folder assigned to that project. Plus a bulk renamer, a
+standalone batch ID3 editor, and a sample de-duplicator.
 
 ## Architecture in ninety seconds
 
@@ -61,7 +63,7 @@ lib/
 ├── notetext.js   writes notes as .txt files next to projects
 ├── dedupe.js     sample de-duplication, hard links only
 ├── renamer.js    plan / apply / undo
-├── id3.js        byte-level ID3 tag stripping
+├── id3.js        reads, writes and removes MP3 metadata without changing audio
 ├── watcher.js    chokidar, groups wav+mp3 of one render into one event
 ├── procs.js      detects running DAWs
 ├── settings.js   roots, ignore list, migrations

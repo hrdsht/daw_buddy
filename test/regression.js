@@ -9,6 +9,9 @@ const { scanRoots } = require('../lib/scanner');
 const renamer = require('../lib/renamer');
 const dedupe = require('../lib/dedupe');
 const silence = require('../lib/silence');
+const renders = require('../lib/renders');
+const videos = require('../lib/videos');
+const id3 = require('../lib/id3');
 
 async function withTempDir(run) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'daw-buddy-test-'));
@@ -140,12 +143,125 @@ async function processedOutputsDoNotCollide() {
   });
 }
 
+async function renderFinderRecognisesProjectVersions() {
+  await withTempDir(async (dir) => {
+    const songFolder = path.join(dir, 'Nava Bharat Jodo');
+    const projectFolder = path.join(songFolder, 'Nava bharat jodo Project');
+    await fs.mkdir(projectFolder, { recursive: true });
+
+    const session = path.join(projectFolder, 'Nava bharat jodo 4.als');
+    await fs.writeFile(session, 'project');
+    await fs.writeFile(path.join(songFolder, 'Nava bharat jodo 3.wav'), testWav());
+    await fs.writeFile(path.join(songFolder, 'Different song.wav'), testWav());
+
+    const result = await renders.findRenders(
+      session,
+      dir,
+      [],
+      ['Nava bharat jodo 3', 'Nava bharat jodo 3 bounced', 'Nava bharat jodo 2']
+    );
+
+    assert.equal(result.renders.length, 1);
+    assert.equal(result.renders[0].primary.name, 'Nava bharat jodo 3.wav');
+  });
+}
+
+async function studioHistoryIsCountedButNotListed() {
+  await withTempDir(async (dir) => {
+    const project = path.join(dir, 'My Song');
+    const history = path.join(project, 'History');
+    await fs.mkdir(history, { recursive: true });
+    await fs.writeFile(path.join(project, 'My Song.song'), 'project');
+    await fs.writeFile(path.join(history, 'My Song 20260815 (Autosaved).song'), 'save');
+    await fs.writeFile(path.join(history, 'My Song 20260814 (Autosaved).song'), 'save');
+
+    const result = await scanRoots([dir]);
+
+    assert.equal(result.entries.length, 1);
+    assert.equal(result.entries[0].name, 'My Song');
+    assert.equal(result.entries[0].backupCount, 2);
+  });
+}
+
+async function audioInAnotherBranchDoesNotEnablePlay() {
+  await withTempDir(async (dir) => {
+    const projectFolder = path.join(dir, 'Archive', 'Song Project');
+    const unrelated = path.join(dir, 'Current Work');
+    await fs.mkdir(projectFolder, { recursive: true });
+    await fs.mkdir(unrelated, { recursive: true });
+    await fs.writeFile(path.join(projectFolder, 'Same Name.rpp'), '<REAPER_PROJECT>');
+    await fs.writeFile(path.join(unrelated, 'Same Name.wav'), testWav());
+
+    const result = await scanRoots([dir]);
+    assert.equal(result.entries.length, 1);
+    assert.equal(result.entries[0].audioCount, 0);
+
+    const rendersFolder = path.join(dir, 'Archive', 'Renders');
+    await fs.mkdir(rendersFolder, { recursive: true });
+    await fs.writeFile(path.join(rendersFolder, 'Same Name.wav'), testWav());
+
+    const rescanned = await scanRoots([dir]);
+    assert.equal(rescanned.entries[0].audioCount, 1);
+  });
+}
+
+async function videosAreCountedAndListed() {
+  await withTempDir(async (dir) => {
+    await fs.writeFile(path.join(dir, 'Picture Project.rpp'), '<REAPER_PROJECT>');
+    await fs.writeFile(path.join(dir, 'picture.mp4'), 'video');
+    await fs.writeFile(path.join(dir, 'picture.mp4.asd'), 'sidecar');
+
+    const result = await scanRoots([dir]);
+    assert.equal(result.entries[0].videoCount, 1);
+
+    const listed = await videos.listVideos(dir);
+    assert.equal(listed.length, 1);
+    assert.equal(listed[0].name, 'picture.mp4');
+  });
+}
+
+async function id3EditingNeverChangesAudioBytes() {
+  await withTempDir(async (dir) => {
+    const filePath = path.join(dir, 'sample.mp3');
+    const audio = Buffer.alloc(4096);
+    for (let i = 0; i < audio.length; i += 1) audio[i] = (i * 37) & 0xff;
+    await fs.writeFile(filePath, audio);
+
+    await id3.write(filePath, {
+      title: 'Granite Kick',
+      artist: 'Hrdsht',
+      album: 'Reddit Cleanup',
+      composer: 'Hrdsht',
+      genre: 'EDM',
+      year: '2026',
+      comment: 'Clean metadata'
+    });
+
+    const tagged = await id3.inspect(filePath);
+    assert.equal(tagged.fields.title, 'Granite Kick');
+    assert.equal(tagged.fields.artist, 'Hrdsht');
+    assert.equal(tagged.fields.album, 'Reddit Cleanup');
+    assert.equal(tagged.fields.composer, 'Hrdsht');
+    assert.equal(tagged.fields.comment, 'Clean metadata');
+    assert.ok(tagged.headBytes > 0);
+
+    await id3.strip(filePath);
+    const after = await fs.readFile(filePath);
+    assert.deepEqual(after, audio);
+  });
+}
+
 async function run() {
   const tests = [
     scannerKeepsSessionFactsSeparate,
     caseOnlyRenameWorks,
     changedDuplicateIsNeverReplaced,
-    processedOutputsDoNotCollide
+    processedOutputsDoNotCollide,
+    renderFinderRecognisesProjectVersions,
+    studioHistoryIsCountedButNotListed,
+    audioInAnotherBranchDoesNotEnablePlay,
+    videosAreCountedAndListed,
+    id3EditingNeverChangesAudioBytes
   ];
 
   for (const test of tests) {

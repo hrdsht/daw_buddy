@@ -69,21 +69,9 @@ Lesson worth carrying: "built" in the notes has meant "the module works", not
 | **Audition reverb** | Medium | `ConvolverNode` needs an impulse response. Can be synthesised — decaying noise burst — rather than shipping an IR file. |
 | **Waveform drag-to-trim** | Medium | The waveform and the WAV writer both exist. This is the UI in between: drag handles, then write the trimmed region. Arguably more useful than most of this list, and Gemini's table omits it entirely despite listing it in the walkthrough. |
 | **Asterisk note tagging** | Medium | `Kick_01 *clips at 2s*.wav` — note carried in the filename, parsed out for display. Clever because the note survives outside any app. Fits naturally with the renamer. |
-| **Bounce email** | Medium | The hook is already there in `main.js`. The work is credentials, not code — see caution below. |
 | **Mini tray window** | Medium | Electron `Tray` plus a compact always-on-top window sharing player state. Fits the existing "On top" workflow. |
 | **Dual-pane comparison** | High | Split browser, drag files between keep and reject. Moves files, so it needs the same preview-and-undo treatment as the renamer. |
 | **AI descriptive naming** | High | KSHMR's generates contextual names — Granite, Avalanche, Nordic. A fixed adjective dictionary is a much weaker thing wearing the same name. Worth being honest that we'd be building the weaker version unless a model is involved. |
-
-### Caution on the email hook
-
-Sending mail means storing an SMTP password in `settings.json` in plain text.
-That file already sits in your app data folder unencrypted.
-
-Two safer routes: an app-specific password rather than your real one, or skip
-mail entirely and POST to a webhook — Discord, Slack, Zapier — where the
-secret is a revocable URL rather than an account credential. Given the point
-is telling collaborators a bounce exists, a webhook probably fits better than
-email anyway.
 
 ### What we have that the video didn't show
 
@@ -161,8 +149,9 @@ its own Open button.
 - **Notes stay per session file.** Each version keeps its own note and its own
   txt file. Grouping is a display concern only — it must not touch the data
   model, which is keyed on the session path.
-- **Renders still match per version.** `Nava bharat jodo 3 bounced_3` finds
-  its own render, not the group's.
+- **Renders match the version family.** Opening `Nava bharat jodo 4` also
+  shows audio rendered from `Nava bharat jodo 3` or its bounced variants.
+  Unrelated project names in the same folder remain excluded.
 - **A toggle to switch grouping off**, next to the DAW filters. Some days you
   want all 678.
 - The count in the sidebar should show groups, with the raw number available —
@@ -332,7 +321,6 @@ the darkest option (violet) and the brightest (yellow) before it ships.
   Writes to the output folder, never in place.
 - Rename templates with `{bpm}` `{key}` tokens
 - REAPER/Cubase/Logic verification against real files
-- Email hook on the bounce watcher
 - Packaging to .exe / .dmg
 
 
@@ -1063,7 +1051,7 @@ knowing before it's built.
 
 **How the rename must work:** `fs.rename` on the existing file, then write the
 new content. Never delete-and-recreate — a crash between the two loses the
-note. Same pattern as the ID3 stripper already uses.
+note. Same pattern as the ID3 editor already uses.
 
 **Two consequences worth knowing up front:**
 
@@ -1201,8 +1189,9 @@ settles it.
 
 ### D3. Stems button
 
-Per-project stems folder, remembered permanently. First click picks the folder,
-every click after opens it. Changeable from the project page.
+Per-project stems folder, remembered permanently. Implemented as a Stems page:
+it lists and plays the audio inside DAW Buddy, with Open folder and Change
+folder controls kept on that page.
 
 Stems are sometimes rendered by part — instrumental, bass, vocals, drums,
 synths — so the button can report what's in there rather than just opening it.
@@ -1317,7 +1306,7 @@ Fine to skip while it's you and your cousin.
 - Key and Camelot detection from audio, with a confidence figure
 - Smooth waveform player with click-to-seek
 - Bulk renamer with preview, collision detection and undo
-- ID3 tag stripper
+- Standalone batch ID3 editor (read, replace or remove MP3 metadata)
 - Per-project records: notes, stems path, key, favourite
 - Cross-platform path handling, macOS permission messages
 - Scroll containment fix
