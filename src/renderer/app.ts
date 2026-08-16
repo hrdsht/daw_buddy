@@ -8,6 +8,7 @@
 import { Player } from './player';
 import { DSP } from './dsp';
 import { parseQuery, hasQuery, matchesQuery } from './search';
+import { findMatches } from './matching';
 
 const $ = (id: string): any => document.getElementById(id);
 
@@ -567,6 +568,7 @@ function renderProjectPage() {
     ['allaudio', 'All audio']
   ];
   if (entry.videoCount > 0) projectTabs.splice(1, 0, ['videos', 'Videos']);
+  if (entry.bpm !== null || record(entry.path).camelot) projectTabs.push(['matches', 'Matches']);
 
   projectTabs.forEach(([key, label]) => {
     const tab = el('button', 'pill', label);
@@ -587,7 +589,56 @@ function renderProjectPage() {
   if (projectTab === 'notes') return renderNotesTab(entry);
   if (projectTab === 'tools') return renderProjectToolsTab(entry);
   if (projectTab === 'allaudio') return renderAllAudioTab(entry);
+  if (projectTab === 'matches') return renderMatchesTab(entry);
   return renderProjectFilesTab(entry);
+}
+
+/**
+ * Cross-project harmonic + tempo matches for this project. Excludes the
+ * project's own folder so it surfaces genuinely different work you could mix
+ * or collab with. Logic + tests live in matching.ts.
+ */
+function renderMatchesTab(entry) {
+  const rec = record(entry.path);
+  const others = entries.filter((e) => e.folder !== entry.folder);
+  const matches = findMatches(entry, rec, others, (e) => record(e.path));
+
+  const section = el('div', 'section');
+  section.append(headRow('Compatible projects'));
+  section.append(
+    el(
+      'div',
+      'callout',
+      'Projects that mix well with this one — the same or a neighbouring Camelot key, and a matching tempo (half- and double-time count). Analyse a render on a project to detect its key.'
+    )
+  );
+
+  if (!matches.length) {
+    section.append(el('p', 'muted', 'No harmonically compatible projects found yet.'));
+    viewEl.append(section);
+    return;
+  }
+
+  const list = el('div');
+  matches.slice(0, 60).forEach((m) => {
+    const r = record(m.entry.path);
+    const row = el('button', 'filerow');
+    const main = el('div', 'filerow__main');
+    main.append(el('div', 'filerow__name', m.entry.name));
+    const reasons = [m.keyRelation, m.tempoRelation].filter(Boolean).join(' · ');
+    const bits = [
+      m.entry.bpm ? `${formatBpm(m.entry.bpm)} BPM` : null,
+      r.camelot ? `${r.key || ''} (${r.camelot})`.trim() : r.key || null,
+      m.entry.location,
+      reasons
+    ].filter(Boolean);
+    main.append(el('div', 'filerow__meta', bits.join('  —  ')));
+    row.append(main);
+    row.addEventListener('click', () => goProject(m.entry));
+    list.append(row);
+  });
+  section.append(list);
+  viewEl.append(section);
 }
 
 function renderProjectToolsTab(entry) {
