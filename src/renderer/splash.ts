@@ -1,6 +1,6 @@
 'use strict';
 
-const video = document.getElementById('splashVideo');
+const video = document.getElementById('splashVideo') as HTMLVideoElement;
 let sent = false;
 
 function finish() {

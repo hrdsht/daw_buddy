@@ -15,13 +15,13 @@
  */
 
 const Player = (() => {
-  const canvas = document.getElementById('wave');
+  const canvas = document.getElementById('wave') as HTMLCanvasElement;
   const ctx = canvas.getContext('2d');
   const audio = new Audio();
   const titleEl = document.getElementById('nowPlaying');
   const timeEl = document.getElementById('nowTime');
   const playBtn = document.getElementById('playPause');
-  const volumeEl = document.getElementById('volume');
+  const volumeEl = document.getElementById('volume') as HTMLInputElement;
 
   let audioContext = null;
   let sourceNode = null;
@@ -469,4 +469,4 @@ const Player = (() => {
   };
 })();
 
-window.Player = Player;
+export { Player };

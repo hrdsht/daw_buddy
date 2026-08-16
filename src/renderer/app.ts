@@ -1,5 +1,3 @@
-'use strict';
-
 /**
  * Runs inside the window. No file access — everything goes through
  * window.api, defined in preload.js.
@@ -7,7 +5,10 @@
  * The project list, project page and standalone tools share the main pane.
  */
 
-const $ = (id) => document.getElementById(id);
+import { Player } from './player';
+import { DSP } from './dsp';
+
+const $ = (id: string): any => document.getElementById(id);
 
 const viewEl = $('view');
 const collectionsEl = $('collections');
@@ -55,7 +56,7 @@ let favOnly = false;
 let sortBy = 'modified';
 let sortDir = -1;
 const noteTimers = new Map();
-let dedupeState = { groups: [], scanned: 0, folders: 0, chosen: new Set() };
+let dedupeState = { groups: [], scanned: 0, folders: 0, chosen: new Set<number>() };
 let silenceProgressStatus = null;
 let qcProgressStatus = null;
 let dedupeProgressStatus = null;
@@ -363,6 +364,14 @@ function renderList() {
       entry.versions.forEach((version) => viewEl.append(buildVersionRow(version)));
     }
   });
+}
+
+// NOTE: buildVersionRow is referenced by the grouped-versions expand path but
+// never defined — a latent ReferenceError. Aliased to buildRow (a version is
+// itself a session entry) so expanding a group renders rows rather than
+// throwing. Revisit when the grouping feature is built out.
+function buildVersionRow(entry) {
+  return buildRow(entry);
 }
 
 function buildRow(entry) {
@@ -1024,7 +1033,7 @@ async function analyseRender(entry, render, buttonEl, { refresh = true } = {}) {
   buttonEl.textContent = 'Analysing…';
   await new Promise((resolve) => setTimeout(resolve, 30));
 
-  const result = window.DSP.analyse(decoded.getChannelData(0), decoded.sampleRate);
+  const result = DSP.analyse(decoded.getChannelData(0), decoded.sampleRate);
 
   await saveRecord(entry.path, {
     key: result.key,
@@ -1362,7 +1371,7 @@ function fieldInput(label) {
 
 let silenceFolder = null;
 let silenceResults = [];
-let silenceChosen = new Set();
+let silenceChosen = new Set<number>();
 
 function renderStandaloneSilence() {
   viewEl.innerHTML = '';
@@ -2197,7 +2206,7 @@ function renderDedupe() {
     list.innerHTML = '';
 
     const result = await window.api.dedupeScan();
-    dedupeState = { ...result, chosen: new Set() };
+    dedupeState = { ...result, chosen: new Set<number>() };
 
     scanBtn.disabled = false;
     scanBtn.textContent = 'Scan again';
@@ -2452,7 +2461,7 @@ Player.onChange(({ path: playing }) => {
   });
   if (!playing) return;
   document.querySelectorAll('.filerow').forEach((node) => {
-    if (node.dataset.path === playing) node.classList.add('is-playing');
+    if ((node as HTMLElement).dataset.path === playing) node.classList.add('is-playing');
   });
 });
 
@@ -2484,14 +2493,14 @@ window.api.onNoteRenamed(() => {
 
 /* ============================== helpers ============================ */
 
-function el(tag, className, text) {
+function el(tag: string, className?: string | null, text?: any): any {
   const node = document.createElement(tag);
   if (className) node.className = className;
   if (text !== undefined && text !== null) node.textContent = text;
   return node;
 }
 
-function headRow(title, subtitle) {
+function headRow(title, subtitle?) {
   const head = el('div', 'section__head');
   head.append(el('h3', null, title));
   if (subtitle) head.append(el('span', 'muted', subtitle));
@@ -2555,7 +2564,7 @@ function timeAgo(ms) {
   return new Date(ms).toLocaleDateString();
 }
 
-function toast(title, body, isAlert) {
+function toast(title, body, isAlert?) {
   const node = el('div', `toast${isAlert ? ' toast--alert' : ''}`);
   node.append(el('div', 'toast__title', title));
   node.append(el('div', 'toast__body', body));

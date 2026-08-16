@@ -322,7 +322,7 @@ function correlate(a, b) {
  * beats the start: intros are often a filtered pad with no drums and no
  * harmony, which is the worst possible material for both jobs.
  */
-function analyse(channelData, sampleRate, onProgress) {
+function analyse(channelData, sampleRate, onProgress?) {
   const maxSeconds = 60;
   const wanted = Math.min(channelData.length, maxSeconds * sampleRate);
   const start = Math.max(0, Math.floor((channelData.length - wanted) / 2));
@@ -344,4 +344,4 @@ function analyse(channelData, sampleRate, onProgress) {
   };
 }
 
-window.DSP = { analyse, detectKey, detectTempo, fftMagnitudes, NOTES };
+export const DSP = { analyse, detectKey, detectTempo, fftMagnitudes, NOTES };
