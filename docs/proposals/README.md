@@ -20,3 +20,4 @@ the historical version is in git).
 | [0001](0001-restructure-and-typescript.md) | Repo restructure + TypeScript migration | Implemented |
 | [0002](0002-renderer-module-split.md) | Split the renderer into modules | Proposed |
 | [0003](0003-packaging-and-release.md) | Installers + release CI | Implemented |
+| [0004](0004-feature-roadmap.md) | Feature roadmap (4 tiers) | Accepted |
