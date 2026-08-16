@@ -6,13 +6,14 @@ title DAW Buddy
 REM ---------------------------------------------------------------
 REM  Double-click this to start DAW Buddy.
 REM
-REM  %~dp0 is the folder this .bat lives in, with a trailing slash.
-REM  Using it means the launcher works no matter where you put the
-REM  folder, and no matter which directory Explorer happens to be in
-REM  when you double-click.
+REM  %~dp0 is the folder this .bat lives in (scripts\), with a
+REM  trailing slash. The project root is one level up, so we cd to
+REM  its parent. This works no matter where you put the folder, and
+REM  no matter which directory Explorer happens to be in when you
+REM  double-click.
 REM ---------------------------------------------------------------
 
-cd /d "%~dp0"
+cd /d "%~dp0.."
 
 echo.
 echo   DAW BUDDY

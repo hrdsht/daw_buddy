@@ -1,0 +1,37 @@
+name: Release
+
+# Builds installers when you publish a GitHub Release, and uploads the
+# .exe / .dmg / AppImage to that release. A macOS .dmg can only be built on
+# macOS, so the job fans out across runners.
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck and test
+        run: |
+          npm run typecheck
+          npm test
+
+      # electron-builder runs `npm run build` shape via the dist script, then
+      # packages dist/ + prod deps. --publish always uploads to the release.
+      # Unsigned for now (no CSC secrets); see docs/proposals/0003.
+      - name: Build and publish installers
+        run: npm run dist -- --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

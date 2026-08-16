@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "rootDir": "src",
+    "outDir": "dist",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+
+    "allowJs": true,
+    "checkJs": false,
+
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "sourceMap": true,
+
+    "strict": false,
+    "noImplicitAny": false
+  },
+  "include": ["src/main/**/*", "src/preload/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

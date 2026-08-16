@@ -12,8 +12,9 @@
 #  You only do this once.
 # ---------------------------------------------------------------
 
-# Move to the folder this script lives in, so it works from anywhere.
-cd "$(dirname "$0")" || exit 1
+# This script lives in scripts/; the project root is one level up.
+# cd there so npm runs from the root, and it works from anywhere.
+cd "$(dirname "$0")/.." || exit 1
 
 echo
 echo "  DAW BUDDY"
