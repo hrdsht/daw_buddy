@@ -237,7 +237,7 @@ function syncsafeBuffer(value) {
 }
 
 function buildTag(rawFields) {
-  const fields = sanitiseFields(rawFields);
+  const fields: Record<string, any> = sanitiseFields(rawFields);
   const frames = [];
   for (const [field, id] of Object.entries(FIELD_FRAMES)) {
     if (fields[field]) frames.push(buildFrame(id,

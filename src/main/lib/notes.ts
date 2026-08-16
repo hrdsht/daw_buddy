@@ -31,7 +31,11 @@ const EMPTY = {
 };
 
 class ProjectStore {
-  constructor(filePath) {
+  filePath: string;
+  data: Record<string, any>;
+  writeTimer: NodeJS.Timeout | null;
+
+  constructor(filePath: string) {
     this.filePath = filePath;
     this.data = {};
     this.writeTimer = null;
@@ -42,7 +46,7 @@ class ProjectStore {
       const raw = JSON.parse(await fs.readFile(this.filePath, 'utf8'));
       let upgraded = false;
 
-      for (const [key, value] of Object.entries(raw)) {
+      for (const [key, value] of Object.entries<any>(raw)) {
         if (typeof value === 'string') {
           this.data[key] = { ...EMPTY, note: value };
           upgraded = true;

@@ -28,8 +28,12 @@ const path = require('path');
 const RENAME_IDLE_MS = 4000;
 
 class NoteWriter {
+  timers: Map<string, NodeJS.Timeout>;
+  onRenamed: ((sessionPath: string, newFile: string) => void) | null;
+
   constructor() {
     this.timers = new Map();
+    this.onRenamed = null;
   }
 
   /**

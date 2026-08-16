@@ -343,7 +343,8 @@ async function buildEntry({ sessionPath, folder, root, isPackage }, options, fol
     modified: 0,
     size: 0,
     audioCount: 0,
-    videoCount: 0
+    videoCount: 0,
+    fromCache: false
   };
 
   try {

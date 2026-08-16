@@ -5,13 +5,13 @@ const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
 
-const { scanRoots } = require('../lib/scanner');
-const renamer = require('../lib/renamer');
-const dedupe = require('../lib/dedupe');
-const silence = require('../lib/silence');
-const renders = require('../lib/renders');
-const videos = require('../lib/videos');
-const id3 = require('../lib/id3');
+const { scanRoots } = require('../src/main/lib/scanner');
+const renamer = require('../src/main/lib/renamer');
+const dedupe = require('../src/main/lib/dedupe');
+const silence = require('../src/main/lib/silence');
+const renders = require('../src/main/lib/renders');
+const videos = require('../src/main/lib/videos');
+const id3 = require('../src/main/lib/id3');
 
 async function withTempDir(run) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'daw-buddy-test-'));

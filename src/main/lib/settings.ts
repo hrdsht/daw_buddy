@@ -43,7 +43,10 @@ const DEFAULTS = {
 };
 
 class Settings {
-  constructor(filePath) {
+  filePath: string;
+  data: ReturnType<typeof freshDefaults> & Record<string, any>;
+
+  constructor(filePath: string) {
     this.filePath = filePath;
     this.data = freshDefaults();
   }

@@ -32,7 +32,13 @@ const path = require('path');
 const CACHE_FORMAT = 3;
 
 class ParseCache {
-  constructor(filePath) {
+  filePath: string;
+  data: Record<string, any>;
+  dirty: boolean;
+  hits: number;
+  misses: number;
+
+  constructor(filePath: string) {
     this.filePath = filePath;
     this.data = {};
     this.dirty = false;

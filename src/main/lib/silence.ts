@@ -302,8 +302,8 @@ async function analyse(inputPath, options = {}) {
   };
 }
 
-async function removeSilence(inputPath, outputRoot, options = {}) {
-  const opts = { ...DEFAULTS, ...options };
+async function removeSilence(inputPath, outputRoot, options: Record<string, any> = {}) {
+  const opts: Record<string, any> = { ...DEFAULTS, ...options };
 
   let buf;
   try {

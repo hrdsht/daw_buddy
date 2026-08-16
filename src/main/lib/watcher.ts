@@ -32,7 +32,7 @@ const GROUP_MS = 6000;
 let watcher = null;
 let pending = new Map();
 
-function startWatching(roots, onBounce, options = {}) {
+function startWatching(roots, onBounce, options: Record<string, any> = {}) {
   stopWatching();
 
   if (!roots || roots.length === 0) {
@@ -94,7 +94,7 @@ function hold(filePath, ext, onBounce) {
     return; // the timer from the first file still runs
   }
 
-  const record = {
+  const record: Record<string, any> = {
     file: filePath,
     folder,
     base,

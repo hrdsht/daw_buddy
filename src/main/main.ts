@@ -22,12 +22,12 @@ const { groupVersions } = require('./lib/versions');
 const dedupe = require('./lib/dedupe');
 const procs = require('./lib/procs');
 
-let mainWindow = null;
-let splashWindow = null;
-let store = null;
-let settings = null;
-let notes = null;
-let cache = null;
+let mainWindow: any = null;
+let splashWindow: any = null;
+let store: any = null;
+let settings: any = null;
+let notes: any = null;
+let cache: any = null;
 let initialScanPromise = null;
 let quitting = false;
 const pendingNoteSaves = new Set();
@@ -85,7 +85,7 @@ function createSplashWindow() {
   return { splash, finished };
 }
 
-function createWindow({ splash = null, revealWhen = Promise.resolve() } = {}) {
+function createWindow({ splash = null, revealWhen = Promise.resolve() }: any = {}) {
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -159,7 +159,7 @@ app.whenReady().then(async () => {
 
   store = new ProjectStore(path.join(dataDir(), 'notes.json'));
   await store.load();
-  Object.values(store.all()).forEach((record) => {
+  Object.values(store.all()).forEach((record: any) => {
     if (record && record.stemsPath) pickedFolders.add(path.resolve(record.stemsPath));
   });
 
@@ -241,7 +241,7 @@ async function ensureOutputFolder() {
     return null;
   }
 
-  const patch = {};
+  const patch: Record<string, any> = {};
   if (current.outputFolder !== target) patch.outputFolder = target;
 
   const folderName = path.basename(target);
@@ -331,9 +331,9 @@ const fullSettings = () => ({
 
 ipcMain.handle('settings:get', () => fullSettings());
 
-ipcMain.handle('settings:update', (event, patch) => {
+ipcMain.handle('settings:update', (event, patch: any) => {
   patch = patch && typeof patch === 'object' ? patch : {};
-  const allowed = {};
+  const allowed: Record<string, any> = {};
   if (typeof patch.alwaysOnTop === 'boolean') allowed.alwaysOnTop = patch.alwaysOnTop;
   if (typeof patch.pollWatching === 'boolean') allowed.pollWatching = patch.pollWatching;
   if (typeof patch.followLinks === 'boolean') allowed.followLinks = patch.followLinks;
@@ -464,7 +464,7 @@ ipcMain.handle('records:all', () => store.all());
 ipcMain.handle('records:set', (event, key, patch) => {
   guardApproved(key);
   patch = patch && typeof patch === 'object' ? patch : {};
-  const allowed = {};
+  const allowed: Record<string, any> = {};
   [
     'key', 'camelot', 'keyConfidence', 'keyAlternate', 'detectedBpm',
     'analysedFrom', 'favourite'
