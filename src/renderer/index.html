@@ -123,6 +123,20 @@
       </section>
 
       <section class="field">
+        <h3>Bounce webhook</h3>
+        <p class="muted">
+          Optional. Paste a Discord, Slack or Zapier webhook URL and each new
+          bounce is announced there. Leave blank to keep everything local.
+        </p>
+        <input
+          id="webhookInput"
+          class="input"
+          type="url"
+          placeholder="https://discord.com/api/webhooks/…"
+        />
+      </section>
+
+      <section class="field">
         <h3>External and network drives</h3>
         <p class="muted">
           Turn on if bounces on a network share go unnoticed. Uses more CPU.

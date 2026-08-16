@@ -21,6 +21,7 @@ const audioqc = require('./lib/audioqc');
 const { groupVersions } = require('./lib/versions');
 const dedupe = require('./lib/dedupe');
 const procs = require('./lib/procs');
+const webhook = require('./lib/webhook');
 
 let mainWindow: any = null;
 let splashWindow: any = null;
@@ -265,6 +266,14 @@ function restartWatcher() {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('bounce:detected', bounce);
       }
+      const url = settings.get().webhookUrl;
+      if (url) {
+        webhook.sendWebhook(url, bounce).then((result: any) => {
+          if (result && result.error) {
+            console.error('[webhook] Could not notify:', result.error);
+          }
+        });
+      }
     },
     { pollWatching: current.pollWatching }
   );
@@ -337,6 +346,7 @@ ipcMain.handle('settings:update', (event, patch: any) => {
   if (typeof patch.alwaysOnTop === 'boolean') allowed.alwaysOnTop = patch.alwaysOnTop;
   if (typeof patch.pollWatching === 'boolean') allowed.pollWatching = patch.pollWatching;
   if (typeof patch.followLinks === 'boolean') allowed.followLinks = patch.followLinks;
+  if (typeof patch.webhookUrl === 'string') allowed.webhookUrl = patch.webhookUrl.trim();
   if (Array.isArray(patch.ignore)) {
     allowed.ignore = patch.ignore.filter((name) => typeof name === 'string');
   }

@@ -14,6 +14,10 @@ const path = require('path');
 const DEFAULTS = {
   roots: [],
   alwaysOnTop: false,
+
+  // A Discord/Slack/Zapier webhook URL. When set, a new bounce POSTs a
+  // notification to it. Empty means no webhook — nothing leaves the machine.
+  webhookUrl: '',
   // Ask the disk repeatedly instead of waiting to be told. Slower and more
   // CPU, but network shares and some external drives never send the events
   // the fast method relies on.

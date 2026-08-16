@@ -84,6 +84,7 @@ function applySettings() {
     $('outputPath').textContent = settings.outputFolder || 'Created on first scan';
   }
   $('ignoreInput').value = settings.ignore.join(', ');
+  if ($('webhookInput')) $('webhookInput').value = settings.webhookUrl || '';
   $('dataDir').textContent = settings.dataDir;
   document.body.classList.toggle('is-mac', Boolean(settings.isMac));
   renderRootList();
@@ -2377,6 +2378,16 @@ $('ignoreInput').addEventListener('input', () => {
     refresh();
   }, 600);
 });
+
+let webhookTimer = null;
+if ($('webhookInput')) {
+  $('webhookInput').addEventListener('input', () => {
+    if (webhookTimer) clearTimeout(webhookTimer);
+    webhookTimer = setTimeout(async () => {
+      settings = await window.api.updateSettings({ webhookUrl: $('webhookInput').value });
+    }, 600);
+  });
+}
 
 $('alwaysOnTop').addEventListener('change', async () => {
   settings = await window.api.updateSettings({ alwaysOnTop: $('alwaysOnTop').checked });
