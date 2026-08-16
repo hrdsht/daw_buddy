@@ -12,6 +12,7 @@ const silence = require('../src/main/lib/silence');
 const renders = require('../src/main/lib/renders');
 const videos = require('../src/main/lib/videos');
 const id3 = require('../src/main/lib/id3');
+const versions = require('../src/main/lib/versions');
 
 async function withTempDir(run) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'daw-buddy-test-'));
@@ -41,6 +42,29 @@ async function scannerKeepsSessionFactsSeparate() {
     assert.equal(byName.Beta.backupCount, 0);
     assert.equal(byName.Alpha.projectFile, byName.Alpha.sessionPath);
   });
+}
+
+function projectVersionsRemainGrouped() {
+  const folder = 'C:\\Music\\Nava Bharat Jodo';
+  const entries = [
+    ['Nava bharat jodo 4', 4],
+    ['Nava bharat jodo 3 bounced_3', 3],
+    ['Nava bharat jodo 3 bounced', 2],
+    ['Nava bharat jodo', 1]
+  ].map(([name, modified]) => ({
+    name,
+    modified,
+    folder,
+    path: `${folder}\\${name}.als`,
+    audioCount: 0,
+    backupCount: 0,
+    health: 0
+  }));
+
+  const grouped = versions.groupVersions(entries);
+  assert.equal(grouped.length, 1);
+  assert.equal(grouped[0].name, 'Nava bharat jodo');
+  assert.equal(grouped[0].versionCount, 4);
 }
 
 async function caseOnlyRenameWorks() {
@@ -254,6 +278,7 @@ async function id3EditingNeverChangesAudioBytes() {
 async function run() {
   const tests = [
     scannerKeepsSessionFactsSeparate,
+    projectVersionsRemainGrouped,
     caseOnlyRenameWorks,
     changedDuplicateIsNeverReplaced,
     processedOutputsDoNotCollide,
