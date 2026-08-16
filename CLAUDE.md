@@ -19,7 +19,7 @@ compiled by `tsc` structure-preserving (`src/` → `dist/`) so the runtime
 `__dirname` joins resolve identically in the build output. `main` points at
 `dist/main/main.js`. `lib/` has no Electron dependency, which is why it is
 directly testable (via `tsx`) and where most bugs are caught. The renderer is
-still plain JS (its TS/ESM conversion is the next phase).
+also TypeScript, bundled by esbuild into `dist/renderer/`.
 
 ## Architecture
 
@@ -30,9 +30,10 @@ Standard Electron split, enforced strictly:
 - **`src/preload/preload.ts`** — the contextBridge "airlock". The renderer gets
   exactly the ~40 whitelisted functions on `window.api` and nothing else
   (`contextIsolation: true`, `nodeIntegration: false`).
-- **`src/renderer/`** — the renderer (the window). **No filesystem access at
-  all.** Loaded as three ordered plain `<script>` tags: `dsp.js` → `player.js`
-  → `app.js`. `player.js` exposes `window.Player`.
+- **`src/renderer/`** — the windows (main app + the startup splash). **No
+  filesystem access at all.** TypeScript bundled by esbuild — two entry points,
+  `app.ts` and `splash.ts` — into `dist/renderer/`. `dsp.ts`/`player.ts` export
+  their APIs; `app.ts` imports them.
 
 The split is the security model: a malicious file name can never become a
 malicious file operation, because the renderer cannot perform operations.
@@ -50,7 +51,7 @@ daw-buddy/
 │   │   ├── main.ts
 │   │   └── lib/          main-process modules (TypeScript, testable via tsx)
 │   ├── preload/          contextBridge airlock (preload.ts)
-│   └── renderer/         the window — app.js, dsp.js, player.js, index.html, styles.css
+│   └── renderer/         app + splash windows (TypeScript, esbuild-bundled)
 ├── dist/                 tsc build output (git-ignored) — what Electron runs
 ├── test/regression.js    lib-level regression tests (run via tsx)
 ├── docs/                 HANDOVER.md, BUILD_NOTES.md (work queue), manual.html
@@ -63,6 +64,7 @@ daw-buddy/
 |---|---|
 | `daw.js` | Format registry — one entry per DAW, each with `readTempo` + `countBackups`. Everything else asks this rather than checking extensions itself. |
 | `scanner.js` | Walks folders, produces one entry per session file. |
+| `videos.js` | Finds video files belonging to a project (counted + listed). |
 | `renders.js` / `media.js` | Find audio; group renders by base name + version. |
 | `notes.js` / `notetext.js` | Record store (`notes.json`) + `.txt` notes beside projects. |
 | `dedupe.js` | Sample de-duplication — **hard links only, never deletes**. |
