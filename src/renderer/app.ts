@@ -6,7 +6,6 @@
  */
 
 import { Player } from './player';
-import { DSP } from './dsp';
 import { parseQuery, hasQuery, matchesQuery } from './search';
 import { findMatches } from './matching';
 
@@ -66,6 +65,11 @@ let activeNoteEditor = null;
 let id3Folder = null;
 let id3Files = [];
 let id3Selected = new Set();
+let analysisWorker = null;
+let analysisRequestId = 0;
+const pendingAnalysis = new Map();
+const activePlayAnalysis = new Map();
+const analysisJobs = new Map();
 
 /* ============================= startup ============================= */
 
@@ -137,6 +141,7 @@ function render() {
   if (view === 'project') return renderProjectPage();
   if (view === 'dedupe') return renderDedupe();
   if (view === 'id3') return renderId3Editor();
+  if (view === 'rename') return renderStandaloneRename();
   if (view === 'silence') return renderStandaloneSilence();
   return renderList();
 }
@@ -205,22 +210,35 @@ function renderCollections() {
   });
   collectionsEl.append(favs);
 
-  // Grouping toggle. The raw file count stays visible next to it, so the
-  // number never looks like projects went missing.
-  const groupRow = el('button', 'coll');
-  groupRow.append(
-    el('span', 'coll__name', groupVersionsOn ? 'Grouping versions' : 'Every file')
+  // Keep both list modes visible. Previously this was one toggle whose label
+  // changed to "Every file" when grouping was off, which made the grouping
+  // feature look as though it had disappeared.
+  const grouped = collButton(
+    'Grouping versions',
+    groupedRows.length || entries.length
   );
-  groupRow.append(el('span', 'coll__count', `${entries.length} files`));
-  if (groupVersionsOn) groupRow.classList.add('is-on');
-  groupRow.addEventListener('click', () => {
-    groupVersionsOn = !groupVersionsOn;
+  grouped.title = 'Combine numbered, bounced and autosaved versions into one project row';
+  if (groupVersionsOn) grouped.classList.add('is-on');
+  grouped.addEventListener('click', () => {
+    groupVersionsOn = true;
     expanded = new Set();
     view = 'list';
     render();
     renderCollections();
   });
-  collectionsEl.append(groupRow);
+  collectionsEl.append(grouped);
+
+  const everyFile = collButton('Every file', `${entries.length} files`);
+  everyFile.title = 'Show every individual DAW project file';
+  if (!groupVersionsOn) everyFile.classList.add('is-on');
+  everyFile.addEventListener('click', () => {
+    groupVersionsOn = false;
+    expanded = new Set();
+    view = 'list';
+    render();
+    renderCollections();
+  });
+  collectionsEl.append(everyFile);
 
   if (settings.roots.length > 0) {
     collectionsEl.append(el('div', 'coll__label', 'Folders'));
@@ -282,7 +300,7 @@ function visible() {
     if (filterDaw && entry.daw !== filterDaw) return false;
     if (favOnly && !record(entry.path).favourite) return false;
     if (!active) return true;
-    return matchesQuery(entry, record(entry.path), q);
+    return matchesQuery({ ...entry, bpm: bpmFor(entry) }, record(entry.path), q);
   });
 
   return list.slice().sort((a, b) => {
@@ -293,7 +311,7 @@ function visible() {
         sortDir
       );
     }
-    if (sortBy === 'bpm') return ((a.bpm || 0) - (b.bpm || 0)) * sortDir;
+    if (sortBy === 'bpm') return ((bpmFor(a) || 0) - (bpmFor(b) || 0)) * sortDir;
     return (a.modified - b.modified) * sortDir;
   });
 }
@@ -413,8 +431,13 @@ function buildRow(entry) {
   row.append(main);
 
   /* bpm */
-  const bpm = el('div', 'cell cell--bpm', entry.bpm !== null ? formatBpm(entry.bpm) : '—');
-  if (entry.bpm === null) bpm.classList.add('cell--empty');
+  const rowBpm = bpmFor(entry);
+  const bpm = el(
+    'div',
+    'cell cell--bpm',
+    rowBpm !== null ? formatBpm(rowBpm) : activePlayAnalysis.has(entry.path) ? '…' : '—'
+  );
+  if (rowBpm === null) bpm.classList.add('cell--empty');
   row.append(bpm);
 
   /* key */
@@ -423,6 +446,8 @@ function buildRow(entry) {
     keyCell.append(el('div', 'keycell__key', rec.key));
     if (rec.camelot) keyCell.append(el('div', 'keycell__camelot', rec.camelot));
     row.append(keyCell);
+  } else if (activePlayAnalysis.has(entry.path)) {
+    row.append(el('div', 'cell cell--empty', 'Analysing…'));
   } else {
     row.append(el('div', 'cell cell--empty', '—'));
   }
@@ -476,7 +501,9 @@ async function playNewest(entry) {
     toast('No audio', `No render found for ${entry.name}`, true);
     return;
   }
-  Player.load(result.renders[0].primary);
+  const file = result.renders[0].primary;
+  const decoded = await Player.load(file);
+  if (decoded) analysePlayedAudio(entry, file, decoded);
 }
 
 /** Other session files sitting in the same folder. */
@@ -513,7 +540,8 @@ function renderProjectPage() {
 
   /* header */
   const head = el('div', 'page__head');
-  const art = el('div', 'page__art', entry.bpm !== null ? formatBpm(entry.bpm) : '♪');
+  const projectBpm = bpmFor(entry);
+  const art = el('div', 'page__art', projectBpm !== null ? formatBpm(projectBpm) : '♪');
   head.append(art);
 
   const titles = el('div', 'page__titles');
@@ -521,7 +549,7 @@ function renderProjectPage() {
   titles.append(el('h1', 'page__title', entry.name));
 
   const facts = el('div', 'page__facts');
-  if (entry.bpm !== null) facts.append(fact('BPM', formatBpm(entry.bpm)));
+  if (projectBpm !== null) facts.append(fact('BPM', formatBpm(projectBpm)));
   else if (entry.bpmError) facts.append(fact('BPM', 'not readable'));
   if (rec.key) facts.append(fact('Key', `${rec.key}${rec.camelot ? ` (${rec.camelot})` : ''}`));
   facts.append(fact('Saves', String(entry.backupCount)));
@@ -569,7 +597,7 @@ function renderProjectPage() {
     ['allaudio', 'All audio']
   ];
   if (entry.videoCount > 0) projectTabs.splice(1, 0, ['videos', 'Videos']);
-  if (entry.bpm !== null || record(entry.path).camelot) projectTabs.push(['matches', 'Matches']);
+  if (bpmFor(entry) !== null || record(entry.path).camelot) projectTabs.push(['matches', 'Matches']);
 
   projectTabs.forEach(([key, label]) => {
     const tab = el('button', 'pill', label);
@@ -601,8 +629,11 @@ function renderProjectPage() {
  */
 function renderMatchesTab(entry) {
   const rec = record(entry.path);
-  const others = entries.filter((e) => e.folder !== entry.folder);
-  const matches = findMatches(entry, rec, others, (e) => record(e.path));
+  const target = { ...entry, bpm: bpmFor(entry) };
+  const others = entries
+    .filter((e) => e.folder !== entry.folder)
+    .map((e) => ({ ...e, bpm: bpmFor(e) }));
+  const matches = findMatches(target, rec, others, (e) => record(e.path));
 
   const section = el('div', 'section');
   section.append(headRow('Compatible projects'));
@@ -1066,43 +1097,122 @@ async function analyseRender(entry, render, buttonEl, { refresh = true } = {}) {
   buttonEl.disabled = true;
   buttonEl.textContent = 'Reading…';
 
-  const decoded = await Player.load(render.primary, { autoplay: false });
-  if (!decoded) {
+  try {
+    const current = Player.getCurrent();
+    const decoded =
+      current && current.path === render.primary.path && Player.getDecoded()
+        ? Player.getDecoded()
+        : await Player.load(render.primary, { autoplay: false });
+
+    if (!decoded) {
+      toast('Analysis failed', 'That file could not be decoded.', true);
+      return;
+    }
+
+    buttonEl.textContent = 'Analysing…';
+    const result = await analyseAudioFile(render.primary, decoded);
+    await storeAnalysis(entry, render.primary, result);
+    showAnalysisResult(entry, result);
+    if (refresh) render();
+  } catch (error) {
+    toast('Analysis failed', error.message || String(error), true);
+  } finally {
     buttonEl.disabled = false;
     buttonEl.textContent = 'Analyse';
-    toast('Analysis failed', 'That file could not be decoded.', true);
-    return;
   }
+}
 
-  buttonEl.textContent = 'Analysing…';
-  await new Promise((resolve) => setTimeout(resolve, 30));
+function ensureAnalysisWorker() {
+  if (analysisWorker) return analysisWorker;
 
-  const result = DSP.analyse(decoded.getChannelData(0), decoded.sampleRate);
+  analysisWorker = new Worker('./analysis-worker.js');
+  analysisWorker.addEventListener('message', (event) => {
+    const pending = pendingAnalysis.get(event.data.id);
+    if (!pending) return;
+    pendingAnalysis.delete(event.data.id);
+    if (event.data.error) pending.reject(new Error(event.data.error));
+    else pending.resolve(event.data.result);
+  });
+  analysisWorker.addEventListener('error', (event) => {
+    const error = new Error(event.message || 'The background analyser stopped unexpectedly.');
+    pendingAnalysis.forEach((pending) => pending.reject(error));
+    pendingAnalysis.clear();
+    analysisWorker.terminate();
+    analysisWorker = null;
+  });
+  return analysisWorker;
+}
 
+function analyseDecodedInBackground(decoded) {
+  const worker = ensureAnalysisWorker();
+  const id = ++analysisRequestId;
+  const samples = new Float32Array(decoded.getChannelData(0));
+
+  return new Promise((resolve, reject) => {
+    pendingAnalysis.set(id, { resolve, reject });
+    worker.postMessage(
+      { id, samples, sampleRate: decoded.sampleRate },
+      [samples.buffer]
+    );
+  });
+}
+
+function analyseAudioFile(file, decoded) {
+  const existing = analysisJobs.get(file.path);
+  if (existing) return existing;
+
+  const job = analyseDecodedInBackground(decoded).finally(() => {
+    if (analysisJobs.get(file.path) === job) analysisJobs.delete(file.path);
+  });
+  analysisJobs.set(file.path, job);
+  return job;
+}
+
+async function storeAnalysis(entry, file, result) {
   await saveRecord(entry.path, {
     key: result.key,
     camelot: result.camelot,
     keyConfidence: result.keyConfidence,
     keyAlternate: result.keyAlternate,
     detectedBpm: result.bpm,
-    analysedFrom: render.primary.name
+    analysedFrom: file.name
   });
+}
 
-  buttonEl.disabled = false;
-  buttonEl.textContent = 'Analyse';
-
-  const drift =
-    entry.bpm && result.bpm ? Math.abs(entry.bpm - result.bpm) : null;
+function showAnalysisResult(entry, result) {
+  const detected = [
+    result.key ? `${result.key}${result.camelot ? ` (${result.camelot})` : ''}` : 'Key not detected',
+    result.bpm ? `${result.bpm} BPM` : 'BPM not detected'
+  ].join(' · ');
+  const drift = entry.bpm && result.bpm ? Math.abs(entry.bpm - result.bpm) : null;
 
   toast(
-    'Analysed',
-    `${result.key} (${result.camelot}) · ${result.bpm} BPM` +
+    'Audio analysed',
+    detected +
       (drift !== null && drift > 1.5
         ? ` — session says ${formatBpm(entry.bpm)}, worth a look`
         : '')
   );
+}
 
-  if (refresh) render();
+async function analysePlayedAudio(entry, file, decoded) {
+  if (analysisJobs.has(file.path)) return;
+
+  activePlayAnalysis.set(entry.path, file.path);
+  render();
+
+  try {
+    const result = await analyseAudioFile(file, decoded);
+    await storeAnalysis(entry, file, result);
+    showAnalysisResult(entry, result);
+  } catch (error) {
+    toast('Background analysis failed', error.message || String(error), true);
+  } finally {
+    if (activePlayAnalysis.get(entry.path) === file.path) {
+      activePlayAnalysis.delete(entry.path);
+      render();
+    }
+  }
 }
 
 /* ------------------------------- notes ---------------------------- */
@@ -1180,21 +1290,33 @@ function renderNotesTab(entry) {
 let renameFolder = null;
 let renameMode = 'simple';
 
-function renderRenameTab(entry) {
-  if (!renameFolder) renameFolder = entry.folder;
+function renderStandaloneRename() {
+  viewEl.innerHTML = '';
+  renderRenameTab(null);
+}
+
+function renderRenameTab(entry = null) {
+  if (!renameFolder && entry) renameFolder = entry.folder;
+  const projectName = entry ? entry.name : renameFolder ? basename(renameFolder) : 'chosen folder';
+  const projectBpm = entry ? bpmFor(entry) : null;
+  const projectRecord = entry ? record(entry.path) : {};
 
   const section = el('div', 'section');
-  section.append(headRow('Rename files'));
+  section.append(headRow(entry ? 'Rename files' : 'Bulk renamer'));
 
   /* which folder */
   const folderBar = el('div', 'callout');
   folderBar.append(el('div', 'page__kicker', 'Renaming files in'));
-  const folderPath = el('div', 'mono', renameFolder);
+  const folderPath = el('div', 'mono', renameFolder || 'Choose a folder to begin');
   folderPath.style.margin = '6px 0 10px';
   folderPath.style.wordBreak = 'break-all';
   folderBar.append(folderPath);
 
-  const pick = el('button', 'pill pill--sm', 'Choose a different folder');
+  const pick = el(
+    'button',
+    `pill${renameFolder ? ' pill--sm' : ' pill--solid'}`,
+    renameFolder ? 'Choose a different folder' : 'Choose folder'
+  );
   pick.addEventListener('click', async () => {
     const chosen = await window.api.pickFolder();
     if (chosen) {
@@ -1202,13 +1324,16 @@ function renderRenameTab(entry) {
       render();
     }
   });
-  const useProject = el('button', 'pill pill--sm', "This project's folder");
-  useProject.addEventListener('click', () => {
-    renameFolder = entry.folder;
-    render();
-  });
   const bar = el('div', 'tabs');
-  bar.append(pick, useProject);
+  bar.append(pick);
+  if (entry) {
+    const useProject = el('button', 'pill pill--sm', "This project's folder");
+    useProject.addEventListener('click', () => {
+      renameFolder = entry.folder;
+      render();
+    });
+    bar.append(useProject);
+  }
   folderBar.append(bar);
   section.append(folderBar);
 
@@ -1284,10 +1409,10 @@ function renderRenameTab(entry) {
   tokenList.style.cssText = 'font-size:11.5px;line-height:1.9;margin-top:6px';
   [
     ['{name}', 'the existing filename'],
-    ['{project}', entry.name],
-    ['{parent}', basename(renameFolder)],
-    ['{bpm}', entry.bpm !== null ? String(entry.bpm) : 'not read for this project'],
-    ['{key}', record(entry.path).camelot || 'analyse a render first'],
+    ['{project}', projectName],
+    ['{parent}', renameFolder ? basename(renameFolder) : 'chosen folder'],
+    ['{bpm}', projectBpm !== null ? String(projectBpm) : 'not available'],
+    ['{key}', projectRecord.camelot || projectRecord.key || 'not available'],
     ['{date}', new Date().toISOString().slice(0, 10)],
     ['{n}, {n:02}', 'a counter, optionally padded']
   ].forEach(([token, meaning]) => {
@@ -1336,10 +1461,10 @@ function renderRenameTab(entry) {
         ? {
             operation: 'applyTemplate',
             template: templateField.input.value,
-            projectName: entry.name,
+            projectName,
             parentFolder: basename(renameFolder),
-            bpm: entry.bpm,
-            key: record(entry.path).camelot || record(entry.path).key,
+            bpm: projectBpm,
+            key: projectRecord.camelot || projectRecord.key,
             startAt: 1
           }
         : {
@@ -1882,6 +2007,13 @@ $('openId3').addEventListener('click', () => {
   render();
 });
 
+$('openRename').addEventListener('click', () => {
+  view = 'rename';
+  renameFolder = null;
+  viewEl.scrollTop = 0;
+  render();
+});
+
 $('openSilence').addEventListener('click', () => {
   view = 'silence';
   silenceFolder = null;
@@ -2317,6 +2449,13 @@ function record(key) {
       favourite: false
     }
   );
+}
+
+/** Prefer the tempo written in the DAW project; use audio analysis as fallback. */
+function bpmFor(entry) {
+  if (entry && entry.bpm !== null && entry.bpm !== undefined) return entry.bpm;
+  const detected = entry ? Number(record(entry.path).detectedBpm) : NaN;
+  return Number.isFinite(detected) && detected > 0 ? detected : null;
 }
 
 async function saveRecord(key, patch) {
