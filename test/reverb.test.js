@@ -12,6 +12,7 @@ function settingsAreSafeForTheAudioGraph() {
   const settings = normalizeReverbSettings({
     decay: 99,
     size: -20,
+    preDelay: 999,
     lowCut: 1900,
     highCut: 1500,
     mix: 140
@@ -19,6 +20,7 @@ function settingsAreSafeForTheAudioGraph() {
 
   assert.equal(settings.decay, 12);
   assert.equal(settings.size, 0);
+  assert.equal(settings.preDelay, 250);
   assert.equal(settings.lowCut, 1400);
   assert.equal(settings.highCut, 2000);
   assert.equal(settings.mix, 100);
@@ -33,6 +35,7 @@ function mixUsesEqualPowerGains() {
 
 function defaultsAndLabelsStayReadable() {
   assert.equal(DEFAULT_REVERB_SETTINGS.mix, 35);
+  assert.equal(DEFAULT_REVERB_SETTINGS.preDelay, 20);
   assert.equal(formatReverbFrequency(120), '120 Hz');
   assert.equal(formatReverbFrequency(12000), '12 kHz');
 }

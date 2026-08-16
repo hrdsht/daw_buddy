@@ -14,8 +14,8 @@ removal. Disk insights is read-only. Audio finishing and Strip silence always
 create new copies and leave the original audio untouched.
 
 While auditioning a render or stem, click **Verb** for a quick reverb bypass or
-right-click it to shape decay time, room size, low cut, high cut, and wet/dry
-mix. Those reverb choices are remembered for the next session.
+right-click it to shape decay time, room size, pre-delay, low cut, high cut, and
+wet/dry mix. Those reverb choices are remembered for the next session.
 
 You tell it which folders to look at, in Settings. It never scans your whole
 computer — the only folders ever opened are the ones on your list. Nothing

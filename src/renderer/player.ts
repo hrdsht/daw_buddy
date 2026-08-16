@@ -35,6 +35,7 @@ const Player = (() => {
   const reverbInputs = {
     decay: document.getElementById('reverbDecay') as HTMLInputElement,
     size: document.getElementById('reverbSize') as HTMLInputElement,
+    preDelay: document.getElementById('reverbPreDelay') as HTMLInputElement,
     lowCut: document.getElementById('reverbLowCut') as HTMLInputElement,
     highCut: document.getElementById('reverbHighCut') as HTMLInputElement,
     mix: document.getElementById('reverbMix') as HTMLInputElement
@@ -42,6 +43,7 @@ const Player = (() => {
   const reverbOutputs = {
     decay: document.getElementById('reverbDecayValue') as HTMLOutputElement,
     size: document.getElementById('reverbSizeValue') as HTMLOutputElement,
+    preDelay: document.getElementById('reverbPreDelayValue') as HTMLOutputElement,
     lowCut: document.getElementById('reverbLowCutValue') as HTMLOutputElement,
     highCut: document.getElementById('reverbHighCutValue') as HTMLOutputElement,
     mix: document.getElementById('reverbMixValue') as HTMLOutputElement
@@ -94,7 +96,11 @@ const Player = (() => {
     shaper.curve = null; // null = pass through untouched
 
     convolver = audioContext.createConvolver();
-    convolver.buffer = makeImpulse(reverbSettings.decay, reverbSettings.size);
+    convolver.buffer = makeImpulse(
+      reverbSettings.decay,
+      reverbSettings.size,
+      reverbSettings.preDelay
+    );
 
     wetLowCut = audioContext.createBiquadFilter();
     wetLowCut.type = 'highpass';
@@ -135,10 +141,10 @@ const Player = (() => {
    * Shipping an actual IR file would sound better and cost a few hundred KB;
    * this is for auditioning a dry sample, not for mixing.
    */
-  function makeImpulse(decaySeconds, sizePercent) {
+  function makeImpulse(decaySeconds, sizePercent, preDelayMs) {
     const rate = audioContext.sampleRate;
     const roomSize = sizePercent / 100;
-    const preDelaySeconds = 0.003 + roomSize * 0.027;
+    const preDelaySeconds = preDelayMs / 1000;
     const length = Math.max(1, Math.floor(rate * (decaySeconds + preDelaySeconds)));
     const preDelaySamples = Math.floor(rate * preDelaySeconds);
     const impulse = audioContext.createBuffer(2, length, rate);
@@ -155,7 +161,8 @@ const Player = (() => {
       // A few room-size-dependent early reflections keep Size perceptually
       // distinct from simply making the tail longer.
       [0.011, 0.019, 0.031, 0.043].forEach((spacing, index) => {
-        const sample = Math.floor(rate * (0.002 + spacing * (0.35 + roomSize)));
+        const sample =
+          preDelaySamples + Math.floor(rate * (0.002 + spacing * (0.35 + roomSize)));
         if (sample < length) {
           const side = channel === 0 ? 1 : index % 2 === 0 ? 0.82 : 1;
           data[sample] += (0.42 - index * 0.07) * side;
@@ -222,7 +229,11 @@ const Player = (() => {
     if (!chainBuilt) return;
     clearTimeout(impulseTimer);
     impulseTimer = setTimeout(() => {
-      convolver.buffer = makeImpulse(reverbSettings.decay, reverbSettings.size);
+      convolver.buffer = makeImpulse(
+        reverbSettings.decay,
+        reverbSettings.size,
+        reverbSettings.preDelay
+      );
     }, 80);
   }
 
@@ -238,6 +249,7 @@ const Player = (() => {
     });
     reverbOutputs.decay.textContent = `${reverbSettings.decay.toFixed(1)} s`;
     reverbOutputs.size.textContent = `${Math.round(reverbSettings.size)}%`;
+    reverbOutputs.preDelay.textContent = `${Math.round(reverbSettings.preDelay)} ms`;
     reverbOutputs.lowCut.textContent = formatReverbFrequency(reverbSettings.lowCut);
     reverbOutputs.highCut.textContent = formatReverbFrequency(reverbSettings.highCut);
     reverbOutputs.mix.textContent = `${Math.round(reverbSettings.mix)}%`;
@@ -258,6 +270,7 @@ const Player = (() => {
     reverbSettings = normalizeReverbSettings({
       decay: Number(reverbInputs.decay.value),
       size: Number(reverbInputs.size.value),
+      preDelay: Number(reverbInputs.preDelay.value),
       lowCut: Number(reverbInputs.lowCut.value),
       highCut: Number(reverbInputs.highCut.value),
       mix: Number(reverbInputs.mix.value)
@@ -269,8 +282,10 @@ const Player = (() => {
     if (
       changed === 'decay' ||
       changed === 'size' ||
+      changed === 'preDelay' ||
       previous.decay !== reverbSettings.decay ||
-      previous.size !== reverbSettings.size
+      previous.size !== reverbSettings.size ||
+      previous.preDelay !== reverbSettings.preDelay
     ) {
       rebuildImpulseSoon();
     }

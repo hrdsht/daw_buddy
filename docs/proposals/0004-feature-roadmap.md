@@ -83,7 +83,7 @@ shipped. A working engine with no reachable interface does not count as done.
 | Bounce watcher | **Done**. Opt-in Discord/Slack/Zapier webhook replaces email delivery. |
 | Template renaming tokens | **Done** and reachable from Bulk renamer. |
 | Harmonic reference drone | **Done** in the player. |
-| Audition reverb and soft clipper | **Done** in the player. Reverb has persistent right-click controls for decay, size, low/high cut and wet/dry mix. |
+| Audition reverb and soft clipper | **Done** in the player. Reverb has persistent right-click controls for decay, size, pre-delay, low/high cut and wet/dry mix. |
 | Peak normalization and BPM/bar-length trimming | **Done** in Audio finishing; creates copies. |
 | Deep subfolder / all-audio view | **Done** in the project view. |
 | Start/end silence, too-quiet and off-grid scanners | **Done**. |

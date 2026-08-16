@@ -3,6 +3,7 @@
 export type ReverbSettings = {
   decay: number;
   size: number;
+  preDelay: number;
   lowCut: number;
   highCut: number;
   mix: number;
@@ -11,6 +12,7 @@ export type ReverbSettings = {
 export const DEFAULT_REVERB_SETTINGS: ReverbSettings = {
   decay: 2.2,
   size: 55,
+  preDelay: 20,
   lowCut: 120,
   highCut: 12000,
   mix: 35
@@ -30,6 +32,7 @@ export function normalizeReverbSettings(
   return {
     decay: clamp(Number(merged.decay) || DEFAULT_REVERB_SETTINGS.decay, 0.2, 12),
     size: clamp(Number(merged.size) || 0, 0, 100),
+    preDelay: clamp(Number(merged.preDelay) || 0, 0, 250),
     lowCut: Math.min(lowCut, highCut - 100),
     highCut: Math.max(highCut, lowCut + 100),
     mix: clamp(Number(merged.mix) || 0, 0, 100)
