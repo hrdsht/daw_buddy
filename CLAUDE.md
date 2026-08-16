@@ -54,7 +54,7 @@ daw-buddy/
 │   └── renderer/         app + splash windows (TypeScript, esbuild-bundled)
 ├── dist/                 tsc build output (git-ignored) — what Electron runs
 ├── test/regression.js    lib-level regression tests (run via tsx)
-├── docs/                 HANDOVER.md, BUILD_NOTES.md (work queue), manual.html
+├── docs/                 BUILD_NOTES.md (work queue), proposals/, manual.html
 └── scripts/              copy-assets.js + DAW Buddy.bat / .command launchers
 ```
 
@@ -79,7 +79,7 @@ daw-buddy/
 
 ## Invariants — do not break these
 
-Pulled from `docs/HANDOVER.md`; each was a real bug or a deliberate safety
+Each of these was a real bug once, or a deliberate safety
 decision.
 
 1. **Every path from the window is guarded.** `guard()` / `guardApproved()` in
