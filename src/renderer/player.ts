@@ -1,5 +1,12 @@
 'use strict';
 
+import {
+  DEFAULT_REVERB_SETTINGS,
+  equalPowerReverbGains,
+  formatReverbFrequency,
+  normalizeReverbSettings
+} from './reverb';
+
 /**
  * Playback and waveform drawing.
  *
@@ -22,12 +29,31 @@ const Player = (() => {
   const timeEl = document.getElementById('nowTime');
   const playBtn = document.getElementById('playPause');
   const volumeEl = document.getElementById('volume') as HTMLInputElement;
+  const verbBtn = document.getElementById('verbBtn');
+  const reverbPanel = document.getElementById('reverbPanel');
+  const reverbReset = document.getElementById('reverbReset');
+  const reverbInputs = {
+    decay: document.getElementById('reverbDecay') as HTMLInputElement,
+    size: document.getElementById('reverbSize') as HTMLInputElement,
+    lowCut: document.getElementById('reverbLowCut') as HTMLInputElement,
+    highCut: document.getElementById('reverbHighCut') as HTMLInputElement,
+    mix: document.getElementById('reverbMix') as HTMLInputElement
+  };
+  const reverbOutputs = {
+    decay: document.getElementById('reverbDecayValue') as HTMLOutputElement,
+    size: document.getElementById('reverbSizeValue') as HTMLOutputElement,
+    lowCut: document.getElementById('reverbLowCutValue') as HTMLOutputElement,
+    highCut: document.getElementById('reverbHighCutValue') as HTMLOutputElement,
+    mix: document.getElementById('reverbMixValue') as HTMLOutputElement
+  };
 
   let audioContext = null;
   let sourceNode = null;
   let dryGain = null;
   let wetGain = null;
   let convolver = null;
+  let wetLowCut = null;
+  let wetHighCut = null;
   let shaper = null;
   let droneOsc = null;
   let droneGain = null;
@@ -37,6 +63,9 @@ const Player = (() => {
   let decoded = null; // AudioBuffer
   let listeners = [];
   let loadSerial = 0;
+  let reverbEnabled = false;
+  let impulseTimer = null;
+  let reverbSettings = loadReverbSettings();
 
   audio.volume = Number(volumeEl.value);
 
@@ -46,9 +75,9 @@ const Player = (() => {
    * Playback runs through an optional reverb and soft clipper, and a separate
    * oscillator can hold the root note underneath.
    *
-   *   <audio> -> shaper -> dry ----+
-   *                    \-> convolver -> wet -+-> out
-   *   oscillator -> droneGain --------------/
+   *   <audio> -> shaper -> dry --------------------------+
+   *                    \-> convolver -> HP -> LP -> wet -+-> out
+   *   oscillator -> droneGain --------------------------/
    *
    * Built once, on first use. Creating an AudioContext before the user has
    * interacted with the page gets it suspended by the browser.
@@ -65,7 +94,15 @@ const Player = (() => {
     shaper.curve = null; // null = pass through untouched
 
     convolver = audioContext.createConvolver();
-    convolver.buffer = makeImpulse(1.8, 2.2);
+    convolver.buffer = makeImpulse(reverbSettings.decay, reverbSettings.size);
+
+    wetLowCut = audioContext.createBiquadFilter();
+    wetLowCut.type = 'highpass';
+    wetLowCut.Q.value = Math.SQRT1_2;
+
+    wetHighCut = audioContext.createBiquadFilter();
+    wetHighCut.type = 'lowpass';
+    wetHighCut.Q.value = Math.SQRT1_2;
 
     dryGain = audioContext.createGain();
     wetGain = audioContext.createGain();
@@ -78,13 +115,16 @@ const Player = (() => {
     sourceNode.connect(shaper);
     shaper.connect(dryGain);
     shaper.connect(convolver);
-    convolver.connect(wetGain);
+    convolver.connect(wetLowCut);
+    wetLowCut.connect(wetHighCut);
+    wetHighCut.connect(wetGain);
 
     dryGain.connect(audioContext.destination);
     wetGain.connect(audioContext.destination);
     droneGain.connect(audioContext.destination);
 
     chainBuilt = true;
+    applyReverbTone();
   }
 
   /**
@@ -95,16 +135,32 @@ const Player = (() => {
    * Shipping an actual IR file would sound better and cost a few hundred KB;
    * this is for auditioning a dry sample, not for mixing.
    */
-  function makeImpulse(seconds, decay) {
+  function makeImpulse(decaySeconds, sizePercent) {
     const rate = audioContext.sampleRate;
-    const length = Math.floor(rate * seconds);
+    const roomSize = sizePercent / 100;
+    const preDelaySeconds = 0.003 + roomSize * 0.027;
+    const length = Math.max(1, Math.floor(rate * (decaySeconds + preDelaySeconds)));
+    const preDelaySamples = Math.floor(rate * preDelaySeconds);
     const impulse = audioContext.createBuffer(2, length, rate);
 
     for (let channel = 0; channel < 2; channel += 1) {
       const data = impulse.getChannelData(channel);
-      for (let i = 0; i < length; i += 1) {
-        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+      for (let i = preDelaySamples; i < length; i += 1) {
+        const elapsed = (i - preDelaySamples) / rate;
+        // -60 dB at the requested decay time, the usual RT60 definition.
+        const envelope = Math.exp((-6.9078 * elapsed) / decaySeconds);
+        data[i] = (Math.random() * 2 - 1) * envelope;
       }
+
+      // A few room-size-dependent early reflections keep Size perceptually
+      // distinct from simply making the tail longer.
+      [0.011, 0.019, 0.031, 0.043].forEach((spacing, index) => {
+        const sample = Math.floor(rate * (0.002 + spacing * (0.35 + roomSize)));
+        if (sample < length) {
+          const side = channel === 0 ? 1 : index % 2 === 0 ? 0.82 : 1;
+          data[sample] += (0.42 - index * 0.07) * side;
+        }
+      });
     }
     return impulse;
   }
@@ -125,11 +181,160 @@ const Player = (() => {
     return curve;
   }
 
+  function loadReverbSettings() {
+    try {
+      const saved = JSON.parse(localStorage.getItem('daw-buddy.reverb-settings.v1') || '{}');
+      return normalizeReverbSettings(saved);
+    } catch {
+      return { ...DEFAULT_REVERB_SETTINGS };
+    }
+  }
+
+  function saveReverbSettings() {
+    try {
+      localStorage.setItem(
+        'daw-buddy.reverb-settings.v1',
+        JSON.stringify(reverbSettings)
+      );
+    } catch {
+      // Auditioning still works if storage is unavailable.
+    }
+  }
+
+  function applyReverbTone() {
+    if (!chainBuilt) return;
+    const now = audioContext.currentTime;
+    wetLowCut.frequency.setTargetAtTime(reverbSettings.lowCut, now, 0.015);
+    wetHighCut.frequency.setTargetAtTime(reverbSettings.highCut, now, 0.015);
+  }
+
+  function applyReverbLevel() {
+    if (!chainBuilt) return;
+    const gains = reverbEnabled
+      ? equalPowerReverbGains(reverbSettings.mix)
+      : { dry: 1, wet: 0 };
+    const now = audioContext.currentTime;
+    dryGain.gain.setTargetAtTime(gains.dry, now, 0.015);
+    wetGain.gain.setTargetAtTime(gains.wet, now, 0.015);
+  }
+
+  function rebuildImpulseSoon() {
+    if (!chainBuilt) return;
+    clearTimeout(impulseTimer);
+    impulseTimer = setTimeout(() => {
+      convolver.buffer = makeImpulse(reverbSettings.decay, reverbSettings.size);
+    }, 80);
+  }
+
   function setReverb(mix) {
     buildChain();
-    wetGain.gain.value = mix;
-    dryGain.gain.value = 1 - mix * 0.4; // reverb adds, doesn't replace
+    reverbEnabled = mix > 0;
+    applyReverbLevel();
   }
+
+  function syncReverbControls() {
+    Object.entries(reverbInputs).forEach(([name, input]) => {
+      input.value = String(reverbSettings[name]);
+    });
+    reverbOutputs.decay.textContent = `${reverbSettings.decay.toFixed(1)} s`;
+    reverbOutputs.size.textContent = `${Math.round(reverbSettings.size)}%`;
+    reverbOutputs.lowCut.textContent = formatReverbFrequency(reverbSettings.lowCut);
+    reverbOutputs.highCut.textContent = formatReverbFrequency(reverbSettings.highCut);
+    reverbOutputs.mix.textContent = `${Math.round(reverbSettings.mix)}%`;
+    const knob = reverbInputs.mix.nextElementSibling as HTMLElement;
+    knob.parentElement.style.setProperty('--mix-turn', `${reverbSettings.mix * 2.7}deg`);
+  }
+
+  function enableReverbFromControl() {
+    if (!current) return;
+    reverbEnabled = true;
+    verbBtn.classList.add('is-on');
+    buildChain();
+    applyReverbLevel();
+  }
+
+  function updateReverbFromControls(changed) {
+    const previous = reverbSettings;
+    reverbSettings = normalizeReverbSettings({
+      decay: Number(reverbInputs.decay.value),
+      size: Number(reverbInputs.size.value),
+      lowCut: Number(reverbInputs.lowCut.value),
+      highCut: Number(reverbInputs.highCut.value),
+      mix: Number(reverbInputs.mix.value)
+    });
+    syncReverbControls();
+    saveReverbSettings();
+    enableReverbFromControl();
+    applyReverbTone();
+    if (
+      changed === 'decay' ||
+      changed === 'size' ||
+      previous.decay !== reverbSettings.decay ||
+      previous.size !== reverbSettings.size
+    ) {
+      rebuildImpulseSoon();
+    }
+  }
+
+  function closeReverbPanel() {
+    reverbPanel.hidden = true;
+    verbBtn.setAttribute('aria-expanded', 'false');
+  }
+
+  function openReverbPanel() {
+    if (!current) return;
+    syncReverbControls();
+    reverbPanel.hidden = false;
+    verbBtn.setAttribute('aria-expanded', 'true');
+
+    const buttonRect = verbBtn.getBoundingClientRect();
+    const panelRect = reverbPanel.getBoundingClientRect();
+    const left = Math.min(
+      window.innerWidth - panelRect.width - 12,
+      Math.max(12, buttonRect.right - panelRect.width)
+    );
+    reverbPanel.style.left = `${left}px`;
+    reverbPanel.style.bottom = `${window.innerHeight - buttonRect.top + 8}px`;
+    reverbInputs.decay.focus();
+  }
+
+  verbBtn.addEventListener('contextmenu', (event) => {
+    event.preventDefault();
+    if (reverbPanel.hidden) openReverbPanel();
+    else closeReverbPanel();
+  });
+
+  Object.entries(reverbInputs).forEach(([name, input]) => {
+    input.addEventListener('input', () => updateReverbFromControls(name));
+  });
+
+  reverbReset.addEventListener('click', () => {
+    reverbSettings = { ...DEFAULT_REVERB_SETTINGS };
+    syncReverbControls();
+    saveReverbSettings();
+    enableReverbFromControl();
+    applyReverbTone();
+    rebuildImpulseSoon();
+  });
+
+  document.addEventListener('pointerdown', (event) => {
+    if (
+      !reverbPanel.hidden &&
+      !reverbPanel.contains(event.target as Node) &&
+      !verbBtn.contains(event.target as Node)
+    ) {
+      closeReverbPanel();
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !reverbPanel.hidden) {
+      closeReverbPanel();
+      verbBtn.focus();
+    }
+  });
+
+  syncReverbControls();
 
   function setSoftClip(amount) {
     buildChain();
