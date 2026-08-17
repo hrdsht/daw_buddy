@@ -159,12 +159,14 @@ function render() {
   backBtn.hidden = view === 'list' && !browsing;
 
   if (view === 'project') return renderProjectPage();
+  if (view === 'tools') return renderStandaloneTools();
   if (view === 'dedupe') return renderDedupe();
   if (view === 'disk') return renderDiskInsights();
   if (view === 'id3') return renderId3Editor();
   if (view === 'rename') return renderStandaloneRename();
   if (view === 'finish') return renderAudioFinishing();
   if (view === 'silence') return renderStandaloneSilence();
+  if (view === 'vocal') return renderStandaloneVocal();
   return renderList();
 }
 
@@ -1620,13 +1622,6 @@ function fieldInput(label) {
 
 /* ------------------------- audio finishing ----------------------- */
 
-$('openFinish').addEventListener('click', () => {
-  navigationHistory.visit(captureLocation());
-  view = 'finish';
-  viewEl.scrollTop = 0;
-  render();
-});
-
 function renderAudioFinishing() {
   viewEl.innerHTML = '';
 
@@ -2163,6 +2158,347 @@ function renderSilenceTab(entry = null) {
   paint();
 }
 
+/* -------------------------- vocal timeline -------------------------- */
+
+let vocalTab = 'split';
+let vocalFolder = null;
+let vocalFiles = [];
+let vocalFile = null;
+let vocalSplitPreview = null;
+let vocalManifestPath = null;
+let vocalBlocksFolder = null;
+let vocalRebuildPreview = null;
+
+function renderStandaloneVocal() {
+  viewEl.innerHTML = '';
+
+  const section = el('div', 'section');
+  section.append(headRow('Vocal reconstruction'));
+  section.append(
+    el(
+      'div',
+      'callout callout--warn',
+      'Splits a long vocal into phrases for external processing, then rebuilds them onto the original timeline. Originals are never touched — everything is written beside the source file.'
+    )
+  );
+
+  const tabBar = el('div', 'tabs');
+  const splitTabBtn = el('button', `pill${vocalTab === 'split' ? ' is-on' : ''}`, 'Split vocal');
+  const rebuildTabBtn = el('button', `pill${vocalTab === 'rebuild' ? ' is-on' : ''}`, 'Rebuild timeline');
+  splitTabBtn.addEventListener('click', () => {
+    vocalTab = 'split';
+    render();
+  });
+  rebuildTabBtn.addEventListener('click', () => {
+    vocalTab = 'rebuild';
+    render();
+  });
+  tabBar.append(splitTabBtn, rebuildTabBtn);
+  section.append(tabBar);
+
+  viewEl.append(section);
+
+  if (vocalTab === 'split') renderVocalSplitTab(section);
+  else renderVocalRebuildTab(section);
+}
+
+function renderVocalSplitTab(section) {
+  const folderBar = el('div', 'callout');
+  folderBar.append(el('div', 'page__kicker', 'Reading WAVs from'));
+  const folderPath = el('div', 'mono', vocalFolder || 'Choose a folder to begin');
+  folderPath.style.cssText = 'margin:6px 0 10px;word-break:break-all';
+  folderBar.append(folderPath);
+
+  const pickBar = el('div', 'tabs');
+  const pick = el(
+    'button',
+    `pill${vocalFolder ? ' pill--sm' : ' pill--solid'}`,
+    vocalFolder ? 'Choose a different folder' : 'Choose folder'
+  );
+  pick.addEventListener('click', async () => {
+    const chosen = await window.api.pickFolder();
+    if (chosen) {
+      vocalFolder = chosen;
+      vocalFile = null;
+      vocalSplitPreview = null;
+      try {
+        vocalFiles = await window.api.vocalListWav(chosen);
+      } catch (err) {
+        vocalFiles = [];
+      }
+      render();
+    }
+  });
+  pickBar.append(pick);
+  folderBar.append(pickBar);
+  section.append(folderBar);
+
+  if (vocalFolder) {
+    const fileList = el('div');
+    if (vocalFiles.length === 0) {
+      fileList.append(el('p', 'muted', 'No WAV files in this folder.'));
+    } else {
+      vocalFiles.forEach((file) => {
+        const row = el('div', `dupe${vocalFile === file.path ? ' is-on' : ''}`);
+        row.style.cursor = 'pointer';
+        row.append(el('div', 'dupe__name', file.name));
+        row.addEventListener('click', () => {
+          vocalFile = file.path;
+          vocalSplitPreview = null;
+          render();
+        });
+        fileList.append(row);
+      });
+    }
+    section.append(fileList);
+  }
+
+  if (!vocalFile) {
+    viewEl.append(section);
+    return;
+  }
+
+  const controls = el('div', 'grid2');
+
+  const detectWrap = el('div', 'fieldrow');
+  detectWrap.append(el('label', null, 'Detection'));
+  const detectRow = el('div', 'tabs');
+  let detection = 'RMS';
+  const rmsBtn = el('button', 'pill is-on', 'RMS');
+  const peakBtn = el('button', 'pill', 'Peak');
+  rmsBtn.addEventListener('click', () => {
+    detection = 'RMS';
+    rmsBtn.classList.add('is-on');
+    peakBtn.classList.remove('is-on');
+  });
+  peakBtn.addEventListener('click', () => {
+    detection = 'Peak';
+    peakBtn.classList.add('is-on');
+    rmsBtn.classList.remove('is-on');
+  });
+  detectRow.append(rmsBtn, peakBtn);
+  detectWrap.append(detectRow);
+  controls.append(detectWrap);
+
+  const threshold = fieldInput('Silence threshold (dB)');
+  threshold.input.value = '-72';
+  controls.append(threshold.wrap);
+
+  const minSilence = fieldInput('Minimum gap to split on (ms)');
+  minSilence.input.value = '400';
+  minSilence.input.title = 'Silences shorter than this stay inside a phrase instead of splitting it.';
+  controls.append(minSilence.wrap);
+
+  const pad = fieldInput('Keep padding (ms)');
+  pad.input.value = '50';
+  pad.input.title = 'Extra silence kept on each side of a phrase so it isn’t cut too tight.';
+  controls.append(pad.wrap);
+
+  section.append(controls);
+
+  function options() {
+    return {
+      detection,
+      thresholdDb: Number(threshold.input.value) || -72,
+      minSilenceMs: Number(minSilence.input.value) || 400,
+      padMs: Number(pad.input.value) || 50
+    };
+  }
+
+  const actions = el('div', 'tabs');
+  actions.style.marginTop = '6px';
+  const analyseBtn = el('button', 'pill pill--solid', 'Analyse');
+  const splitBtn = el('button', 'pill', 'Split into blocks');
+  splitBtn.disabled = true;
+  actions.append(analyseBtn, splitBtn);
+  section.append(actions);
+
+  const status = el('p', 'muted');
+  status.style.marginTop = '12px';
+  const results = el('div');
+  section.append(status, results);
+
+  viewEl.append(section);
+
+  analyseBtn.addEventListener('click', async () => {
+    analyseBtn.disabled = true;
+    analyseBtn.textContent = 'Analysing…';
+    results.innerHTML = '';
+    splitBtn.disabled = true;
+
+    try {
+      vocalSplitPreview = await window.api.vocalSplitAnalyse(vocalFile, options());
+      if (vocalSplitPreview.error) {
+        status.textContent = vocalSplitPreview.error;
+      } else if (vocalSplitPreview.skip) {
+        status.textContent = vocalSplitPreview.reason;
+      } else {
+        status.textContent = `${vocalSplitPreview.blockCount} block(s) found in ${vocalSplitPreview.duration.toFixed(1)}s`;
+        splitBtn.disabled = false;
+        vocalSplitPreview.segments
+          .filter((segment) => segment.type === 'block')
+          .forEach((segment) => {
+            const row = el('div', 'dupe');
+            row.append(el('div', 'dupe__name', segment.id));
+            row.append(
+              el(
+                'div',
+                'dupe__where',
+                `${segment.startSec.toFixed(2)}s – ${segment.endSec.toFixed(2)}s (${segment.durationSec.toFixed(2)}s)`
+              )
+            );
+            results.append(row);
+          });
+      }
+    } catch (err) {
+      status.textContent = err.message;
+    }
+
+    analyseBtn.disabled = false;
+    analyseBtn.textContent = 'Analyse';
+  });
+
+  splitBtn.addEventListener('click', async () => {
+    splitBtn.disabled = true;
+    splitBtn.textContent = 'Splitting…';
+
+    try {
+      const outcome = await window.api.vocalSplit(vocalFile, options());
+      if (!outcome.cancelled) {
+        toast(
+          'Vocal split',
+          outcome.modified
+            ? `${outcome.blockCount} block(s) written to ${basename(outcome.outputFolder)}`
+            : outcome.message || outcome.error,
+          !outcome.success || !outcome.modified
+        );
+      }
+    } catch (err) {
+      toast('Could not split', err.message, true);
+    }
+
+    splitBtn.disabled = false;
+    splitBtn.textContent = 'Split into blocks';
+  });
+}
+
+function renderVocalRebuildTab(section) {
+  const manifestBar = el('div', 'callout');
+  manifestBar.append(el('div', 'page__kicker', 'Manifest'));
+  const manifestPathEl = el('div', 'mono', vocalManifestPath || 'Choose the manifest.json from a split job');
+  manifestPathEl.style.cssText = 'margin:6px 0 10px;word-break:break-all';
+  manifestBar.append(manifestPathEl);
+
+  const manifestActions = el('div', 'tabs');
+  const pickManifest = el('button', 'pill pill--solid', vocalManifestPath ? 'Change manifest' : 'Choose manifest');
+  pickManifest.addEventListener('click', async () => {
+    const chosen = await window.api.vocalPickManifest();
+    if (chosen) {
+      vocalManifestPath = chosen;
+      vocalRebuildPreview = null;
+      render();
+    }
+  });
+  manifestActions.append(pickManifest);
+  manifestBar.append(manifestActions);
+  section.append(manifestBar);
+
+  const blocksBar = el('div', 'callout');
+  blocksBar.append(el('div', 'page__kicker', 'Processed blocks folder'));
+  const blocksPath = el('div', 'mono', vocalBlocksFolder || 'Choose the folder holding the processed blocks');
+  blocksPath.style.cssText = 'margin:6px 0 10px;word-break:break-all';
+  blocksBar.append(blocksPath);
+
+  const blocksActions = el('div', 'tabs');
+  const pickBlocks = el('button', 'pill pill--solid', vocalBlocksFolder ? 'Change folder' : 'Choose folder');
+  pickBlocks.addEventListener('click', async () => {
+    const chosen = await window.api.pickFolder();
+    if (chosen) {
+      vocalBlocksFolder = chosen;
+      vocalRebuildPreview = null;
+      render();
+    }
+  });
+  blocksActions.append(pickBlocks);
+  blocksBar.append(blocksActions);
+  section.append(blocksBar);
+
+  const actions = el('div', 'tabs');
+  actions.style.marginTop = '6px';
+  const analyseBtn = el('button', 'pill pill--solid', 'Analyse');
+  analyseBtn.disabled = !vocalManifestPath || !vocalBlocksFolder;
+  const rebuildBtn = el('button', 'pill', 'Rebuild timeline');
+  rebuildBtn.disabled = !vocalRebuildPreview;
+  actions.append(analyseBtn, rebuildBtn);
+  section.append(actions);
+
+  const status = el('p', 'muted');
+  status.style.marginTop = '12px';
+  const results = el('div');
+  section.append(status, results);
+
+  viewEl.append(section);
+
+  function paintPreview() {
+    results.innerHTML = '';
+    if (!vocalRebuildPreview) return;
+
+    status.textContent =
+      `${vocalRebuildPreview.readyCount} of ${vocalRebuildPreview.blockCount} block(s) ready` +
+      (vocalRebuildPreview.flaggedCount ? ` — ${vocalRebuildPreview.flaggedCount} flagged` : '') +
+      (vocalRebuildPreview.unexpected.length ? ` — ${vocalRebuildPreview.unexpected.length} unrecognised file(s)` : '');
+
+    vocalRebuildPreview.blocks.forEach((block) => {
+      const row = el('div', 'dupe');
+      row.append(el('div', 'dupe__name', block.id));
+      row.append(el('div', 'dupe__where', block.status + (block.detail ? ` — ${block.detail}` : '')));
+      results.append(row);
+    });
+  }
+
+  analyseBtn.addEventListener('click', async () => {
+    analyseBtn.disabled = true;
+    analyseBtn.textContent = 'Analysing…';
+    rebuildBtn.disabled = true;
+    results.innerHTML = '';
+
+    try {
+      vocalRebuildPreview = await window.api.vocalRebuildAnalyse(vocalManifestPath, vocalBlocksFolder);
+      rebuildBtn.disabled = vocalRebuildPreview.readyCount === 0;
+      paintPreview();
+    } catch (err) {
+      status.textContent = err.message;
+    }
+
+    analyseBtn.disabled = false;
+    analyseBtn.textContent = 'Analyse';
+  });
+
+  rebuildBtn.addEventListener('click', async () => {
+    rebuildBtn.disabled = true;
+    rebuildBtn.textContent = 'Rebuilding…';
+
+    try {
+      const outcome = await window.api.vocalRebuild(vocalManifestPath, vocalBlocksFolder, {});
+      if (!outcome.cancelled) {
+        toast(
+          'Timeline rebuilt',
+          `${outcome.accepted.length} block(s) placed at ${basename(outcome.output)}` +
+            (outcome.flagged.length ? ` — ${outcome.flagged.length} flagged, see report` : ''),
+          outcome.flagged.some((f) => !f.informational)
+        );
+      }
+    } catch (err) {
+      toast('Could not rebuild', err.message, true);
+    }
+
+    rebuildBtn.disabled = false;
+    rebuildBtn.textContent = 'Rebuild timeline';
+  });
+
+  paintPreview();
+}
+
 /* ------------------------------- QC ------------------------------- */
 
 let qcFolder = null;
@@ -2384,31 +2720,6 @@ function renderAllAudioTab(entry) {
 }
 
 /* ============================= ID3 editor ========================== */
-
-$('openId3').addEventListener('click', () => {
-  navigationHistory.visit(captureLocation());
-  view = 'id3';
-  viewEl.scrollTop = 0;
-  render();
-});
-
-$('openRename').addEventListener('click', () => {
-  navigationHistory.visit(captureLocation());
-  view = 'rename';
-  renameFolder = null;
-  viewEl.scrollTop = 0;
-  render();
-});
-
-$('openSilence').addEventListener('click', () => {
-  navigationHistory.visit(captureLocation());
-  view = 'silence';
-  silenceFolder = null;
-  silenceResults = [];
-  silenceChosen = new Set();
-  viewEl.scrollTop = 0;
-  render();
-});
 
 function renderId3Editor() {
   viewEl.innerHTML = '';
@@ -2669,13 +2980,6 @@ function id3FieldSummary(fields, bytes) {
 
 /* ========================== disk insights ========================= */
 
-$('openDisk').addEventListener('click', () => {
-  navigationHistory.visit(captureLocation());
-  view = 'disk';
-  viewEl.scrollTop = 0;
-  render();
-});
-
 function renderDiskInsights() {
   viewEl.innerHTML = '';
 
@@ -2799,12 +3103,6 @@ function diskInsightList(title, items) {
 }
 
 /* ============================== dedupe ============================= */
-
-$('openDedupe').addEventListener('click', () => {
-  navigationHistory.visit(captureLocation());
-  view = 'dedupe';
-  render();
-});
 
 function renderDedupe() {
   viewEl.innerHTML = '';
@@ -3062,6 +3360,111 @@ $('openDataDir').addEventListener('click', () => window.api.reveal(settings.data
 $('openSettings').addEventListener('click', openSheet);
 $('closeSettings').addEventListener('click', closeSheet);
 scrimEl.addEventListener('click', closeSheet);
+
+$('openTools').addEventListener('click', () => {
+  navigationHistory.visit(captureLocation());
+  view = 'tools';
+  viewEl.scrollTop = 0;
+  render();
+});
+
+function openStandaloneTool(nextView) {
+  navigationHistory.visit(captureLocation());
+  view = nextView;
+
+  if (nextView === 'rename') renameFolder = null;
+  if (nextView === 'silence') {
+    silenceFolder = null;
+    silenceResults = [];
+    silenceChosen = new Set();
+  }
+  if (nextView === 'vocal') {
+    vocalTab = 'split';
+    vocalFolder = null;
+    vocalFiles = [];
+    vocalFile = null;
+    vocalSplitPreview = null;
+    vocalManifestPath = null;
+    vocalBlocksFolder = null;
+    vocalRebuildPreview = null;
+  }
+
+  viewEl.scrollTop = 0;
+  render();
+}
+
+function renderStandaloneTools() {
+  viewEl.innerHTML = '';
+
+  const section = el('div', 'section');
+  section.append(headRow('Tools'));
+  section.append(
+    el(
+      'div',
+      'callout',
+      'All the utility jobs live here, so the sidebar stays calm and the tools are easier to find when you actually need them.'
+    )
+  );
+
+  const grid = el('div', 'tool-grid');
+  [
+    {
+      view: 'dedupe',
+      icon: '≋',
+      title: 'Sample cleanup',
+      text: 'Find duplicate imported samples and safely replace extra copies with links.'
+    },
+    {
+      view: 'disk',
+      icon: 'GB',
+      title: 'Disk insights',
+      text: 'See which project folders use the most storage without changing or deleting anything.'
+    },
+    {
+      view: 'id3',
+      icon: 'ID3',
+      title: 'ID3 editor',
+      text: 'Add, replace or remove metadata across many MP3 files at once.'
+    },
+    {
+      view: 'rename',
+      icon: 'Aa',
+      title: 'Bulk renamer',
+      text: 'Clean up or standardise many filenames with a preview before anything changes.'
+    },
+    {
+      view: 'finish',
+      icon: '↗',
+      title: 'Audio finishing',
+      text: 'Normalise WAV files and optionally fit long audio to an exact beat or bar length.'
+    },
+    {
+      view: 'silence',
+      icon: '✂',
+      title: 'Strip silence',
+      text: 'Detect leading or trailing silence and create trimmed copies while preserving originals.'
+    },
+    {
+      view: 'vocal',
+      icon: 'VOX',
+      title: 'Vocal reconstruction',
+      text: 'Split long vocals for external processing, then rebuild them at their exact original timing.'
+    }
+  ].forEach((tool) => {
+    const card = el('button', 'tool-card');
+    card.type = 'button';
+    card.append(el('span', 'tool-card__icon', tool.icon));
+    const copy = el('span', 'tool-card__copy');
+    copy.append(el('b', 'tool-card__title', tool.title));
+    copy.append(el('span', 'tool-card__text', tool.text));
+    card.append(copy, el('span', 'tool-card__open', 'Open →'));
+    card.addEventListener('click', () => openStandaloneTool(tool.view));
+    grid.append(card);
+  });
+
+  section.append(grid);
+  viewEl.append(section);
+}
 
 function openSheet() {
   sheetEl.hidden = false;

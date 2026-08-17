@@ -18,6 +18,8 @@ const { migrate } = require('./lib/migrate');
 const id3 = require('./lib/id3');
 const renamer = require('./lib/renamer');
 const silence = require('./lib/silence');
+const vocalSplit = require('./lib/vocalSplit');
+const vocalRebuild = require('./lib/vocalRebuild');
 const finisher = require('./lib/finisher');
 const audioqc = require('./lib/audioqc');
 const { groupVersions } = require('./lib/versions');
@@ -886,6 +888,81 @@ ipcMain.handle('silence:process', async (event, paths, options) => {
   }
 
   return { cancelled: false, results, outputRoot };
+});
+
+/* ---------------------- vocal timeline round trip ------------------ */
+
+/** Any WAV in the folder — the source for a split job. */
+ipcMain.handle('vocal:listWav', async (event, folder) => {
+  guardApproved(folder);
+  const files = await media.listAudio(folder, 1);
+  return files
+    .filter((file) => file.ext === '.wav')
+    .map((file) => ({ path: file.path, name: file.name, size: file.size }));
+});
+
+ipcMain.handle('vocal:splitAnalyse', async (event, inputPath, options) => {
+  guardApproved(inputPath);
+  return vocalSplit.analyseSplit(inputPath, options);
+});
+
+ipcMain.handle('vocal:split', async (event, inputPath, options) => {
+  guardApproved(inputPath);
+
+  const ext = path.extname(inputPath);
+  const baseName = path.basename(inputPath, ext);
+  const outDir = path.join(path.dirname(inputPath), `${baseName} (Vocal Split)`);
+
+  const { response } = await dialog.showMessageBox(mainWindow, {
+    type: 'question',
+    buttons: ['Cancel', 'Split'],
+    defaultId: 1,
+    cancelId: 0,
+    title: 'Split vocal',
+    message: 'Split this recording into blocks?',
+    detail: `Block files and a manifest are written to:\n${outDir}\n\nYour original is not touched.`
+  });
+  if (response !== 1) return { cancelled: true };
+
+  return { cancelled: false, ...(await vocalSplit.splitVocal(inputPath, options)) };
+});
+
+/** A single-purpose file picker for the manifest — everything else uses folders. */
+ipcMain.handle('vocal:pickManifest', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Choose a vocal timeline manifest',
+    buttonLabel: 'Use this manifest',
+    filters: [{ name: 'Manifest', extensions: ['json'] }],
+    properties: ['openFile']
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  const chosen = path.resolve(result.filePaths[0]);
+  pickedFolders.add(path.dirname(chosen));
+  return chosen;
+});
+
+ipcMain.handle('vocal:rebuildAnalyse', async (event, manifestPath, blocksFolder) => {
+  guardApproved(manifestPath);
+  guardApproved(blocksFolder);
+  return vocalRebuild.analyseRebuild(manifestPath, blocksFolder);
+});
+
+ipcMain.handle('vocal:rebuild', async (event, manifestPath, blocksFolder, options) => {
+  guardApproved(manifestPath);
+  guardApproved(blocksFolder);
+
+  const { response } = await dialog.showMessageBox(mainWindow, {
+    type: 'question',
+    buttons: ['Cancel', 'Rebuild'],
+    defaultId: 1,
+    cancelId: 0,
+    title: 'Rebuild timeline',
+    message: 'Rebuild a unified WAV from these blocks?',
+    detail: 'Blocks that are missing, the wrong format, or would overlap the next block are left silent and reported rather than guessed at.'
+  });
+  if (response !== 1) return { cancelled: true };
+
+  return { cancelled: false, ...(await vocalRebuild.rebuildTimeline(manifestPath, blocksFolder, options)) };
 });
 
 /* ------------------------- audio finishing ------------------------ */

@@ -527,4 +527,13 @@ async function measure(inputPath) {
   };
 }
 
-module.exports = { removeSilence, analyse, measure, parseWav, buildHeader, DEFAULTS };
+module.exports = {
+  removeSilence,
+  analyse,
+  measure,
+  parseWav,
+  buildHeader,
+  readMagnitude,
+  dbToLinear,
+  DEFAULTS
+};

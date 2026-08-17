@@ -9,6 +9,8 @@ const { scanRoots } = require('../src/main/lib/scanner');
 const renamer = require('../src/main/lib/renamer');
 const dedupe = require('../src/main/lib/dedupe');
 const silence = require('../src/main/lib/silence');
+const vocalSplit = require('../src/main/lib/vocalSplit');
+const vocalRebuild = require('../src/main/lib/vocalRebuild');
 const renders = require('../src/main/lib/renders');
 const videos = require('../src/main/lib/videos');
 const id3 = require('../src/main/lib/id3');
@@ -132,6 +134,185 @@ function testWav() {
   buffer.writeUInt32LE(frames * 2, 40);
   for (let i = 0; i < 10; i += 1) buffer.writeInt16LE(12000, 44 + i * 2);
   return buffer;
+}
+
+/**
+ * Builds a mono 16-bit WAV from a list of { type: 'active' | 'silence', ms }
+ * segments. Active segments alternate +/-12000 (well above any sane
+ * threshold); silence segments are true zero. Segment lengths are chosen as
+ * exact multiples of the default 50ms window in the tests below, so the
+ * windowed classifier's boundaries land exactly on the segment boundaries —
+ * no quantization slop to account for in the assertions.
+ */
+function synthWav(sampleRate, segments) {
+  const bytesPerSample = 2;
+  const frameCounts = segments.map((s) => Math.round((sampleRate * s.ms) / 1000));
+  const totalFrames = frameCounts.reduce((a, b) => a + b, 0);
+
+  const buffer = Buffer.alloc(44 + totalFrames * bytesPerSample);
+  buffer.write('RIFF', 0);
+  buffer.writeUInt32LE(buffer.length - 8, 4);
+  buffer.write('WAVE', 8);
+  buffer.write('fmt ', 12);
+  buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20);
+  buffer.writeUInt16LE(1, 22);
+  buffer.writeUInt32LE(sampleRate, 24);
+  buffer.writeUInt32LE(sampleRate * bytesPerSample, 28);
+  buffer.writeUInt16LE(bytesPerSample, 32);
+  buffer.writeUInt16LE(16, 34);
+  buffer.write('data', 36);
+  buffer.writeUInt32LE(totalFrames * bytesPerSample, 40);
+
+  let frame = 0;
+  segments.forEach((segment, index) => {
+    const frames = frameCounts[index];
+    for (let i = 0; i < frames; i += 1) {
+      const value = segment.type === 'active' ? (i % 2 === 0 ? 12000 : -12000) : 0;
+      buffer.writeInt16LE(value, 44 + (frame + i) * bytesPerSample);
+    }
+    frame += frames;
+  });
+
+  return buffer;
+}
+
+async function vocalSplitFindsExpectedBlocks() {
+  const sampleRate = 8000;
+  const pattern = [
+    { type: 'silence', ms: 500 },
+    { type: 'active', ms: 200 },
+    { type: 'silence', ms: 500 },
+    { type: 'active', ms: 300 },
+    { type: 'silence', ms: 500 },
+    { type: 'active', ms: 250 },
+    { type: 'silence', ms: 500 }
+  ];
+
+  await withTempDir(async (dir) => {
+    const filePath = path.join(dir, 'vocal.wav');
+    await fs.writeFile(filePath, synthWav(sampleRate, pattern));
+
+    const preview = await vocalSplit.analyseSplit(filePath, {
+      detection: 'Peak',
+      thresholdDb: -20,
+      minSilenceMs: 400,
+      padMs: 0
+    });
+
+    assert.equal(preview.blockCount, 3);
+    const blocks = preview.segments.filter((s) => s.type === 'block');
+    assert.equal(blocks[0].durationSec, 0.2);
+    assert.equal(blocks[1].durationSec, 0.3);
+    assert.equal(blocks[2].durationSec, 0.25);
+  });
+}
+
+async function vocalRoundTripIsSampleAccurate() {
+  const sampleRate = 8000;
+  const pattern = [
+    { type: 'silence', ms: 500 },
+    { type: 'active', ms: 200 },
+    { type: 'silence', ms: 500 },
+    { type: 'active', ms: 300 },
+    { type: 'silence', ms: 500 }
+  ];
+
+  await withTempDir(async (dir) => {
+    const filePath = path.join(dir, 'vocal.wav');
+    const original = synthWav(sampleRate, pattern);
+    await fs.writeFile(filePath, original);
+
+    const options = { detection: 'Peak', thresholdDb: -20, minSilenceMs: 400, padMs: 0 };
+    const result = await vocalSplit.splitVocal(filePath, options);
+    assert.ok(result.modified);
+    assert.equal(result.blockCount, 2);
+
+    // The source is never touched.
+    assert.deepEqual(await fs.readFile(filePath), original);
+
+    // Simulate the blocks coming back from external processing unchanged.
+    const processedDir = path.join(dir, 'processed');
+    await fs.mkdir(processedDir);
+    const blockSegments = result.segments.filter((s) => s.file);
+    for (const segment of blockSegments) {
+      await fs.copyFile(
+        path.join(result.outputFolder, segment.file),
+        path.join(processedDir, segment.file)
+      );
+    }
+
+    const rebuilt = await vocalRebuild.rebuildTimeline(result.manifestPath, processedDir);
+    // Unchanged blocks round-trip cleanly — any flagged entries here are only
+    // the informational "identical to original, was it processed?" note, not
+    // a real problem.
+    assert.equal(rebuilt.flagged.filter((f) => !f.informational).length, 0);
+    assert.equal(rebuilt.accepted.length, 2);
+
+    const rebuiltBuf = await fs.readFile(rebuilt.output);
+    const parsedOriginal = silence.parseWav(original);
+    const parsedRebuilt = silence.parseWav(rebuiltBuf);
+    const originalPcm = original.subarray(
+      parsedOriginal.dataOffset,
+      parsedOriginal.dataOffset + parsedOriginal.dataSize
+    );
+    const rebuiltPcm = rebuiltBuf.subarray(
+      parsedRebuilt.dataOffset,
+      parsedRebuilt.dataOffset + parsedRebuilt.dataSize
+    );
+    assert.deepEqual(rebuiltPcm, originalPcm);
+  });
+}
+
+async function vocalRebuildFlagsDurationCollision() {
+  const sampleRate = 8000;
+  const pattern = [
+    { type: 'silence', ms: 500 },
+    { type: 'active', ms: 200 },
+    { type: 'silence', ms: 500 },
+    { type: 'active', ms: 300 },
+    { type: 'silence', ms: 500 }
+  ];
+
+  await withTempDir(async (dir) => {
+    const filePath = path.join(dir, 'vocal.wav');
+    await fs.writeFile(filePath, synthWav(sampleRate, pattern));
+
+    const options = { detection: 'Peak', thresholdDb: -20, minSilenceMs: 400, padMs: 0 };
+    const result = await vocalSplit.splitVocal(filePath, options);
+    const blockSegments = result.segments.filter((s) => s.file);
+    assert.equal(blockSegments.length, 2);
+
+    const processedDir = path.join(dir, 'processed');
+    await fs.mkdir(processedDir);
+
+    // First block comes back unchanged.
+    await fs.copyFile(
+      path.join(result.outputFolder, blockSegments[0].file),
+      path.join(processedDir, blockSegments[0].file)
+    );
+    // Second comes back far longer than the silence available before it —
+    // must be flagged, not overlapped into the next segment.
+    await fs.writeFile(
+      path.join(processedDir, blockSegments[1].file),
+      synthWav(sampleRate, [{ type: 'active', ms: 2000 }])
+    );
+
+    const rebuilt = await vocalRebuild.rebuildTimeline(result.manifestPath, processedDir);
+
+    const hardFlagged = rebuilt.flagged.filter((f) => !f.informational).map((f) => f.id);
+    assert.deepEqual(hardFlagged, [blockSegments[1].id]);
+    assert.ok(rebuilt.accepted.some((a) => a.id === blockSegments[0].id));
+    assert.ok(!rebuilt.accepted.some((a) => a.id === blockSegments[1].id));
+
+    // Never overlapped/extended to fit — the output stays exactly the
+    // manifest's original length.
+    const manifest = JSON.parse(await fs.readFile(result.manifestPath, 'utf8'));
+    const outputBuf = await fs.readFile(rebuilt.output);
+    const parsedOutput = silence.parseWav(outputBuf);
+    const blockAlign = manifest.source.channels * (manifest.source.bitsPerSample / 8);
+    assert.equal(parsedOutput.dataSize / blockAlign, manifest.source.totalFrames);
+  });
 }
 
 async function processedOutputsDoNotCollide() {
@@ -339,6 +520,9 @@ async function run() {
     caseOnlyRenameWorks,
     changedDuplicateIsNeverReplaced,
     processedOutputsDoNotCollide,
+    vocalSplitFindsExpectedBlocks,
+    vocalRoundTripIsSampleAccurate,
+    vocalRebuildFlagsDurationCollision,
     renderFinderRecognisesProjectVersions,
     studioHistoryIsCountedButNotListed,
     bitwigBackupsAreCountedButNotListed,

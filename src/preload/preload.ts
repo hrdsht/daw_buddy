@@ -80,6 +80,16 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('silence:process', paths, options),
   onSilenceProgress: (callback) => subscribe('silence:progress', callback),
 
+  vocalListWav: (folder) => ipcRenderer.invoke('vocal:listWav', folder),
+  vocalSplitAnalyse: (inputPath, options) =>
+    ipcRenderer.invoke('vocal:splitAnalyse', inputPath, options),
+  vocalSplit: (inputPath, options) => ipcRenderer.invoke('vocal:split', inputPath, options),
+  vocalPickManifest: () => ipcRenderer.invoke('vocal:pickManifest'),
+  vocalRebuildAnalyse: (manifestPath, blocksFolder) =>
+    ipcRenderer.invoke('vocal:rebuildAnalyse', manifestPath, blocksFolder),
+  vocalRebuild: (manifestPath, blocksFolder, options) =>
+    ipcRenderer.invoke('vocal:rebuild', manifestPath, blocksFolder, options),
+
   finishList: (folder) => ipcRenderer.invoke('finish:list', folder),
   finishAnalyse: (paths, options) => ipcRenderer.invoke('finish:analyse', paths, options),
   finishProcess: (paths, options) => ipcRenderer.invoke('finish:process', paths, options),
