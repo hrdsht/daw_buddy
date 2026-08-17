@@ -255,6 +255,52 @@ async function countReaperBackups(projectPath, sessionPath) {
 }
 
 /* ================================================================== */
+/* Bitwig Studio — .bwproject, proprietary project container          */
+/* ================================================================== */
+
+/**
+ * Bitwig documents the .bwproject extension and project-folder layout, but
+ * not the project file's internal schema. List and open the project safely;
+ * do not invent a tempo parser that could return a convincing wrong value.
+ * A render can still be analysed for BPM/key through the player.
+ */
+async function readBitwigTempo(filePath) {
+  try {
+    const handle = await fs.open(filePath, 'r');
+    await handle.close();
+    return { bpm: null, error: 'Bitwig tempo not readable yet' };
+  } catch (err) {
+    return { bpm: null, error: `Could not read project: ${err.message}` };
+  }
+}
+
+/**
+ * Bitwig keeps recent copies in auto-backup/ and version-migration copies in
+ * auto-backup/versions/. The scanner skips that tree so these count toward
+ * project health without appearing as separate projects.
+ */
+async function countBitwigBackups(projectPath) {
+  const backupRoot = path.join(projectPath, 'auto-backup');
+  const folders = [backupRoot, path.join(backupRoot, 'versions')];
+  let total = 0;
+
+  for (const folder of folders) {
+    try {
+      const entries = await fs.readdir(folder, { withFileTypes: true });
+      total += entries.filter(
+        (entry) =>
+          entry.isFile() &&
+          path.extname(entry.name).toLowerCase() === '.bwproject'
+      ).length;
+    } catch {
+      /* folder is optional */
+    }
+  }
+
+  return total;
+}
+
+/* ================================================================== */
 /* Fender Studio Pro (was Studio One) — .song, a zip container        */
 /* ================================================================== */
 
@@ -402,6 +448,7 @@ const PARSER_VERSIONS = {
   '.als': 2,
   '.flp': 3, // 3 = bounded-scan fallback for FL 26
   '.rpp': 1,
+  '.bwproject': 1,
   '.song': 1,
   '.cpr': 1,
   '.logicx': 1,
@@ -432,6 +479,14 @@ const FORMATS = {
     readTempo: readReaperTempo,
     isBackup: () => false,
     countBackups: countReaperBackups
+  },
+  '.bwproject': {
+    ext: '.bwproject',
+    name: 'Bitwig Studio',
+    isPackage: false,
+    readTempo: readBitwigTempo,
+    isBackup: () => false,
+    countBackups: countBitwigBackups
   },
   '.song': {
     ext: '.song',

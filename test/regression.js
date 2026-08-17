@@ -207,6 +207,29 @@ async function studioHistoryIsCountedButNotListed() {
   });
 }
 
+async function bitwigBackupsAreCountedButNotListed() {
+  await withTempDir(async (dir) => {
+    const project = path.join(dir, 'Bitwig Song');
+    const backups = path.join(project, 'auto-backup');
+    const versionsFolder = path.join(backups, 'versions');
+    await fs.mkdir(versionsFolder, { recursive: true });
+    await fs.writeFile(path.join(project, 'Bitwig Song.bwproject'), 'project');
+    await fs.writeFile(path.join(backups, 'Bitwig Song backup.bwproject'), 'backup');
+    await fs.writeFile(
+      path.join(versionsFolder, 'Bitwig Song [5.3].bwproject'),
+      'version backup'
+    );
+
+    const result = await scanRoots([dir]);
+
+    assert.equal(result.entries.length, 1);
+    assert.equal(result.entries[0].name, 'Bitwig Song');
+    assert.equal(result.entries[0].daw, 'Bitwig Studio');
+    assert.equal(result.entries[0].backupCount, 2);
+    assert.equal(result.entries[0].bpm, null);
+  });
+}
+
 async function audioInAnotherBranchDoesNotEnablePlay() {
   await withTempDir(async (dir) => {
     const projectFolder = path.join(dir, 'Archive', 'Song Project');
@@ -284,6 +307,7 @@ async function run() {
     processedOutputsDoNotCollide,
     renderFinderRecognisesProjectVersions,
     studioHistoryIsCountedButNotListed,
+    bitwigBackupsAreCountedButNotListed,
     audioInAnotherBranchDoesNotEnablePlay,
     videosAreCountedAndListed,
     id3EditingNeverChangesAudioBytes

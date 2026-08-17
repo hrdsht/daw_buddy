@@ -154,6 +154,15 @@ async function walk(dir, root, depth, options, out) {
   const ownsStudioHistory = contents.some(
     (entry) => entry.isFile() && path.extname(entry.name).toLowerCase() === '.song'
   );
+  // Bitwig saves real .bwproject files in the project folder and automatic
+  // copies below auto-backup/. Those copies belong to the health count; they
+  // are not independent projects. Scope the skip to an actual Bitwig folder
+  // so an unrelated directory named "auto-backup" is not hidden globally.
+  const ownsBitwigBackups = contents.some(
+    (entry) =>
+      entry.isFile() &&
+      path.extname(entry.name).toLowerCase() === '.bwproject'
+  );
 
   for (const entry of contents) {
     if (entry.name.startsWith('.')) continue;
@@ -170,6 +179,7 @@ async function walk(dir, root, depth, options, out) {
 
       const lower = entry.name.toLowerCase();
       if (lower === 'history' && ownsStudioHistory) continue;
+      if (lower === 'auto-backup' && ownsBitwigBackups) continue;
       if (NEVER_PROJECTS.has(lower)) continue;
 
       // Renders and Bounces are skipped for finding PROJECTS but their
