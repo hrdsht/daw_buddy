@@ -1159,6 +1159,70 @@ body.is-mac .topbar {
   cursor: pointer;
 }
 
+.vocal-file-list {
+  margin-top: 10px;
+}
+
+.vocal-selection-bar {
+  align-items: center;
+  margin: 4px 0 8px;
+}
+
+.vocal-selection-bar .muted {
+  margin-left: auto;
+  font-size: 12px;
+}
+
+.vocal-file-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  padding: 11px 12px;
+  border-radius: var(--r);
+  cursor: pointer;
+}
+
+.vocal-file-row:hover,
+.vocal-file-row.is-on {
+  background: var(--hover);
+}
+
+.vocal-file-row .check {
+  margin-top: 2px;
+}
+
+.vocal-file-row__copy {
+  min-width: 0;
+}
+
+.vocal-file-row__name {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.vocal-file-row__meta {
+  display: block;
+  margin-top: 3px;
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.vocal-analysis-row {
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.vocal-analysis-row__error {
+  margin-top: 4px;
+  color: var(--alert);
+  font-size: 11.5px;
+}
+
 .callout {
   background: var(--raised);
   border-radius: var(--r);

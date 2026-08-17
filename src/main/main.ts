@@ -927,6 +927,35 @@ ipcMain.handle('vocal:split', async (event, inputPath, options) => {
   return { cancelled: false, ...(await vocalSplit.splitVocal(inputPath, options)) };
 });
 
+/** Split several selected recordings after one confirmation, one file at a time. */
+ipcMain.handle('vocal:splitBatch', async (event, inputPaths, options) => {
+  const paths = [...new Set(Array.isArray(inputPaths) ? inputPaths : [])];
+  if (paths.length === 0) return { cancelled: false, results: [] };
+  paths.forEach((target) => guardApproved(target));
+
+  const { response } = await dialog.showMessageBox(mainWindow, {
+    type: 'question',
+    buttons: ['Cancel', 'Split selected'],
+    defaultId: 1,
+    cancelId: 0,
+    title: 'Split vocals',
+    message: `Split ${paths.length} selected recording${paths.length === 1 ? '' : 's'} into blocks?`,
+    detail: 'Each recording gets its own Vocal Split folder beside the source. Originals are never changed.'
+  });
+  if (response !== 1) return { cancelled: true, results: [] };
+
+  const results = [];
+  for (const target of paths) {
+    try {
+      results.push(await vocalSplit.splitVocal(target, options));
+    } catch (error) {
+      results.push({ success: false, path: target, error: error.message });
+    }
+  }
+
+  return { cancelled: false, results };
+});
+
 /** A single-purpose file picker for the manifest — everything else uses folders. */
 ipcMain.handle('vocal:pickManifest', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {

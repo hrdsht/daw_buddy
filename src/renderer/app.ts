@@ -2233,8 +2233,8 @@ function renderSilenceTab(entry = null) {
 let vocalTab = 'split';
 let vocalFolder = null;
 let vocalFiles = [];
-let vocalFile = null;
-let vocalSplitPreview = null;
+let vocalSelected = new Set();
+let vocalSplitPreviews = new Map();
 let vocalManifestPath = null;
 let vocalBlocksFolder = null;
 let vocalRebuildPreview = null;
@@ -2289,8 +2289,8 @@ function renderVocalSplitTab(section) {
     const chosen = await window.api.pickFolder();
     if (chosen) {
       vocalFolder = chosen;
-      vocalFile = null;
-      vocalSplitPreview = null;
+      vocalSelected = new Set();
+      vocalSplitPreviews = new Map();
       try {
         vocalFiles = await window.api.vocalListWav(chosen);
       } catch (err) {
@@ -2304,26 +2304,56 @@ function renderVocalSplitTab(section) {
   section.append(folderBar);
 
   if (vocalFolder) {
-    const fileList = el('div');
+    const fileList = el('div', 'vocal-file-list');
     if (vocalFiles.length === 0) {
       fileList.append(el('p', 'muted', 'No WAV files in this folder.'));
     } else {
+      const selectionBar = el('div', 'tabs vocal-selection-bar');
+      const selectAllBtn = el('button', 'pill pill--sm', 'Select all');
+      const clearBtn = el('button', 'pill pill--sm', 'Clear');
+      const selectionCount = el(
+        'span',
+        'muted',
+        `${vocalSelected.size} of ${vocalFiles.length} selected`
+      );
+      selectAllBtn.disabled = vocalSelected.size === vocalFiles.length;
+      clearBtn.disabled = vocalSelected.size === 0;
+      selectAllBtn.addEventListener('click', () => {
+        vocalSelected = new Set(vocalFiles.map((file) => file.path));
+        vocalSplitPreviews = new Map();
+        render();
+      });
+      clearBtn.addEventListener('click', () => {
+        vocalSelected = new Set();
+        vocalSplitPreviews = new Map();
+        render();
+      });
+      selectionBar.append(selectAllBtn, clearBtn, selectionCount);
+      fileList.append(selectionBar);
+
       vocalFiles.forEach((file) => {
-        const row = el('div', `dupe${vocalFile === file.path ? ' is-on' : ''}`);
-        row.style.cursor = 'pointer';
-        row.append(el('div', 'dupe__name', file.name));
-        row.addEventListener('click', () => {
-          vocalFile = file.path;
-          vocalSplitPreview = null;
+        const row = el('label', `vocal-file-row${vocalSelected.has(file.path) ? ' is-on' : ''}`);
+        const check = el('input', 'check');
+        check.type = 'checkbox';
+        check.checked = vocalSelected.has(file.path);
+        check.addEventListener('change', () => {
+          if (check.checked) vocalSelected.add(file.path);
+          else vocalSelected.delete(file.path);
+          vocalSplitPreviews = new Map();
           render();
         });
+        const fileCopy = el('span', 'vocal-file-row__copy');
+        const name = el('span', 'vocal-file-row__name', file.name);
+        name.title = file.name;
+        fileCopy.append(name, el('span', 'vocal-file-row__meta', formatBytes(file.size)));
+        row.append(check, fileCopy);
         fileList.append(row);
       });
     }
     section.append(fileList);
   }
 
-  if (!vocalFile) {
+  if (vocalSelected.size === 0) {
     viewEl.append(section);
     return;
   }
@@ -2377,8 +2407,8 @@ function renderVocalSplitTab(section) {
 
   const actions = el('div', 'tabs');
   actions.style.marginTop = '6px';
-  const analyseBtn = el('button', 'pill pill--solid', 'Analyse');
-  const splitBtn = el('button', 'pill', 'Split into blocks');
+  const analyseBtn = el('button', 'pill pill--solid', `Analyse selected (${vocalSelected.size})`);
+  const splitBtn = el('button', 'pill', 'Split selected');
   splitBtn.disabled = true;
   actions.append(analyseBtn, splitBtn);
   section.append(actions);
@@ -2391,56 +2421,76 @@ function renderVocalSplitTab(section) {
   viewEl.append(section);
 
   analyseBtn.addEventListener('click', async () => {
+    const selectedFiles = vocalFiles.filter((file) => vocalSelected.has(file.path));
     analyseBtn.disabled = true;
     analyseBtn.textContent = 'Analysing…';
     results.innerHTML = '';
     splitBtn.disabled = true;
+    vocalSplitPreviews = new Map();
 
-    try {
-      vocalSplitPreview = await window.api.vocalSplitAnalyse(vocalFile, options());
-      if (vocalSplitPreview.error) {
-        status.textContent = vocalSplitPreview.error;
-      } else if (vocalSplitPreview.skip) {
-        status.textContent = vocalSplitPreview.reason;
-      } else {
-        status.textContent = `${vocalSplitPreview.blockCount} block(s) found in ${vocalSplitPreview.duration.toFixed(1)}s`;
-        splitBtn.disabled = false;
-        vocalSplitPreview.segments
-          .filter((segment) => segment.type === 'block')
-          .forEach((segment) => {
-            const row = el('div', 'dupe');
-            row.append(el('div', 'dupe__name', segment.id));
-            row.append(
-              el(
-                'div',
-                'dupe__where',
-                `${segment.startSec.toFixed(2)}s – ${segment.endSec.toFixed(2)}s (${segment.durationSec.toFixed(2)}s)`
-              )
-            );
-            results.append(row);
-          });
+    for (let index = 0; index < selectedFiles.length; index += 1) {
+      const file = selectedFiles[index];
+      status.textContent = `Analysing ${index + 1} of ${selectedFiles.length} — ${file.name}`;
+      try {
+        const preview = await window.api.vocalSplitAnalyse(file.path, options());
+        vocalSplitPreviews.set(file.path, preview);
+
+        const row = el('div', 'vocal-analysis-row');
+        const copy = el('div');
+        copy.append(el('div', 'vocal-file-row__name', file.name));
+        const summary = preview.error
+          ? preview.error
+          : preview.skip
+            ? preview.reason
+            : `${preview.blockCount} block(s) · ${preview.duration.toFixed(1)}s`;
+        copy.append(el('div', 'vocal-file-row__meta', summary));
+        row.append(copy);
+        results.append(row);
+      } catch (err) {
+        vocalSplitPreviews.set(file.path, { path: file.path, error: err.message });
+        const row = el('div', 'vocal-analysis-row');
+        row.append(el('div', 'vocal-file-row__name', file.name));
+        row.append(el('div', 'vocal-analysis-row__error', err.message));
+        results.append(row);
       }
-    } catch (err) {
-      status.textContent = err.message;
     }
 
+    const ready = selectedFiles.filter((file) => {
+      const preview = vocalSplitPreviews.get(file.path);
+      return preview && !preview.error && !preview.skip && preview.blockCount > 0;
+    });
+    status.textContent = `${ready.length} of ${selectedFiles.length} selected file(s) ready to split`;
+    splitBtn.disabled = ready.length === 0;
+    splitBtn.textContent = `Split selected (${ready.length})`;
+
     analyseBtn.disabled = false;
-    analyseBtn.textContent = 'Analyse';
+    analyseBtn.textContent = `Analyse selected (${vocalSelected.size})`;
   });
 
   splitBtn.addEventListener('click', async () => {
+    const paths = vocalFiles
+      .filter((file) => vocalSelected.has(file.path))
+      .filter((file) => {
+        const preview = vocalSplitPreviews.get(file.path);
+        return preview && !preview.error && !preview.skip && preview.blockCount > 0;
+      })
+      .map((file) => file.path);
+    if (paths.length === 0) return;
+
     splitBtn.disabled = true;
     splitBtn.textContent = 'Splitting…';
 
     try {
-      const outcome = await window.api.vocalSplit(vocalFile, options());
+      const outcome = await window.api.vocalSplitBatch(paths, options());
       if (!outcome.cancelled) {
+        const done = outcome.results.filter((result) => result.success && result.modified);
+        const skipped = outcome.results.filter((result) => !result.success || !result.modified);
+        const blocks = done.reduce((sum, result) => sum + (result.blockCount || 0), 0);
         toast(
-          'Vocal split',
-          outcome.modified
-            ? `${outcome.blockCount} block(s) written to ${basename(outcome.outputFolder)}`
-            : outcome.message || outcome.error,
-          !outcome.success || !outcome.modified
+          'Vocals split',
+          `${done.length} file(s) · ${blocks} block(s) written` +
+            (skipped.length ? ` · ${skipped.length} skipped` : ''),
+          skipped.length > 0
         );
       }
     } catch (err) {
@@ -2448,7 +2498,7 @@ function renderVocalSplitTab(section) {
     }
 
     splitBtn.disabled = false;
-    splitBtn.textContent = 'Split into blocks';
+    splitBtn.textContent = `Split selected (${paths.length})`;
   });
 }
 
@@ -3452,8 +3502,8 @@ function openStandaloneTool(nextView) {
     vocalTab = 'split';
     vocalFolder = null;
     vocalFiles = [];
-    vocalFile = null;
-    vocalSplitPreview = null;
+    vocalSelected = new Set();
+    vocalSplitPreviews = new Map();
     vocalManifestPath = null;
     vocalBlocksFolder = null;
     vocalRebuildPreview = null;

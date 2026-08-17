@@ -84,6 +84,8 @@ contextBridge.exposeInMainWorld('api', {
   vocalSplitAnalyse: (inputPath, options) =>
     ipcRenderer.invoke('vocal:splitAnalyse', inputPath, options),
   vocalSplit: (inputPath, options) => ipcRenderer.invoke('vocal:split', inputPath, options),
+  vocalSplitBatch: (inputPaths, options) =>
+    ipcRenderer.invoke('vocal:splitBatch', inputPaths, options),
   vocalPickManifest: () => ipcRenderer.invoke('vocal:pickManifest'),
   vocalRebuildAnalyse: (manifestPath, blocksFolder) =>
     ipcRenderer.invoke('vocal:rebuildAnalyse', manifestPath, blocksFolder),
