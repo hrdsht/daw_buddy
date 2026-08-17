@@ -190,8 +190,9 @@ folder shows an error explaining which setting to change.
 ## Part 7 — About the DAW formats
 
 One module, `src/main/lib/daw.ts`, knows every supported format — Ableton,
-FL Studio, REAPER, Bitwig Studio, Studio One / Fender Studio Pro, Cubase and
-Logic. Everything else asks it rather than checking file extensions itself.
+FL Studio, REAPER, Bitwig Studio, Pro Tools, Studio One / Fender Studio Pro,
+Cubase and Logic. Everything else asks it rather than checking file extensions
+itself.
 
 - **`.als` (Ableton)** is gzipped XML — un-gzipped in memory, the `<Tempo>` block
   read straight out.
@@ -201,8 +202,11 @@ Logic. Everything else asks it rather than checking file extensions itself.
 - **REAPER `.rpp`** is plain text (`TEMPO 128 4 4`).
 - **Bitwig `.bwproject`** files are listed and opened, and copies in
   `auto-backup` are counted instead of appearing as separate songs.
-- **Bitwig, Cubase and Logic** tempos aren't readable yet — those rows show
-  `— — —` for BPM but still list with everything else working.
+- **Pro Tools `.ptx`** sessions are listed and opened. `Session File Backups`
+  contributes to project health, `Audio Files` is treated as recorded source,
+  and finished audio in `Bounced Files` is available as a render.
+- **Bitwig, Pro Tools, Cubase and Logic** tempos aren't readable yet — those
+  rows show `— — —` for BPM but still list with everything else working.
 
 Backups are counted per DAW: Ableton and FL use a `Backup` folder (FL also
 writes `(autosaved…)` siblings), REAPER uses `.rpp-bak`, and so on. A project

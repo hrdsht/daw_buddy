@@ -225,7 +225,7 @@ footer{
   <p class="standfirst">A desktop tool that reads music production sessions off disk, pulls the tempo out of proprietary file formats, matches renders to the sessions that made them, and tidies up afterwards. This is how each of those works.</p>
   <p class="specline">
     <span>Electron + Node · <b>no runtime dependencies beyond chokidar</b></span>
-    <span>Formats <b>.als .flp .rpp .bwproject .cpr .song .logicx</b></span>
+    <span>Formats <b>.als .flp .rpp .bwproject .ptx .cpr .song .logicx</b></span>
     <span>Platforms <b>Windows · macOS</b></span>
   </p>
 </header>
@@ -430,6 +430,7 @@ footer{
         <tr><td><code>.flp</code></td><td>FL Studio</td><td>Binary event stream</td><td>Walk events; fall back to a bounded scan — see below</td></tr>
         <tr><td><code>.rpp</code></td><td>REAPER</td><td>Plain text</td><td>A <code>TEMPO 128 4 4</code> line near the top</td></tr>
         <tr><td><code>.bwproject</code></td><td>Bitwig Studio</td><td>Proprietary project container</td><td>Listed and opened; tempo not read yet</td></tr>
+        <tr><td><code>.ptx</code></td><td>Pro Tools</td><td>Proprietary session file</td><td>Listed and opened; backups counted; tempo not read yet</td></tr>
         <tr><td><code>.song</code></td><td>Fender Studio Pro</td><td>Zip container</td><td>Search small text entries inside</td></tr>
         <tr><td><code>.cpr</code></td><td>Cubase</td><td>Undocumented binary</td><td>Not read — listed with everything else</td></tr>
         <tr><td><code>.logicx</code></td><td>Logic Pro</td><td><em>A folder</em></td><td>Not read; claimed whole, never opened</td></tr>
@@ -716,7 +717,7 @@ scanRoots(['./fixtures/Jump'], { ignore: ['Backup'] })
 
 <footer>
   <span>DAW Buddy — internal documentation</span>
-  <span>Ableton · FL Studio · REAPER · Bitwig Studio · Cubase · Fender Studio Pro · Logic</span>
+  <span>Ableton · FL Studio · REAPER · Bitwig Studio · Pro Tools · Cubase · Fender Studio Pro · Logic</span>
 </footer>
 
 </body>

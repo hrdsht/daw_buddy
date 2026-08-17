@@ -301,6 +301,41 @@ async function countBitwigBackups(projectPath) {
 }
 
 /* ================================================================== */
+/* Pro Tools — .ptx, proprietary session file                         */
+/* ================================================================== */
+
+/**
+ * Avid documents .ptx as the current session extension, but does not publish
+ * a schema suitable for a trustworthy tempo parser. List and open sessions;
+ * use render analysis for BPM and key until real files prove a parser.
+ */
+async function readProToolsTempo(filePath) {
+  try {
+    const handle = await fs.open(filePath, 'r');
+    await handle.close();
+    return { bpm: null, error: 'Pro Tools tempo not readable yet' };
+  } catch (err) {
+    return { bpm: null, error: `Could not read session: ${err.message}` };
+  }
+}
+
+/** Pro Tools writes incremental .ptx copies to Session File Backups/. */
+async function countProToolsBackups(projectPath) {
+  try {
+    const entries = await fs.readdir(
+      path.join(projectPath, 'Session File Backups'),
+      { withFileTypes: true }
+    );
+    return entries.filter(
+      (entry) =>
+        entry.isFile() && path.extname(entry.name).toLowerCase() === '.ptx'
+    ).length;
+  } catch {
+    return 0;
+  }
+}
+
+/* ================================================================== */
 /* Fender Studio Pro (was Studio One) — .song, a zip container        */
 /* ================================================================== */
 
@@ -449,6 +484,7 @@ const PARSER_VERSIONS = {
   '.flp': 3, // 3 = bounded-scan fallback for FL 26
   '.rpp': 1,
   '.bwproject': 1,
+  '.ptx': 1,
   '.song': 1,
   '.cpr': 1,
   '.logicx': 1,
@@ -487,6 +523,14 @@ const FORMATS = {
     readTempo: readBitwigTempo,
     isBackup: () => false,
     countBackups: countBitwigBackups
+  },
+  '.ptx': {
+    ext: '.ptx',
+    name: 'Pro Tools',
+    isPackage: false,
+    readTempo: readProToolsTempo,
+    isBackup: () => false,
+    countBackups: countProToolsBackups
   },
   '.song': {
     ext: '.song',

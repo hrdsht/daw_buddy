@@ -230,6 +230,40 @@ async function bitwigBackupsAreCountedButNotListed() {
   });
 }
 
+async function proToolsBackupsAndSourceAudioStayOutOfResults() {
+  await withTempDir(async (dir) => {
+    const project = path.join(dir, 'Studio Vocal');
+    const backups = path.join(project, 'Session File Backups');
+    const sourceAudio = path.join(project, 'Audio Files');
+    const bounces = path.join(project, 'Bounced Files');
+    await fs.mkdir(backups, { recursive: true });
+    await fs.mkdir(sourceAudio, { recursive: true });
+    await fs.mkdir(bounces, { recursive: true });
+    await fs.writeFile(path.join(project, 'Studio Vocal.ptx'), 'session');
+    await fs.writeFile(path.join(backups, 'Studio Vocal.bak.001.ptx'), 'backup');
+    await fs.writeFile(path.join(backups, 'Studio Vocal.bak.002.ptx'), 'backup');
+    await fs.writeFile(path.join(sourceAudio, 'Studio Vocal.wav'), testWav());
+
+    const withoutBounce = await scanRoots([dir]);
+    assert.equal(withoutBounce.entries.length, 1);
+    assert.equal(withoutBounce.entries[0].name, 'Studio Vocal');
+    assert.equal(withoutBounce.entries[0].daw, 'Pro Tools');
+    assert.equal(withoutBounce.entries[0].backupCount, 2);
+    assert.equal(withoutBounce.entries[0].audioCount, 0);
+
+    await fs.writeFile(path.join(bounces, 'Studio Vocal.wav'), testWav());
+    const withBounce = await scanRoots([dir]);
+    assert.equal(withBounce.entries[0].audioCount, 1);
+
+    const listed = await renders.findRenders(
+      path.join(project, 'Studio Vocal.ptx'),
+      dir
+    );
+    assert.equal(listed.renders.length, 1);
+    assert.equal(listed.renders[0].primary.name, 'Studio Vocal.wav');
+  });
+}
+
 async function audioInAnotherBranchDoesNotEnablePlay() {
   await withTempDir(async (dir) => {
     const projectFolder = path.join(dir, 'Archive', 'Song Project');
@@ -308,6 +342,7 @@ async function run() {
     renderFinderRecognisesProjectVersions,
     studioHistoryIsCountedButNotListed,
     bitwigBackupsAreCountedButNotListed,
+    proToolsBackupsAndSourceAudioStayOutOfResults,
     audioInAnotherBranchDoesNotEnablePlay,
     videosAreCountedAndListed,
     id3EditingNeverChangesAudioBytes

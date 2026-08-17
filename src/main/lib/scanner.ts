@@ -163,6 +163,12 @@ async function walk(dir, root, depth, options, out) {
       entry.isFile() &&
       path.extname(entry.name).toLowerCase() === '.bwproject'
   );
+  // Pro Tools puts both backups and recorded source media beside the main
+  // .ptx session. Neither tree contains independent DAW Buddy projects.
+  const ownsProToolsSession = contents.some(
+    (entry) =>
+      entry.isFile() && path.extname(entry.name).toLowerCase() === '.ptx'
+  );
 
   for (const entry of contents) {
     if (entry.name.startsWith('.')) continue;
@@ -180,6 +186,8 @@ async function walk(dir, root, depth, options, out) {
       const lower = entry.name.toLowerCase();
       if (lower === 'history' && ownsStudioHistory) continue;
       if (lower === 'auto-backup' && ownsBitwigBackups) continue;
+      if (lower === 'session file backups' && ownsProToolsSession) continue;
+      if (lower === 'audio files' && ownsProToolsSession) continue;
       if (NEVER_PROJECTS.has(lower)) continue;
 
       // Renders and Bounces are skipped for finding PROJECTS but their
