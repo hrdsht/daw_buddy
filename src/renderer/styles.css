@@ -560,6 +560,12 @@ body.is-mac .topbar {
   border: none;
   cursor: pointer;
 }
+/* Harmonic/tempo match reason on the Matches tab — accent-tinted, like the
+   analysis chips elsewhere. Uses the theme accent so it tracks colour changes. */
+.badge--match {
+  background: color-mix(in srgb, var(--amber) 16%, transparent);
+  color: var(--amber);
+}
 
 .badge--inside:hover {
   background: var(--amber);

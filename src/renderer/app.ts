@@ -738,18 +738,37 @@ function renderMatchesTab(entry) {
   const list = el('div');
   matches.slice(0, 60).forEach((m) => {
     const r = record(m.entry.path);
-    const row = el('button', 'filerow');
-    const main = el('div', 'filerow__main');
-    main.append(el('div', 'filerow__name', m.entry.name));
-    const reasons = [m.keyRelation, m.tempoRelation].filter(Boolean).join(' · ');
+    // Same full-width themed row as the other project tabs (a <div class="filerow">,
+    // not a native <button> — that was rendering as narrow white cards).
+    const row = el('div', 'filerow');
+
+    // Icon cell: the Camelot key, or the tempo, so the match reason is visible
+    // at a glance.
+    row.append(
+      el('div', 'projectfile__icon', r.camelot || (m.entry.bpm ? formatBpm(m.entry.bpm) : '♪'))
+    );
+
+    const middle = el('div');
+    middle.append(el('div', 'filerow__name', m.entry.name));
     const bits = [
       m.entry.bpm ? `${formatBpm(m.entry.bpm)} BPM` : null,
-      r.camelot ? `${r.key || ''} (${r.camelot})`.trim() : r.key || null,
-      m.entry.location,
-      reasons
+      r.key ? `${r.key}${r.camelot ? ` (${r.camelot})` : ''}` : null,
+      m.entry.location
     ].filter(Boolean);
-    main.append(el('div', 'filerow__meta', bits.join('  —  ')));
-    row.append(main);
+    const meta = el('div', 'filerow__meta', bits.join('  ·  '));
+    // Keep the (often long) location on one line; full path on hover.
+    meta.style.whiteSpace = 'nowrap';
+    meta.style.overflow = 'hidden';
+    meta.style.textOverflow = 'ellipsis';
+    if (m.entry.location) meta.title = m.entry.location;
+    middle.append(meta);
+    row.append(middle);
+
+    // Reason chip (accent) + spacer to fill the 4-column filerow grid.
+    const reason = [m.keyRelation, m.tempoRelation].filter(Boolean).join(' · ');
+    row.append(reason ? el('span', 'badge badge--match', reason) : el('span'));
+    row.append(el('span'));
+
     row.addEventListener('click', () => goProject(m.entry));
     list.append(row);
   });
