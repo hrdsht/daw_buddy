@@ -46,6 +46,65 @@ body.theme-light {
   --line: rgba(25, 42, 23, 0.11);
 }
 
+/* ---- Accent presets ---------------------------------------------------
+   Only the accent (--amber) changes; the ink already contrasts in both
+   surfaces (dark ink on the bright dark-surface accent, near-white ink on
+   the darker light-surface accent). Green is the default in :root /
+   .theme-light, so it needs no override. The key colour (--sage) stays put
+   so key and accent never blur together. */
+body[data-accent="blue"] { --amber: #6db6ff; }
+body[data-accent="yellow"] { --amber: #e8d15a; }
+body[data-accent="amber"] { --amber: #f0a63a; }
+body[data-accent="red"] { --amber: #ef6f63; }
+
+body.theme-light[data-accent="blue"] { --amber: #2f74c8; }
+body.theme-light[data-accent="yellow"] { --amber: #a8901f; }
+body.theme-light[data-accent="amber"] { --amber: #b9701a; }
+body.theme-light[data-accent="red"] { --amber: #c83f35; }
+
+/* ---- AMOLED surface ---------------------------------------------------
+   A dark surface with true-black window and panels; text and accent carry
+   over from :root, so the data-accent rules above still apply. */
+body.theme-amoled {
+  --bg: #000000;
+  --surface: #050705;
+  --raised: #0c100c;
+  --hover: #171d17;
+  --active: #222922;
+  --line: rgba(220, 242, 214, 0.1);
+}
+
+/* ---- Appearance controls (Settings) ----------------------------------- */
+.appearance-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 8px;
+}
+.swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  outline: 2px solid var(--line);
+  cursor: pointer;
+  padding: 0;
+}
+.swatch.is-on {
+  border-color: var(--text);
+}
+.swatch--green { background: #9dde64; }
+.swatch--blue { background: #6db6ff; }
+.swatch--yellow { background: #e8d15a; }
+.swatch--amber { background: #f0a63a; }
+.swatch--red { background: #ef6f63; }
+.surface-btn.is-on {
+  background: var(--amber);
+  color: var(--amber-ink);
+  border-color: transparent;
+}
+
 * {
   box-sizing: border-box;
 }

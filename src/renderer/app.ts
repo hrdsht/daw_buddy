@@ -23,21 +23,72 @@ const sheetEl = $('sheet');
 const scrimEl = $('scrim');
 const themeToggleEl = $('themeToggle');
 
-function applyTheme(theme) {
-  const light = theme === 'light';
-  document.body.classList.toggle('theme-light', light);
-  themeToggleEl.textContent = light ? 'Dark mode' : 'Light mode';
-  themeToggleEl.setAttribute('aria-pressed', String(light));
+const ACCENTS = ['green', 'blue', 'yellow', 'amber', 'red'];
+const SURFACES = ['dark', 'light', 'amoled'];
+
+function currentSurface() {
+  if (document.body.classList.contains('theme-amoled')) return 'amoled';
+  if (document.body.classList.contains('theme-light')) return 'light';
+  return 'dark';
 }
 
-const savedTheme = localStorage.getItem('dawBuddyTheme');
-applyTheme(savedTheme === 'light' ? 'light' : 'dark');
+/** Accent (colour) and surface (dark/light/amoled) are independent axes. */
+function applyAppearance(accent, surface) {
+  if (!ACCENTS.includes(accent)) accent = 'green';
+  if (!SURFACES.includes(surface)) surface = 'dark';
+  document.body.dataset.accent = accent;
+  document.body.classList.toggle('theme-light', surface === 'light');
+  document.body.classList.toggle('theme-amoled', surface === 'amoled');
 
+  // The topbar quick-toggle mirrors the light/dark state.
+  const light = surface === 'light';
+  if (themeToggleEl) {
+    themeToggleEl.textContent = light ? 'Dark mode' : 'Light mode';
+    themeToggleEl.setAttribute('aria-pressed', String(light));
+  }
+
+  // Reflect the active choices in the Settings controls.
+  document.querySelectorAll('#accentSwatches .swatch').forEach((node) =>
+    node.classList.toggle('is-on', node.getAttribute('data-accent') === accent)
+  );
+  document.querySelectorAll('#surfaceModes .surface-btn').forEach((node) =>
+    node.classList.toggle('is-on', node.getAttribute('data-surface') === surface)
+  );
+
+  localStorage.setItem('dawBuddyAccent', accent);
+  localStorage.setItem('dawBuddySurface', surface);
+}
+
+// Load saved appearance, migrating the old light/dark-only key.
+const savedAccent = localStorage.getItem('dawBuddyAccent') || 'green';
+let savedSurface = localStorage.getItem('dawBuddySurface');
+if (!savedSurface) {
+  savedSurface = localStorage.getItem('dawBuddyTheme') === 'light' ? 'light' : 'dark';
+}
+applyAppearance(savedAccent, savedSurface);
+
+// Topbar button: quick flip between dark and light (keeps the accent).
 themeToggleEl.addEventListener('click', () => {
-  const next = document.body.classList.contains('theme-light') ? 'dark' : 'light';
-  localStorage.setItem('dawBuddyTheme', next);
-  applyTheme(next);
+  const next = currentSurface() === 'light' ? 'dark' : 'light';
+  applyAppearance(document.body.dataset.accent || 'green', next);
 });
+
+// Settings — accent swatches, surface modes, reset to default.
+if ($('accentSwatches')) {
+  $('accentSwatches').addEventListener('click', (event) => {
+    const btn = event.target.closest('.swatch');
+    if (btn) applyAppearance(btn.getAttribute('data-accent'), currentSurface());
+  });
+}
+if ($('surfaceModes')) {
+  $('surfaceModes').addEventListener('click', (event) => {
+    const btn = event.target.closest('.surface-btn');
+    if (btn) applyAppearance(document.body.dataset.accent || 'green', btn.getAttribute('data-surface'));
+  });
+}
+if ($('resetTheme')) {
+  $('resetTheme').addEventListener('click', () => applyAppearance('green', 'dark'));
+}
 
 /* ============================== state ============================== */
 
