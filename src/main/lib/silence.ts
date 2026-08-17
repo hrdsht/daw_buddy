@@ -19,7 +19,8 @@ const crypto = require('crypto');
 const DEFAULTS = {
   detection: 'RMS', // 'Peak' or 'RMS'
   thresholdDb: -72,
-  where: 'End', // only End is implemented
+  where: 'End', // 'Start', 'End' or 'Both'
+  headMs: 10,
   tailMs: 10,
   windowMs: 50 // RMS averaging window
 };
@@ -212,6 +213,45 @@ function findLastAudioFrame(buf, fmt, dataOffset, totalFrames, opts) {
   return -1;
 }
 
+/** First frame carrying audio, using the same Peak/RMS rules as the end scan. */
+function findFirstAudioFrame(buf, fmt, dataOffset, totalFrames, opts) {
+  const threshold = dbToLinear(opts.thresholdDb);
+  const bytesPerSample = fmt.bitsPerSample / 8;
+  const blockAlign = fmt.numChannels * bytesPerSample;
+  const windowFrames = Math.max(1, Math.floor(fmt.sampleRate * (opts.windowMs / 1000)));
+  let sumSquares = 0;
+  let windowCount = 0;
+
+  for (let frame = 0; frame < totalFrames; frame += 1) {
+    let peak = 0;
+    for (let channel = 0; channel < fmt.numChannels; channel += 1) {
+      const offset = dataOffset + frame * blockAlign + channel * bytesPerSample;
+      if (offset + bytesPerSample > buf.length) continue;
+      const magnitude = readMagnitude(buf, offset, fmt);
+      if (magnitude > peak) peak = magnitude;
+    }
+
+    if (opts.detection === 'Peak') {
+      if (peak > threshold) return frame;
+    } else {
+      sumSquares += peak * peak;
+      windowCount += 1;
+      if (windowCount >= windowFrames) {
+        const rms = Math.sqrt(sumSquares / windowFrames);
+        if (rms > threshold) return Math.max(0, frame - windowFrames + 1);
+        sumSquares = 0;
+        windowCount = 0;
+      }
+    }
+  }
+
+  if (opts.detection !== 'Peak' && windowCount > 0) {
+    const rms = Math.sqrt(sumSquares / windowCount);
+    if (rms > threshold) return Math.max(0, totalFrames - windowCount);
+  }
+  return -1;
+}
+
 /**
  * Rebuilds everything before the audio: the RIFF header, every chunk the
  * source had before `data` — LIST, cue points, whatever the DAW wrote — then
@@ -269,11 +309,18 @@ async function analyse(inputPath, options = {}) {
   const { fmt, dataOffset, dataSize } = parsed;
   const blockAlign = fmt.numChannels * (fmt.bitsPerSample / 8);
   const totalFrames = Math.floor(dataSize / blockAlign);
-  const lastAudioFrame = findLastAudioFrame(buf, fmt, dataOffset, totalFrames, opts);
+  const scanStart = opts.where === 'Start' || opts.where === 'Both';
+  const scanEnd = opts.where === 'End' || opts.where === 'Both';
+  const firstAudioFrame = scanStart
+    ? findFirstAudioFrame(buf, fmt, dataOffset, totalFrames, opts)
+    : 0;
+  const lastAudioFrame = scanEnd
+    ? findLastAudioFrame(buf, fmt, dataOffset, totalFrames, opts)
+    : totalFrames - 1;
 
   const duration = totalFrames / fmt.sampleRate;
 
-  if (lastAudioFrame < 0) {
+  if (firstAudioFrame < 0 || lastAudioFrame < 0 || firstAudioFrame > lastAudioFrame) {
     return {
       path: inputPath,
       name: path.basename(inputPath),
@@ -284,21 +331,29 @@ async function analyse(inputPath, options = {}) {
     };
   }
 
+  const headFrames = Math.floor(fmt.sampleRate * (opts.headMs / 1000));
   const tailFrames = Math.floor(fmt.sampleRate * (opts.tailMs / 1000));
-  const cutFrame = Math.min(totalFrames, lastAudioFrame + 1 + tailFrames);
-  const removableFrames = Math.max(0, totalFrames - cutFrame);
+  const startFrame = scanStart ? Math.max(0, firstAudioFrame - headFrames) : 0;
+  const endFrame = scanEnd
+    ? Math.min(totalFrames, lastAudioFrame + 1 + tailFrames)
+    : totalFrames;
+  const leadingFrames = startFrame;
+  const trailingFrames = Math.max(0, totalFrames - endFrame);
+  const removableFrames = leadingFrames + trailingFrames;
 
   return {
     path: inputPath,
     name: path.basename(inputPath),
     duration,
     removable: removableFrames / fmt.sampleRate,
+    leadingRemovable: leadingFrames / fmt.sampleRate,
+    trailingRemovable: trailingFrames / fmt.sampleRate,
     removableBytes: removableFrames * blockAlign,
     sampleRate: fmt.sampleRate,
     channels: fmt.numChannels,
     bits: fmt.bitsPerSample,
     skip: removableFrames === 0,
-    reason: removableFrames === 0 ? 'No trailing silence' : null
+    reason: removableFrames === 0 ? 'No removable silence in the selected area' : null
   };
 }
 
@@ -321,12 +376,19 @@ async function removeSilence(inputPath, outputRoot, options: Record<string, any>
   const blockAlign = fmt.numChannels * (fmt.bitsPerSample / 8);
   const totalFrames = Math.floor(dataSize / blockAlign);
 
-  const lastAudioFrame = findLastAudioFrame(buf, fmt, dataOffset, totalFrames, opts);
+  const scanStart = opts.where === 'Start' || opts.where === 'Both';
+  const scanEnd = opts.where === 'End' || opts.where === 'Both';
+  const firstAudioFrame = scanStart
+    ? findFirstAudioFrame(buf, fmt, dataOffset, totalFrames, opts)
+    : 0;
+  const lastAudioFrame = scanEnd
+    ? findLastAudioFrame(buf, fmt, dataOffset, totalFrames, opts)
+    : totalFrames - 1;
 
   // Nothing cleared the threshold. Could be a genuinely silent file, could be
   // detection failing on something unusual. Either way, refuse — cutting to a
   // 10ms stub would destroy a file we didn't understand.
-  if (lastAudioFrame < 0) {
+  if (firstAudioFrame < 0 || lastAudioFrame < 0 || firstAudioFrame > lastAudioFrame) {
     return {
       success: true,
       path: inputPath,
@@ -335,17 +397,24 @@ async function removeSilence(inputPath, outputRoot, options: Record<string, any>
     };
   }
 
+  const headFrames = Math.floor(fmt.sampleRate * (opts.headMs / 1000));
   const tailFrames = Math.floor(fmt.sampleRate * (opts.tailMs / 1000));
-  const cutFrame = Math.min(totalFrames, lastAudioFrame + 1 + tailFrames);
-  const newDataSize = cutFrame * blockAlign;
+  const startFrame = scanStart ? Math.max(0, firstAudioFrame - headFrames) : 0;
+  const endFrame = scanEnd
+    ? Math.min(totalFrames, lastAudioFrame + 1 + tailFrames)
+    : totalFrames;
+  const leadingFrames = startFrame;
+  const trailingFrames = Math.max(0, totalFrames - endFrame);
+  const newDataSize = Math.max(0, endFrame - startFrame) * blockAlign;
 
-  if (newDataSize >= dataSize) {
-    return { success: true, path: inputPath, modified: false, message: 'No trailing silence found' };
+  if (newDataSize >= dataSize || newDataSize <= 0) {
+    return { success: true, path: inputPath, modified: false, message: 'No removable silence found' };
   }
 
   const header = buildHeader(buf, leading, newDataSize);
 
-  const audio = buf.subarray(dataOffset, dataOffset + newDataSize);
+  const audioStart = dataOffset + startFrame * blockAlign;
+  const audio = buf.subarray(audioStart, audioStart + newDataSize);
   const outBuf = Buffer.concat([header, audio]);
 
   const fileName = path.basename(inputPath);
@@ -380,7 +449,9 @@ async function removeSilence(inputPath, outputRoot, options: Record<string, any>
       output: target,
       modified: true,
       reclaimedBytes: dataSize - newDataSize,
-      secondsRemoved: (dataSize - newDataSize) / blockAlign / fmt.sampleRate
+      secondsRemoved: (dataSize - newDataSize) / blockAlign / fmt.sampleRate,
+      leadingSecondsRemoved: leadingFrames / fmt.sampleRate,
+      trailingSecondsRemoved: trailingFrames / fmt.sampleRate
     };
   } catch (err) {
     return { success: false, path: inputPath, error: `Failed to write output: ${err.message}` };
@@ -456,4 +527,13 @@ async function measure(inputPath) {
   };
 }
 
-module.exports = { removeSilence, analyse, measure, parseWav, DEFAULTS };
+module.exports = {
+  removeSilence,
+  analyse,
+  measure,
+  parseWav,
+  buildHeader,
+  readMagnitude,
+  dbToLinear,
+  DEFAULTS
+};

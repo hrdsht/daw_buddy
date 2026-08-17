@@ -8,6 +8,8 @@
 import { Player } from './player';
 import { parseQuery, hasQuery, matchesQuery } from './search';
 import { findMatches } from './matching';
+import { droneNoteFor } from './drone';
+import { NavigationHistory } from './navigation';
 
 const $ = (id: string): any => document.getElementById(id);
 
@@ -51,6 +53,7 @@ let openProject = null;
 let projectTab = 'projectfiles';
 let projectTool = null;
 let selected = null;
+let activeAuditionPath = null;
 let filterRoot = null;
 let filterDaw = null;
 let favOnly = false;
@@ -59,9 +62,16 @@ let sortDir = -1;
 const noteTimers = new Map();
 let dedupeState = { groups: [], scanned: 0, folders: 0, chosen: new Set<number>() };
 let silenceProgressStatus = null;
+let finishProgressStatus = null;
 let qcProgressStatus = null;
 let dedupeProgressStatus = null;
+let diskProgressStatus = null;
+let diskState = null;
+let diskScanning = false;
 let activeNoteEditor = null;
+let finishFolder = null;
+let finishResults = [];
+let finishChosen = new Set<number>();
 let id3Folder = null;
 let id3Files = [];
 let id3Selected = new Set();
@@ -70,6 +80,7 @@ let analysisRequestId = 0;
 const pendingAnalysis = new Map();
 const activePlayAnalysis = new Map();
 const analysisJobs = new Map();
+const navigationHistory = new NavigationHistory();
 
 /* ============================= startup ============================= */
 
@@ -101,6 +112,14 @@ async function refresh() {
     ? await window.api.browse(browsing)
     : await window.api.scan();
 
+  applyProjectResult(result);
+}
+
+function applyProjectResult(result, { background = false } = {}) {
+  // Do not replace a folder-specific browsing view with the root catalogue.
+  // The next trip back to All projects will request the verified root list.
+  if (background && browsing) return;
+
   entries = result.entries || [];
   groupedRows = result.grouped || [];
 
@@ -113,7 +132,8 @@ async function refresh() {
 
   if (result.cache) {
     console.log(
-      `[scan] ${entries.length} sessions · ${result.foldersRead} folders read · ` +
+      `[${result.fromIndex ? 'index' : 'scan'}] ${entries.length} sessions · ` +
+        `${result.foldersRead} folders read · ` +
         `cache ${result.cache.hits} hit / ${result.cache.misses} parsed`
     );
   }
@@ -139,14 +159,85 @@ function render() {
   backBtn.hidden = view === 'list' && !browsing;
 
   if (view === 'project') return renderProjectPage();
+  if (view === 'tools') return renderStandaloneTools();
   if (view === 'dedupe') return renderDedupe();
+  if (view === 'disk') return renderDiskInsights();
   if (view === 'id3') return renderId3Editor();
   if (view === 'rename') return renderStandaloneRename();
+  if (view === 'finish') return renderAudioFinishing();
   if (view === 'silence') return renderStandaloneSilence();
+  if (view === 'vocal') return renderStandaloneVocal();
   return renderList();
 }
 
+function captureLocation() {
+  return {
+    view,
+    browsing,
+    openProject,
+    projectTab,
+    projectTool,
+    filterRoot,
+    filterDaw,
+    favOnly,
+    groupVersionsOn,
+    selected,
+    search: searchEl.value,
+    entries,
+    groupedRows,
+    scrollTop: viewEl.scrollTop
+  };
+}
+
+function restoreLocation(location) {
+  view = location.view;
+  browsing = location.browsing;
+  openProject = location.openProject;
+  projectTab = location.projectTab;
+  projectTool = location.projectTool;
+  filterRoot = location.filterRoot;
+  filterDaw = location.filterDaw;
+  favOnly = location.favOnly;
+  groupVersionsOn = location.groupVersionsOn;
+  selected = location.selected;
+  searchEl.value = location.search || '';
+  entries = location.entries || entries;
+  groupedRows = location.groupedRows || groupedRows;
+  favFilterEl.classList.toggle('is-on', favOnly);
+  renderCollections();
+  render();
+  requestAnimationFrame(() => {
+    viewEl.scrollTop = location.scrollTop || 0;
+  });
+}
+
+function navigateBack() {
+  const location = navigationHistory.backFrom(captureLocation());
+  if (location) return restoreLocation(location);
+
+  // Fallback for a page reached before history tracking was initialized.
+  if (view !== 'list') {
+    view = 'list';
+    openProject = null;
+    render();
+    return;
+  }
+  if (!browsing) return;
+  const parent = browsing.split(/[\\/]/).slice(0, -1).join(sep());
+  const stillInside = settings.roots.some(
+    (root) => parent && (parent === root || parent.startsWith(root))
+  );
+  browsing = stillInside ? parent : null;
+  refresh();
+}
+
+function navigateForward() {
+  const location = navigationHistory.forwardFrom(captureLocation());
+  if (location) restoreLocation(location);
+}
+
 function goList(folder) {
+  navigationHistory.visit(captureLocation());
   view = 'list';
   browsing = folder || null;
   openProject = null;
@@ -155,8 +246,10 @@ function goList(folder) {
 }
 
 function goProject(entry) {
+  navigationHistory.visit(captureLocation());
   view = 'project';
   openProject = entry;
+  activeAuditionPath = entry.path;
   projectTab = 'projectfiles';
   projectTool = null;
   renameFolder = entry.folder;
@@ -168,20 +261,7 @@ function goProject(entry) {
   render();
 }
 
-backBtn.addEventListener('click', () => {
-  if (view !== 'list') {
-    view = 'list';
-    openProject = null;
-    render();
-    return;
-  }
-  // Walking back out of a folder: drop the last segment.
-  const parent = browsing ? browsing.split(/[\\/]/).slice(0, -1).join(sep()) : null;
-  const stillInside = settings.roots.some(
-    (root) => parent && (parent === root || parent.startsWith(root))
-  );
-  goList(stillInside ? parent : null);
-});
+backBtn.addEventListener('click', navigateBack);
 
 /* ============================== sidebar ============================ */
 
@@ -491,6 +571,10 @@ function buildRow(entry) {
 }
 
 async function playNewest(entry) {
+  // The Play button stops the row click from bubbling. Record the project
+  // explicitly so the drone follows this audio, not an older highlighted row.
+  selected = entry.path;
+  activeAuditionPath = entry.path;
   const result = await window.api.findRenders(
     entry.sessionPath,
     entry.root,
@@ -1536,6 +1620,255 @@ function fieldInput(label) {
   return { wrap, input };
 }
 
+/* ------------------------- audio finishing ----------------------- */
+
+function renderAudioFinishing() {
+  viewEl.innerHTML = '';
+
+  const section = el('div', 'section');
+  section.append(headRow('Audio finishing'));
+  section.append(
+    el(
+      'div',
+      'callout callout--warn',
+      'Normalizes WAV peak level and optionally trims long files to an exact beat/bar length. Finished copies are written to the output folder; originals are never changed. Short files are never stretched or padded.'
+    )
+  );
+
+  const folderBar = el('div', 'callout');
+  folderBar.append(el('div', 'page__kicker', 'Reading WAVs from'));
+  const folderPath = el('div', 'mono', finishFolder || 'Choose a folder to begin');
+  folderPath.style.cssText = 'margin:6px 0 10px;word-break:break-all';
+  folderBar.append(folderPath);
+  const choose = el(
+    'button',
+    `pill${finishFolder ? ' pill--sm' : ' pill--solid'}`,
+    finishFolder ? 'Choose a different folder' : 'Choose folder'
+  );
+  choose.addEventListener('click', async () => {
+    const chosen = await window.api.pickFolder();
+    if (!chosen) return;
+    finishFolder = chosen;
+    finishResults = [];
+    finishChosen = new Set();
+    render();
+  });
+  folderBar.append(choose);
+  section.append(folderBar);
+
+  let normalize = true;
+  let trimToBars = true;
+  const modeRow = el('div', 'tabs');
+  const normalizeBtn = el('button', 'pill is-on', 'Normalize peak');
+  const trimBtn = el('button', 'pill is-on', 'Fit to bars');
+  modeRow.append(normalizeBtn, trimBtn);
+  section.append(modeRow);
+
+  const controls = el('div', 'grid2');
+  const peak = fieldInput('Target peak (dB)');
+  peak.input.type = 'number';
+  peak.input.step = '0.1';
+  peak.input.value = '-1';
+  const bpm = fieldInput('BPM');
+  bpm.input.type = 'number';
+  bpm.input.min = '20';
+  bpm.input.max = '400';
+  bpm.input.value = '120';
+  const bars = fieldInput('Bars');
+  bars.input.type = 'number';
+  bars.input.min = '1';
+  bars.input.value = '4';
+  const beats = fieldInput('Beats per bar');
+  beats.input.type = 'number';
+  beats.input.min = '1';
+  beats.input.value = '4';
+  controls.append(peak.wrap, bpm.wrap, bars.wrap, beats.wrap);
+  section.append(controls);
+
+  const actions = el('div', 'tabs');
+  const analyseBtn = el('button', 'pill pill--solid', 'Analyse folder');
+  const selectAllBtn = el('button', 'pill', 'Select all');
+  const clearBtn = el('button', 'pill', 'Clear selection');
+  const processBtn = el('button', 'pill', 'Create finished copies');
+  analyseBtn.disabled = !finishFolder;
+  selectAllBtn.disabled = true;
+  clearBtn.disabled = true;
+  processBtn.disabled = true;
+  actions.append(analyseBtn, selectAllBtn, clearBtn, processBtn);
+  section.append(actions);
+
+  const status = el('p', 'muted');
+  finishProgressStatus = status;
+  status.style.marginTop = '12px';
+  if (!finishFolder) status.textContent = 'Choose any folder containing WAV files.';
+  const list = el('div');
+  section.append(status, list);
+  viewEl.append(section);
+
+  function currentOptions() {
+    return {
+      normalize,
+      trimToBars,
+      targetPeakDb: Number(peak.input.value),
+      bpm: Number(bpm.input.value),
+      bars: Number(bars.input.value),
+      beatsPerBar: Number(beats.input.value)
+    };
+  }
+
+  function updateButtons() {
+    const selectable = finishResults.filter((result) => !result.error && result.changing).length;
+    selectAllBtn.disabled = selectable === 0 || finishChosen.size === selectable;
+    clearBtn.disabled = finishChosen.size === 0;
+    processBtn.disabled = finishChosen.size === 0;
+    processBtn.textContent = finishChosen.size
+      ? `Create finished copies (${finishChosen.size})`
+      : 'Create finished copies';
+  }
+
+  function paint() {
+    list.innerHTML = '';
+    if (!finishResults.length) {
+      updateButtons();
+      return;
+    }
+
+    const changing = finishResults.filter((result) => !result.error && result.changing);
+    status.textContent = `${changing.length} of ${finishResults.length} file(s) would change`;
+
+    finishResults.forEach((result, index) => {
+      const row = el('div', 'dupe');
+      const check = el('input', 'check');
+      check.type = 'checkbox';
+      check.disabled = Boolean(result.error || !result.changing);
+      check.checked = finishChosen.has(index);
+      check.addEventListener('change', () => {
+        if (check.checked) finishChosen.add(index);
+        else finishChosen.delete(index);
+        updateButtons();
+      });
+      row.append(check);
+
+      const middle = el('div');
+      middle.append(el('div', 'dupe__name', result.name || basename(result.path)));
+      const details = result.error
+        ? `Skipped — ${result.error}`
+        : [
+            `${result.duration.toFixed(2)}s`,
+            Number.isFinite(result.peakDb) ? `${result.peakDb.toFixed(1)} dB peak` : 'silent',
+            result.tooShort ? 'shorter than requested length' : null,
+            result.gainLimited ? 'boost limited to +24 dB' : null
+          ].filter(Boolean).join(' · ');
+      middle.append(el('div', 'dupe__where', details));
+      row.append(middle);
+      row.append(
+        el(
+          'div',
+          'dupe__num',
+          result.error || !normalize ? '—' : `${result.gainDb >= 0 ? '+' : ''}${result.gainDb.toFixed(1)} dB`
+        )
+      );
+      row.append(
+        el(
+          'div',
+          'dupe__num dupe__num--waste',
+          result.error || !trimToBars || result.trimSeconds <= 0
+            ? '—'
+            : `-${result.trimSeconds.toFixed(2)}s`
+        )
+      );
+      list.append(row);
+    });
+    updateButtons();
+  }
+
+  function invalidate() {
+    finishResults = [];
+    finishChosen = new Set();
+    status.textContent = 'Settings changed — analyse again to preview the result.';
+    paint();
+  }
+
+  normalizeBtn.addEventListener('click', () => {
+    normalize = !normalize;
+    normalizeBtn.classList.toggle('is-on', normalize);
+    peak.input.disabled = !normalize;
+    invalidate();
+  });
+  trimBtn.addEventListener('click', () => {
+    trimToBars = !trimToBars;
+    trimBtn.classList.toggle('is-on', trimToBars);
+    [bpm.input, bars.input, beats.input].forEach((input) => { input.disabled = !trimToBars; });
+    invalidate();
+  });
+  [peak.input, bpm.input, bars.input, beats.input].forEach((input) => {
+    input.addEventListener('input', invalidate);
+  });
+
+  analyseBtn.addEventListener('click', async () => {
+    if (!finishFolder) return;
+    if (!normalize && !trimToBars) {
+      toast('Choose an action', 'Turn on Normalize peak, Fit to bars, or both.', true);
+      return;
+    }
+    if (trimToBars && (!(Number(bpm.input.value) > 0) || !(Number(bars.input.value) > 0))) {
+      toast('Check the musical length', 'BPM and Bars must be greater than zero.', true);
+      return;
+    }
+
+    analyseBtn.disabled = true;
+    analyseBtn.textContent = 'Analysing…';
+    finishResults = [];
+    finishChosen = new Set();
+    list.innerHTML = '';
+    try {
+      const files = await window.api.finishList(finishFolder);
+      finishResults = await window.api.finishAnalyse(files.map((file) => file.path), currentOptions());
+      finishChosen = new Set(
+        finishResults
+          .map((result, index) => (!result.error && result.changing ? index : -1))
+          .filter((index) => index >= 0)
+      );
+      paint();
+    } catch (error) {
+      status.textContent = error.message || String(error);
+    } finally {
+      analyseBtn.disabled = false;
+      analyseBtn.textContent = 'Analyse folder';
+    }
+  });
+
+  selectAllBtn.addEventListener('click', () => {
+    finishChosen = new Set(
+      finishResults
+        .map((result, index) => (!result.error && result.changing ? index : -1))
+        .filter((index) => index >= 0)
+    );
+    paint();
+  });
+  clearBtn.addEventListener('click', () => {
+    finishChosen = new Set();
+    paint();
+  });
+  processBtn.addEventListener('click', async () => {
+    const paths = [...finishChosen].map((index) => finishResults[index].path);
+    if (!paths.length) return;
+    processBtn.disabled = true;
+    processBtn.textContent = 'Processing…';
+    const result = await window.api.finishProcess(paths, currentOptions());
+    if (!result.cancelled) {
+      const changed = result.results.filter((item) => item.modified).length;
+      const failed = result.results.filter((item) => !item.success).length;
+      toast('Finished copies created', `${changed} file(s)` + (failed ? ` · ${failed} failed` : ''), failed > 0);
+      if (changed) status.textContent = `Finished copies are in ${result.outputRoot}`;
+    }
+    processBtn.disabled = false;
+    updateButtons();
+  });
+
+  paint();
+}
+
 /* ----------------------------- silence ---------------------------- */
 
 let silenceFolder = null;
@@ -1556,7 +1889,7 @@ function renderSilenceTab(entry = null) {
     el(
       'div',
       'callout callout--warn',
-      'Trims trailing silence from WAV files. Your originals are never touched — trimmed copies are written to the output folder. Analyse first to see exactly what would be cut.'
+      'Trims silence from the beginning, end or both sides of WAV files. Your originals are never touched — trimmed copies are written to the output folder. Analyse first to see exactly what would be cut.'
     )
   );
 
@@ -1599,6 +1932,27 @@ function renderSilenceTab(entry = null) {
   /* settings */
   const controls = el('div', 'grid2');
 
+  const whereWrap = el('div', 'fieldrow');
+  whereWrap.append(el('label', null, 'Remove silence from'));
+  const whereRow = el('div', 'tabs');
+  let where = 'Both';
+  const startBtn = el('button', 'pill', 'Beginning');
+  const endBtn = el('button', 'pill', 'End');
+  const bothBtn = el('button', 'pill is-on', 'Both');
+  function setWhere(next) {
+    where = next;
+    startBtn.classList.toggle('is-on', next === 'Start');
+    endBtn.classList.toggle('is-on', next === 'End');
+    bothBtn.classList.toggle('is-on', next === 'Both');
+    invalidateSilencePreview();
+  }
+  startBtn.addEventListener('click', () => setWhere('Start'));
+  endBtn.addEventListener('click', () => setWhere('End'));
+  bothBtn.addEventListener('click', () => setWhere('Both'));
+  whereRow.append(startBtn, endBtn, bothBtn);
+  whereWrap.append(whereRow);
+  controls.append(whereWrap);
+
   const detectWrap = el('div', 'fieldrow');
   detectWrap.append(el('label', null, 'Detection'));
   const detectRow = el('div', 'tabs');
@@ -1611,11 +1965,13 @@ function renderSilenceTab(entry = null) {
     detection = 'RMS';
     rmsBtn.classList.add('is-on');
     peakBtn.classList.remove('is-on');
+    invalidateSilencePreview();
   });
   peakBtn.addEventListener('click', () => {
     detection = 'Peak';
     peakBtn.classList.add('is-on');
     rmsBtn.classList.remove('is-on');
+    invalidateSilencePreview();
   });
   detectRow.append(rmsBtn, peakBtn);
   detectWrap.append(detectRow);
@@ -1625,7 +1981,7 @@ function renderSilenceTab(entry = null) {
   threshold.input.value = '-72';
   controls.append(threshold.wrap);
 
-  const tail = fieldInput('Leave a tail (ms)');
+  const tail = fieldInput('Leave safety padding (ms)');
   tail.input.value = '10';
   tail.input.title =
     'Cutting at the exact sample where audio drops below the threshold truncates a decaying waveform and clicks. A few ms of padding avoids that.';
@@ -1653,7 +2009,9 @@ function renderSilenceTab(entry = null) {
   function options() {
     return {
       detection,
+      where,
       thresholdDb: Number(threshold.input.value) || -72,
+      headMs: Number(tail.input.value) || 10,
       tailMs: Number(tail.input.value) || 10
     };
   }
@@ -1666,7 +2024,7 @@ function renderSilenceTab(entry = null) {
 
     const total = usable.reduce((sum, r) => sum + r.removable, 0);
     status.textContent =
-      `${usable.length} of ${silenceResults.length} file(s) have trailing silence — ` +
+      `${usable.length} of ${silenceResults.length} file(s) have removable silence — ` +
       `${total.toFixed(1)}s in total`;
 
     silenceResults.forEach((result, index) => {
@@ -1700,19 +2058,40 @@ function renderSilenceTab(entry = null) {
       row.append(middle);
 
       row.append(
-        el('div', 'dupe__num', result.error || result.skip ? '—' : `${result.duration.toFixed(1)}s`)
+        el(
+          'div',
+          'dupe__num',
+          result.error || result.skip
+            ? '—'
+            : `Start −${result.leadingRemovable.toFixed(2)}s`
+        )
       );
       row.append(
         el(
           'div',
           'dupe__num dupe__num--waste',
-          result.error || result.skip ? '' : `−${result.removable.toFixed(2)}s`
+          result.error || result.skip
+            ? ''
+            : `End −${result.trailingRemovable.toFixed(2)}s`
         )
       );
 
       list.append(row);
     });
   }
+
+  function invalidateSilencePreview() {
+    if (!silenceResults.length) return;
+    silenceResults = [];
+    silenceChosen = new Set();
+    processBtn.disabled = true;
+    processBtn.textContent = 'Process selected';
+    list.innerHTML = '';
+    status.textContent = 'Settings changed — analyse again to preview the cut.';
+  }
+
+  threshold.input.addEventListener('input', invalidateSilencePreview);
+  tail.input.addEventListener('input', invalidateSilencePreview);
 
   analyseBtn.addEventListener('click', async () => {
     analyseBtn.disabled = true;
@@ -1777,6 +2156,347 @@ function renderSilenceTab(entry = null) {
   });
 
   paint();
+}
+
+/* -------------------------- vocal timeline -------------------------- */
+
+let vocalTab = 'split';
+let vocalFolder = null;
+let vocalFiles = [];
+let vocalFile = null;
+let vocalSplitPreview = null;
+let vocalManifestPath = null;
+let vocalBlocksFolder = null;
+let vocalRebuildPreview = null;
+
+function renderStandaloneVocal() {
+  viewEl.innerHTML = '';
+
+  const section = el('div', 'section');
+  section.append(headRow('Vocal reconstruction'));
+  section.append(
+    el(
+      'div',
+      'callout callout--warn',
+      'Splits a long vocal into phrases for external processing, then rebuilds them onto the original timeline. Originals are never touched — everything is written beside the source file.'
+    )
+  );
+
+  const tabBar = el('div', 'tabs');
+  const splitTabBtn = el('button', `pill${vocalTab === 'split' ? ' is-on' : ''}`, 'Split vocal');
+  const rebuildTabBtn = el('button', `pill${vocalTab === 'rebuild' ? ' is-on' : ''}`, 'Rebuild timeline');
+  splitTabBtn.addEventListener('click', () => {
+    vocalTab = 'split';
+    render();
+  });
+  rebuildTabBtn.addEventListener('click', () => {
+    vocalTab = 'rebuild';
+    render();
+  });
+  tabBar.append(splitTabBtn, rebuildTabBtn);
+  section.append(tabBar);
+
+  viewEl.append(section);
+
+  if (vocalTab === 'split') renderVocalSplitTab(section);
+  else renderVocalRebuildTab(section);
+}
+
+function renderVocalSplitTab(section) {
+  const folderBar = el('div', 'callout');
+  folderBar.append(el('div', 'page__kicker', 'Reading WAVs from'));
+  const folderPath = el('div', 'mono', vocalFolder || 'Choose a folder to begin');
+  folderPath.style.cssText = 'margin:6px 0 10px;word-break:break-all';
+  folderBar.append(folderPath);
+
+  const pickBar = el('div', 'tabs');
+  const pick = el(
+    'button',
+    `pill${vocalFolder ? ' pill--sm' : ' pill--solid'}`,
+    vocalFolder ? 'Choose a different folder' : 'Choose folder'
+  );
+  pick.addEventListener('click', async () => {
+    const chosen = await window.api.pickFolder();
+    if (chosen) {
+      vocalFolder = chosen;
+      vocalFile = null;
+      vocalSplitPreview = null;
+      try {
+        vocalFiles = await window.api.vocalListWav(chosen);
+      } catch (err) {
+        vocalFiles = [];
+      }
+      render();
+    }
+  });
+  pickBar.append(pick);
+  folderBar.append(pickBar);
+  section.append(folderBar);
+
+  if (vocalFolder) {
+    const fileList = el('div');
+    if (vocalFiles.length === 0) {
+      fileList.append(el('p', 'muted', 'No WAV files in this folder.'));
+    } else {
+      vocalFiles.forEach((file) => {
+        const row = el('div', `dupe${vocalFile === file.path ? ' is-on' : ''}`);
+        row.style.cursor = 'pointer';
+        row.append(el('div', 'dupe__name', file.name));
+        row.addEventListener('click', () => {
+          vocalFile = file.path;
+          vocalSplitPreview = null;
+          render();
+        });
+        fileList.append(row);
+      });
+    }
+    section.append(fileList);
+  }
+
+  if (!vocalFile) {
+    viewEl.append(section);
+    return;
+  }
+
+  const controls = el('div', 'grid2');
+
+  const detectWrap = el('div', 'fieldrow');
+  detectWrap.append(el('label', null, 'Detection'));
+  const detectRow = el('div', 'tabs');
+  let detection = 'RMS';
+  const rmsBtn = el('button', 'pill is-on', 'RMS');
+  const peakBtn = el('button', 'pill', 'Peak');
+  rmsBtn.addEventListener('click', () => {
+    detection = 'RMS';
+    rmsBtn.classList.add('is-on');
+    peakBtn.classList.remove('is-on');
+  });
+  peakBtn.addEventListener('click', () => {
+    detection = 'Peak';
+    peakBtn.classList.add('is-on');
+    rmsBtn.classList.remove('is-on');
+  });
+  detectRow.append(rmsBtn, peakBtn);
+  detectWrap.append(detectRow);
+  controls.append(detectWrap);
+
+  const threshold = fieldInput('Silence threshold (dB)');
+  threshold.input.value = '-72';
+  controls.append(threshold.wrap);
+
+  const minSilence = fieldInput('Minimum gap to split on (ms)');
+  minSilence.input.value = '400';
+  minSilence.input.title = 'Silences shorter than this stay inside a phrase instead of splitting it.';
+  controls.append(minSilence.wrap);
+
+  const pad = fieldInput('Keep padding (ms)');
+  pad.input.value = '50';
+  pad.input.title = 'Extra silence kept on each side of a phrase so it isn’t cut too tight.';
+  controls.append(pad.wrap);
+
+  section.append(controls);
+
+  function options() {
+    return {
+      detection,
+      thresholdDb: Number(threshold.input.value) || -72,
+      minSilenceMs: Number(minSilence.input.value) || 400,
+      padMs: Number(pad.input.value) || 50
+    };
+  }
+
+  const actions = el('div', 'tabs');
+  actions.style.marginTop = '6px';
+  const analyseBtn = el('button', 'pill pill--solid', 'Analyse');
+  const splitBtn = el('button', 'pill', 'Split into blocks');
+  splitBtn.disabled = true;
+  actions.append(analyseBtn, splitBtn);
+  section.append(actions);
+
+  const status = el('p', 'muted');
+  status.style.marginTop = '12px';
+  const results = el('div');
+  section.append(status, results);
+
+  viewEl.append(section);
+
+  analyseBtn.addEventListener('click', async () => {
+    analyseBtn.disabled = true;
+    analyseBtn.textContent = 'Analysing…';
+    results.innerHTML = '';
+    splitBtn.disabled = true;
+
+    try {
+      vocalSplitPreview = await window.api.vocalSplitAnalyse(vocalFile, options());
+      if (vocalSplitPreview.error) {
+        status.textContent = vocalSplitPreview.error;
+      } else if (vocalSplitPreview.skip) {
+        status.textContent = vocalSplitPreview.reason;
+      } else {
+        status.textContent = `${vocalSplitPreview.blockCount} block(s) found in ${vocalSplitPreview.duration.toFixed(1)}s`;
+        splitBtn.disabled = false;
+        vocalSplitPreview.segments
+          .filter((segment) => segment.type === 'block')
+          .forEach((segment) => {
+            const row = el('div', 'dupe');
+            row.append(el('div', 'dupe__name', segment.id));
+            row.append(
+              el(
+                'div',
+                'dupe__where',
+                `${segment.startSec.toFixed(2)}s – ${segment.endSec.toFixed(2)}s (${segment.durationSec.toFixed(2)}s)`
+              )
+            );
+            results.append(row);
+          });
+      }
+    } catch (err) {
+      status.textContent = err.message;
+    }
+
+    analyseBtn.disabled = false;
+    analyseBtn.textContent = 'Analyse';
+  });
+
+  splitBtn.addEventListener('click', async () => {
+    splitBtn.disabled = true;
+    splitBtn.textContent = 'Splitting…';
+
+    try {
+      const outcome = await window.api.vocalSplit(vocalFile, options());
+      if (!outcome.cancelled) {
+        toast(
+          'Vocal split',
+          outcome.modified
+            ? `${outcome.blockCount} block(s) written to ${basename(outcome.outputFolder)}`
+            : outcome.message || outcome.error,
+          !outcome.success || !outcome.modified
+        );
+      }
+    } catch (err) {
+      toast('Could not split', err.message, true);
+    }
+
+    splitBtn.disabled = false;
+    splitBtn.textContent = 'Split into blocks';
+  });
+}
+
+function renderVocalRebuildTab(section) {
+  const manifestBar = el('div', 'callout');
+  manifestBar.append(el('div', 'page__kicker', 'Manifest'));
+  const manifestPathEl = el('div', 'mono', vocalManifestPath || 'Choose the manifest.json from a split job');
+  manifestPathEl.style.cssText = 'margin:6px 0 10px;word-break:break-all';
+  manifestBar.append(manifestPathEl);
+
+  const manifestActions = el('div', 'tabs');
+  const pickManifest = el('button', 'pill pill--solid', vocalManifestPath ? 'Change manifest' : 'Choose manifest');
+  pickManifest.addEventListener('click', async () => {
+    const chosen = await window.api.vocalPickManifest();
+    if (chosen) {
+      vocalManifestPath = chosen;
+      vocalRebuildPreview = null;
+      render();
+    }
+  });
+  manifestActions.append(pickManifest);
+  manifestBar.append(manifestActions);
+  section.append(manifestBar);
+
+  const blocksBar = el('div', 'callout');
+  blocksBar.append(el('div', 'page__kicker', 'Processed blocks folder'));
+  const blocksPath = el('div', 'mono', vocalBlocksFolder || 'Choose the folder holding the processed blocks');
+  blocksPath.style.cssText = 'margin:6px 0 10px;word-break:break-all';
+  blocksBar.append(blocksPath);
+
+  const blocksActions = el('div', 'tabs');
+  const pickBlocks = el('button', 'pill pill--solid', vocalBlocksFolder ? 'Change folder' : 'Choose folder');
+  pickBlocks.addEventListener('click', async () => {
+    const chosen = await window.api.pickFolder();
+    if (chosen) {
+      vocalBlocksFolder = chosen;
+      vocalRebuildPreview = null;
+      render();
+    }
+  });
+  blocksActions.append(pickBlocks);
+  blocksBar.append(blocksActions);
+  section.append(blocksBar);
+
+  const actions = el('div', 'tabs');
+  actions.style.marginTop = '6px';
+  const analyseBtn = el('button', 'pill pill--solid', 'Analyse');
+  analyseBtn.disabled = !vocalManifestPath || !vocalBlocksFolder;
+  const rebuildBtn = el('button', 'pill', 'Rebuild timeline');
+  rebuildBtn.disabled = !vocalRebuildPreview;
+  actions.append(analyseBtn, rebuildBtn);
+  section.append(actions);
+
+  const status = el('p', 'muted');
+  status.style.marginTop = '12px';
+  const results = el('div');
+  section.append(status, results);
+
+  viewEl.append(section);
+
+  function paintPreview() {
+    results.innerHTML = '';
+    if (!vocalRebuildPreview) return;
+
+    status.textContent =
+      `${vocalRebuildPreview.readyCount} of ${vocalRebuildPreview.blockCount} block(s) ready` +
+      (vocalRebuildPreview.flaggedCount ? ` — ${vocalRebuildPreview.flaggedCount} flagged` : '') +
+      (vocalRebuildPreview.unexpected.length ? ` — ${vocalRebuildPreview.unexpected.length} unrecognised file(s)` : '');
+
+    vocalRebuildPreview.blocks.forEach((block) => {
+      const row = el('div', 'dupe');
+      row.append(el('div', 'dupe__name', block.id));
+      row.append(el('div', 'dupe__where', block.status + (block.detail ? ` — ${block.detail}` : '')));
+      results.append(row);
+    });
+  }
+
+  analyseBtn.addEventListener('click', async () => {
+    analyseBtn.disabled = true;
+    analyseBtn.textContent = 'Analysing…';
+    rebuildBtn.disabled = true;
+    results.innerHTML = '';
+
+    try {
+      vocalRebuildPreview = await window.api.vocalRebuildAnalyse(vocalManifestPath, vocalBlocksFolder);
+      rebuildBtn.disabled = vocalRebuildPreview.readyCount === 0;
+      paintPreview();
+    } catch (err) {
+      status.textContent = err.message;
+    }
+
+    analyseBtn.disabled = false;
+    analyseBtn.textContent = 'Analyse';
+  });
+
+  rebuildBtn.addEventListener('click', async () => {
+    rebuildBtn.disabled = true;
+    rebuildBtn.textContent = 'Rebuilding…';
+
+    try {
+      const outcome = await window.api.vocalRebuild(vocalManifestPath, vocalBlocksFolder, {});
+      if (!outcome.cancelled) {
+        toast(
+          'Timeline rebuilt',
+          `${outcome.accepted.length} block(s) placed at ${basename(outcome.output)}` +
+            (outcome.flagged.length ? ` — ${outcome.flagged.length} flagged, see report` : ''),
+          outcome.flagged.some((f) => !f.informational)
+        );
+      }
+    } catch (err) {
+      toast('Could not rebuild', err.message, true);
+    }
+
+    rebuildBtn.disabled = false;
+    rebuildBtn.textContent = 'Rebuild timeline';
+  });
+
+  paintPreview();
 }
 
 /* ------------------------------- QC ------------------------------- */
@@ -2000,28 +2720,6 @@ function renderAllAudioTab(entry) {
 }
 
 /* ============================= ID3 editor ========================== */
-
-$('openId3').addEventListener('click', () => {
-  view = 'id3';
-  viewEl.scrollTop = 0;
-  render();
-});
-
-$('openRename').addEventListener('click', () => {
-  view = 'rename';
-  renameFolder = null;
-  viewEl.scrollTop = 0;
-  render();
-});
-
-$('openSilence').addEventListener('click', () => {
-  view = 'silence';
-  silenceFolder = null;
-  silenceResults = [];
-  silenceChosen = new Set();
-  viewEl.scrollTop = 0;
-  render();
-});
 
 function renderId3Editor() {
   viewEl.innerHTML = '';
@@ -2280,12 +2978,131 @@ function id3FieldSummary(fields, bytes) {
   return bytes > 0 ? 'Metadata present (no common text fields)' : 'No metadata';
 }
 
-/* ============================== dedupe ============================= */
+/* ========================== disk insights ========================= */
 
-$('openDedupe').addEventListener('click', () => {
-  view = 'dedupe';
-  render();
-});
+function renderDiskInsights() {
+  viewEl.innerHTML = '';
+
+  const section = el('div', 'section');
+  section.append(headRow('Disk insights'));
+  section.append(
+    el(
+      'div',
+      'callout',
+      'A read-only size check of the folders that contain your DAW project files. Nothing is changed or deleted. Junctions and cloud links are skipped, and the scan stops safely at 250,000 files.'
+    )
+  );
+
+  const actions = el('div', 'tabs');
+  const scanBtn = el('button', 'pill pill--solid', diskState ? 'Scan again' : 'Scan disk usage');
+  const cancelBtn = el('button', 'pill', 'Cancel scan');
+  cancelBtn.hidden = !diskScanning;
+  scanBtn.disabled = diskScanning;
+  actions.append(scanBtn, cancelBtn);
+  section.append(actions);
+
+  const status = el('p', 'muted');
+  status.style.marginTop = '12px';
+  diskProgressStatus = status;
+  section.append(status);
+
+  const results = el('div');
+  section.append(results);
+  viewEl.append(section);
+
+  function paint() {
+    results.innerHTML = '';
+    if (!diskState) {
+      status.textContent = diskScanning
+        ? 'Preparing folder scan…'
+        : 'Run the scan to find your largest project and Imported-sample folders.';
+      return;
+    }
+
+    const measured = diskState.projects.reduce((sum, item) => sum + item.bytes, 0);
+    const flags = [
+      diskState.cancelled ? 'cancelled early' : null,
+      diskState.truncated ? 'stopped at the 250,000-file safety limit' : null,
+      diskState.errors ? `${diskState.errors} unreadable folder/file(s)` : null
+    ].filter(Boolean);
+    status.textContent =
+      `${diskState.foldersScanned} of ${diskState.totalFolders} folder(s) measured · ` +
+      `${diskState.filesScanned} files · ${formatBytes(measured)}` +
+      (flags.length ? ` · ${flags.join(' · ')}` : '');
+
+    results.append(diskInsightList('Largest project folders', diskState.projects));
+    if (diskState.imported.length) {
+      results.append(diskInsightList('Largest Samples / Imported folders', diskState.imported));
+    }
+  }
+
+  scanBtn.addEventListener('click', async () => {
+    const folders = [...new Set(entries.map((entry) => entry.folder).filter(Boolean))];
+    if (!folders.length) {
+      toast('Nothing to scan', 'No project folders are currently indexed.', true);
+      return;
+    }
+
+    diskScanning = true;
+    diskState = null;
+    scanBtn.disabled = true;
+    scanBtn.textContent = 'Scanning…';
+    cancelBtn.hidden = false;
+    paint();
+
+    try {
+      diskState = await window.api.diskScan(folders);
+    } catch (error) {
+      toast('Disk scan failed', error.message || String(error), true);
+    } finally {
+      diskScanning = false;
+      renderDiskInsights();
+    }
+  });
+
+  cancelBtn.addEventListener('click', async () => {
+    cancelBtn.disabled = true;
+    cancelBtn.textContent = 'Cancelling…';
+    status.textContent = 'Stopping after the current folder read…';
+    await window.api.diskCancel();
+  });
+
+  paint();
+}
+
+function diskInsightList(title, items) {
+  const block = el('div');
+  const heading = el('h3', null, title);
+  heading.style.margin = '28px 0 10px';
+  block.append(heading);
+
+  if (!items.length) {
+    block.append(el('p', 'muted', 'No folders measured.'));
+    return block;
+  }
+
+  items.slice(0, 100).forEach((item) => {
+    const row = el('div', 'filerow');
+    row.append(el('span'));
+
+    const middle = el('div', 'filerow__main');
+    middle.append(el('div', 'filerow__name', item.name || basename(item.folder)));
+    middle.append(
+      el('div', 'filerow__meta', `${item.folder}  ·  ${item.files} file(s)`)
+    );
+    row.append(middle);
+    row.append(el('div', 'dupe__num dupe__num--waste', formatBytes(item.bytes)));
+
+    const reveal = el('button', 'pill pill--sm', `Show in ${settings.fileManager}`);
+    reveal.addEventListener('click', () => window.api.reveal(item.folder));
+    row.append(reveal);
+    block.append(row);
+  });
+
+  return block;
+}
+
+/* ============================== dedupe ============================= */
 
 function renderDedupe() {
   viewEl.innerHTML = '';
@@ -2431,13 +3248,6 @@ function renderDedupe() {
 
 /* ============================== records ============================ */
 
-/** "F# min" -> "F#". The drone only needs the root. */
-function rootNoteOf(rec) {
-  if (!rec || !rec.key) return null;
-  const match = String(rec.key).match(/^([A-G]#?)/);
-  return match ? match[1] : null;
-}
-
 function record(key) {
   return (
     records[key] || {
@@ -2551,6 +3361,111 @@ $('openSettings').addEventListener('click', openSheet);
 $('closeSettings').addEventListener('click', closeSheet);
 scrimEl.addEventListener('click', closeSheet);
 
+$('openTools').addEventListener('click', () => {
+  navigationHistory.visit(captureLocation());
+  view = 'tools';
+  viewEl.scrollTop = 0;
+  render();
+});
+
+function openStandaloneTool(nextView) {
+  navigationHistory.visit(captureLocation());
+  view = nextView;
+
+  if (nextView === 'rename') renameFolder = null;
+  if (nextView === 'silence') {
+    silenceFolder = null;
+    silenceResults = [];
+    silenceChosen = new Set();
+  }
+  if (nextView === 'vocal') {
+    vocalTab = 'split';
+    vocalFolder = null;
+    vocalFiles = [];
+    vocalFile = null;
+    vocalSplitPreview = null;
+    vocalManifestPath = null;
+    vocalBlocksFolder = null;
+    vocalRebuildPreview = null;
+  }
+
+  viewEl.scrollTop = 0;
+  render();
+}
+
+function renderStandaloneTools() {
+  viewEl.innerHTML = '';
+
+  const section = el('div', 'section');
+  section.append(headRow('Tools'));
+  section.append(
+    el(
+      'div',
+      'callout',
+      'All the utility jobs live here, so the sidebar stays calm and the tools are easier to find when you actually need them.'
+    )
+  );
+
+  const grid = el('div', 'tool-grid');
+  [
+    {
+      view: 'dedupe',
+      icon: '≋',
+      title: 'Sample cleanup',
+      text: 'Find duplicate imported samples and safely replace extra copies with links.'
+    },
+    {
+      view: 'disk',
+      icon: 'GB',
+      title: 'Disk insights',
+      text: 'See which project folders use the most storage without changing or deleting anything.'
+    },
+    {
+      view: 'id3',
+      icon: 'ID3',
+      title: 'ID3 editor',
+      text: 'Add, replace or remove metadata across many MP3 files at once.'
+    },
+    {
+      view: 'rename',
+      icon: 'Aa',
+      title: 'Bulk renamer',
+      text: 'Clean up or standardise many filenames with a preview before anything changes.'
+    },
+    {
+      view: 'finish',
+      icon: '↗',
+      title: 'Audio finishing',
+      text: 'Normalise WAV files and optionally fit long audio to an exact beat or bar length.'
+    },
+    {
+      view: 'silence',
+      icon: '✂',
+      title: 'Strip silence',
+      text: 'Detect leading or trailing silence and create trimmed copies while preserving originals.'
+    },
+    {
+      view: 'vocal',
+      icon: 'VOX',
+      title: 'Vocal reconstruction',
+      text: 'Split long vocals for external processing, then rebuild them at their exact original timing.'
+    }
+  ].forEach((tool) => {
+    const card = el('button', 'tool-card');
+    card.type = 'button';
+    card.append(el('span', 'tool-card__icon', tool.icon));
+    const copy = el('span', 'tool-card__copy');
+    copy.append(el('b', 'tool-card__title', tool.title));
+    copy.append(el('span', 'tool-card__text', tool.text));
+    card.append(copy, el('span', 'tool-card__open', 'Open →'));
+    card.addEventListener('click', () => openStandaloneTool(tool.view));
+    grid.append(card);
+  });
+
+  section.append(grid);
+  viewEl.append(section);
+}
+
 function openSheet() {
   sheetEl.hidden = false;
   scrimEl.hidden = false;
@@ -2579,10 +3494,7 @@ favFilterEl.addEventListener('click', () => {
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
     if (!sheetEl.hidden) return closeSheet();
-    if (view !== 'list') {
-      view = 'list';
-      render();
-    }
+    if (view !== 'list') navigateBack();
   }
   if (event.key === ' ' && event.target === document.body) {
     event.preventDefault();
@@ -2622,10 +3534,14 @@ droneBtn.addEventListener('click', () => {
     return;
   }
 
-  const entry = openProject || entries.find((e) => e.path === selected);
-  const rec = entry ? record(entry.path) : null;
+  const note = droneNoteFor(
+    records,
+    activeAuditionPath,
+    openProject && openProject.path,
+    selected
+  );
 
-  if (!rec || !rootNoteOf(rec)) {
+  if (!note) {
     toast(
       'No key yet',
       'Analyse a render first — the drone plays the root note it finds.',
@@ -2634,11 +3550,35 @@ droneBtn.addEventListener('click', () => {
     return;
   }
 
-  if (Player.startDrone(rootNoteOf(rec))) {
+  if (Player.startDrone(note)) {
     droneBtn.classList.add('is-on');
-    toast('Drone', `Holding ${rootNoteOf(rec)} underneath`);
+    toast('Drone', `Holding ${note} underneath`);
   }
 });
+
+let lastMouseNavigation = { direction: '', at: 0 };
+function handleMouseNavigation(direction) {
+  const now = performance.now();
+  // Some Logitech/Chromium combinations emit both app-command and mouseup.
+  if (lastMouseNavigation.direction === direction && now - lastMouseNavigation.at < 80) return;
+  lastMouseNavigation = { direction, at: now };
+  if (direction === 'back') navigateBack();
+  else navigateForward();
+}
+
+window.api.onNavigateBack(() => handleMouseNavigation('back'));
+window.api.onNavigateForward(() => handleMouseNavigation('forward'));
+
+// Fallback for devices/drivers that expose buttons 4/5 directly to Chromium.
+window.addEventListener(
+  'mouseup',
+  (event) => {
+    if (event.button !== 3 && event.button !== 4) return;
+    event.preventDefault();
+    handleMouseNavigation(event.button === 3 ? 'back' : 'forward');
+  },
+  { capture: true }
+);
 
 verbBtn.addEventListener('click', () => {
   const on = verbBtn.classList.toggle('is-on');
@@ -2672,6 +3612,17 @@ window.api.onSilenceProgress(({ done, total, phase }) => {
   }
 });
 
+window.api.onProjectsUpdated((result) => {
+  applyProjectResult(result, { background: true });
+});
+
+window.api.onFinishProgress(({ done, total, phase }) => {
+  if (finishProgressStatus) {
+    finishProgressStatus.textContent =
+      `${phase === 'analyse' ? 'Analysing' : 'Processing'} ${done} of ${total}…`;
+  }
+});
+
 window.api.onQcProgress(({ done, total }) => {
   if (qcProgressStatus) qcProgressStatus.textContent = `Reading ${done} of ${total}…`;
 });
@@ -2679,6 +3630,14 @@ window.api.onQcProgress(({ done, total }) => {
 window.api.onDedupeProgress(({ done, total }) => {
   if (dedupeProgressStatus) {
     dedupeProgressStatus.textContent = `Comparing ${done} of ${total} candidates…`;
+  }
+});
+
+window.api.onDiskProgress(({ foldersDone, totalFolders, filesScanned, maxFiles }) => {
+  if (diskProgressStatus && diskScanning) {
+    diskProgressStatus.textContent =
+      `Measured ${foldersDone} of ${totalFolders} folder(s) · ` +
+      `${filesScanned} of ${maxFiles} maximum files…`;
   }
 });
 

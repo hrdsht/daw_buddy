@@ -1,5 +1,36 @@
 # Build notes
 
+## BUILT 17 Aug — vocal timeline round trip (proposal 0005, Phase 1 + 2)
+
+- New sidebar tool **Vocal reconstruction**, with **Split vocal** and
+  **Rebuild timeline** sub-tabs. Implements 0005's round trip end to end;
+  the waveform-alignment editor for mismatched blocks stays deferred, as the
+  proposal itself specifies.
+- **Split**: `lib/vocalSplit.ts` walks a WAV in 50ms windows (RMS or Peak,
+  same math as `silence.ts`), merges any silent run shorter than the
+  configured minimum gap into the block(s) either side (a breath shouldn't
+  fragment a phrase), then grows each block into its bordering silence by
+  the pad amount — clamped so two blocks reaching for the same gap can never
+  overlap. Writes numbered block WAVs (`0001.wav`, ...) and a versioned
+  `manifest.json` into a new sibling folder next to the source; the source
+  itself is only ever read.
+- **Rebuild**: `lib/vocalRebuild.ts` places each processed block at its own
+  saved absolute start frame in a zero-filled buffer sized to the original
+  file — not appended one after another — so a shorter processed block
+  automatically leaves the right silence before whatever comes next with no
+  special-casing. A block that would run past the next block's original
+  position is left silent and reported, never overlapped or truncated.
+  Missing files, format mismatches and blocks identical to their own
+  original export are all reported per-block before anything is written.
+- Verified against a synthetic WAV with known active/silence timing: split
+  finds the expected block count and durations; unmodified blocks round-trip
+  to PCM-identical output; a deliberately oversized replacement block is
+  flagged and excluded rather than corrupting the timeline (`test/regression.js`).
+- `writeWav` (new in `vocalWav.ts`) is the first from-scratch WAV writer in
+  the codebase — `silence.ts`'s `buildHeader` only rebuilds a header from an
+  existing buffer's own chunks, which doesn't cover synthesizing a new file
+  out of many sources.
+
 ## BUILT 14 Aug — this session
 
 - **One entry per session file**, not per folder. A folder with eight `.als`

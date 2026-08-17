@@ -8,13 +8,24 @@ and tells you when a new bounce lands on disk.
 Numbered and bounced session files in the same folder are treated as versions of
 one song, so opening version 4 can still find a render made from version 3. An
 animated splash plays while the first scan runs, project utilities live on a
-focused Tools page, and there's a standalone Strip-silence workflow for any
-folder you point at.
+focused Tools page, and standalone sidebar tools handle sample cleanup, ID3
+editing, bulk renaming, disk-space insights, audio finishing, and silence
+removal. Disk insights is read-only. Audio finishing and Strip silence always
+create new copies and leave the original audio untouched.
+
+While auditioning a render or stem, click **Verb** for a quick reverb bypass or
+right-click it to shape decay time, room size, pre-delay, low cut, high cut, and
+wet/dry mix. Those reverb choices are remembered for the next session.
 
 You tell it which folders to look at, in Settings. It never scans your whole
 computer — the only folders ever opened are the ones on your list. Nothing
 leaves your machine: no server, no account, no internet call except the two font
 files the window loads.
+
+The first launch builds a complete project catalogue. Later launches show that
+catalogue immediately and verify changes quietly in the background. The Windows
+launcher also reuses the compiled app unless code or assets have changed, so a
+normal launch does not rebuild everything.
 
 ---
 
@@ -74,7 +85,7 @@ This compiles the TypeScript, bundles the window, and launches the app.
 
 **From then on, just double-click the launcher** instead of using a terminal:
 
-- **Windows:** `scripts\DAW Buddy.bat`
+- **Windows:** `DAW Buddy.bat`
 - **macOS:** `scripts/DAW Buddy.command` — run `chmod +x "scripts/DAW Buddy.command"`
   once so macOS will let it launch
 
@@ -179,8 +190,9 @@ folder shows an error explaining which setting to change.
 ## Part 7 — About the DAW formats
 
 One module, `src/main/lib/daw.ts`, knows every supported format — Ableton,
-FL Studio, REAPER, Studio One / Fender Studio Pro, Cubase and Logic. Everything
-else asks it rather than checking file extensions itself.
+FL Studio, REAPER, Bitwig Studio, Pro Tools, Studio One / Fender Studio Pro,
+Cubase and Logic. Everything else asks it rather than checking file extensions
+itself.
 
 - **`.als` (Ableton)** is gzipped XML — un-gzipped in memory, the `<Tempo>` block
   read straight out.
@@ -188,8 +200,13 @@ else asks it rather than checking file extensions itself.
   event 156 stored as BPM × 1000. Newer FL versions changed the layout, so a
   bounded header scan is used as a fallback.
 - **REAPER `.rpp`** is plain text (`TEMPO 128 4 4`).
-- **Cubase and Logic** tempos aren't readable yet — those rows show `— — —` for
-  BPM but still list with everything else working.
+- **Bitwig `.bwproject`** files are listed and opened, and copies in
+  `auto-backup` are counted instead of appearing as separate songs.
+- **Pro Tools `.ptx`** sessions are listed and opened. `Session File Backups`
+  contributes to project health, `Audio Files` is treated as recorded source,
+  and finished audio in `Bounced Files` is available as a render.
+- **Bitwig, Pro Tools, Cubase and Logic** tempos aren't readable yet — those
+  rows show `— — —` for BPM but still list with everything else working.
 
 Backups are counted per DAW: Ableton and FL use a `Backup` folder (FL also
 writes `(autosaved…)` siblings), REAPER uses `.rpp-bak`, and so on. A project

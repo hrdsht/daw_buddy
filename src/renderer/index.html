@@ -27,10 +27,7 @@
         <nav id="collections" class="collections"></nav>
 
         <div class="sidebar__foot">
-          <button id="openDedupe" class="side-action">Sample cleanup</button>
-          <button id="openId3" class="side-action">ID3 editor</button>
-          <button id="openRename" class="side-action">Bulk renamer</button>
-          <button id="openSilence" class="side-action">Strip silence</button>
+          <button id="openTools" class="side-action">Tools</button>
           <button id="openSettings" class="side-action">Settings</button>
         </div>
       </aside>
@@ -80,7 +77,13 @@
           <button id="droneBtn" class="chip-btn" title="Hold the root note underneath">
             Drone
           </button>
-          <button id="verbBtn" class="chip-btn" title="Audition reverb">
+          <button
+            id="verbBtn"
+            class="chip-btn"
+            title="Click to toggle reverb · Right-click to shape it"
+            aria-haspopup="dialog"
+            aria-expanded="false"
+          >
             Verb
           </button>
           <button id="clipBtn" class="chip-btn" title="Soft clipper">
@@ -99,6 +102,72 @@
         </div>
       </footer>
     </div>
+
+    <section
+      id="reverbPanel"
+      class="reverb-panel"
+      role="dialog"
+      aria-label="Reverb settings"
+      hidden
+    >
+      <header class="reverb-panel__head">
+        <div>
+          <strong>Audition reverb</strong>
+          <span>Settings stay with you between sessions</span>
+        </div>
+        <button id="reverbReset" class="reverb-reset" type="button">Reset</button>
+      </header>
+
+      <label class="reverb-control">
+        <span>Decay time</span>
+        <output id="reverbDecayValue" for="reverbDecay">2.2 s</output>
+        <input id="reverbDecay" type="range" min="0.2" max="12" step="0.1" value="2.2" />
+      </label>
+
+      <label class="reverb-control">
+        <span>Room size</span>
+        <output id="reverbSizeValue" for="reverbSize">55%</output>
+        <input id="reverbSize" type="range" min="0" max="100" step="1" value="55" />
+      </label>
+
+      <label class="reverb-control">
+        <span>Pre-delay</span>
+        <output id="reverbPreDelayValue" for="reverbPreDelay">20 ms</output>
+        <input id="reverbPreDelay" type="range" min="0" max="250" step="1" value="20" />
+      </label>
+
+      <label class="reverb-control">
+        <span>Low cut</span>
+        <output id="reverbLowCutValue" for="reverbLowCut">120 Hz</output>
+        <input id="reverbLowCut" type="range" min="20" max="2000" step="10" value="120" />
+      </label>
+
+      <label class="reverb-control">
+        <span>High cut</span>
+        <output id="reverbHighCutValue" for="reverbHighCut">12 kHz</output>
+        <input id="reverbHighCut" type="range" min="1000" max="20000" step="100" value="12000" />
+      </label>
+
+      <label class="reverb-mix">
+        <span class="reverb-mix__label">Mix</span>
+        <span class="reverb-knob-wrap">
+          <input
+            id="reverbMix"
+            class="reverb-knob-input"
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            value="35"
+            aria-label="Reverb mix"
+          />
+          <span class="reverb-knob" aria-hidden="true"></span>
+        </span>
+        <output id="reverbMixValue" for="reverbMix">35%</output>
+      </label>
+
+      <p class="reverb-panel__hint">Click Verb to bypass · Right-click it to reopen</p>
+    </section>
 
     <!-- ========================= settings ========================= -->
     <div id="scrim" class="scrim" hidden></div>

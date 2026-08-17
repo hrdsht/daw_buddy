@@ -43,6 +43,7 @@ const RENDER_FOLDERS = new Set([
   'rendered',
   'bounces',
   'bounce',
+  'bounced files',
   'stems',
   'ai stems',
   'stem',
@@ -64,7 +65,8 @@ const SKIP = new Set([
   'presets',
   'ableton project info',
   'processed',
-  'recorded'
+  'recorded',
+  'audio files'
 ]);
 
 const VERSION = /^(.*?)[ _.-]v?(\d+)$/i;

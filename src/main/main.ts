@@ -13,13 +13,18 @@ const media = require('./lib/media');
 const renders = require('./lib/renders');
 const videos = require('./lib/videos');
 const { ParseCache } = require('./lib/cache');
+const { ProjectIndex } = require('./lib/projectindex');
 const { migrate } = require('./lib/migrate');
 const id3 = require('./lib/id3');
 const renamer = require('./lib/renamer');
 const silence = require('./lib/silence');
+const vocalSplit = require('./lib/vocalSplit');
+const vocalRebuild = require('./lib/vocalRebuild');
+const finisher = require('./lib/finisher');
 const audioqc = require('./lib/audioqc');
 const { groupVersions } = require('./lib/versions');
 const dedupe = require('./lib/dedupe');
+const disk = require('./lib/disk');
 const procs = require('./lib/procs');
 const webhook = require('./lib/webhook');
 
@@ -29,7 +34,13 @@ let store: any = null;
 let settings: any = null;
 let notes: any = null;
 let cache: any = null;
+let projectIndex: any = null;
 let initialScanPromise = null;
+let backgroundScanPromise = null;
+let startupSnapshot = null;
+let startupSnapshotDelivered = false;
+let queuedBackgroundResult = null;
+let activeDiskScan = 0;
 let quitting = false;
 const pendingNoteSaves = new Set();
 
@@ -124,6 +135,16 @@ function createWindow({ splash = null, revealWhen = Promise.resolve() }: any = {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+  // Windows and Linux expose extra mouse buttons as browser app commands.
+  // DAW Buddy is a single-page app, so forward them to its own history.
+  mainWindow.on('app-command', (event, command) => {
+    if (command !== 'browser-backward' && command !== 'browser-forward') return;
+    event.preventDefault();
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.webContents.send(
+      command === 'browser-backward' ? 'navigation:back' : 'navigation:forward'
+    );
+  });
 }
 
 /**
@@ -169,17 +190,30 @@ app.whenReady().then(async () => {
 
   await ensureOutputFolder();
 
-  // Start the expensive first scan while the eight-second animation plays.
-  // The renderer will reuse this exact promise instead of scanning twice.
-  initialScanPromise = scanProjects().catch((error) => ({
-    entries: [],
-    grouped: [],
-    errors: [{ root: 'Startup scan', message: error.message }],
-    truncated: false,
-    foldersRead: 0,
-    roots: settings.get().roots,
-    cache: cache.stats()
-  }));
+  projectIndex = new ProjectIndex(path.join(dataDir(), 'project-index.json'));
+  const indexed = await projectIndex.load(settings.get());
+
+  if (indexed) {
+    // Returning launch: the last complete catalogue can paint immediately.
+    // Verify it quietly; the renderer receives the fresh result when ready.
+    startupSnapshot = indexedResult(indexed);
+    backgroundScanPromise = scanProjects()
+      .then((result) => {
+        queueBackgroundResult(result);
+        return result;
+      })
+      .catch((error) => {
+        console.error('[startup] Background project check failed:', error.message);
+        return null;
+      })
+      .finally(() => {
+        backgroundScanPromise = null;
+      });
+  } else {
+    // First launch (or changed roots): build the catalogue before showing an
+    // empty app. Later launches use the saved result above.
+    initialScanPromise = scanProjects().catch((error) => failedScan(error));
+  }
 
   notes = new NoteWriter();
   notes.onRenamed = (sessionPath, newFile) => {
@@ -191,7 +225,9 @@ app.whenReady().then(async () => {
 
   createWindow({
     splash: splashState.splash,
-    revealWhen: Promise.all([splashState.finished, initialScanPromise])
+    revealWhen: indexed
+      ? splashState.finished
+      : Promise.all([splashState.finished, initialScanPromise])
   });
   restartWatcher();
 
@@ -428,6 +464,13 @@ async function scanProjects() {
   cache.prune(entries.map((e) => e.sessionPath));
   await cache.save();
 
+  // Only replace the last-known-good catalogue with a complete scan. If a
+  // drive is temporarily unreadable, the next launch should retain the good
+  // list rather than remember a partial one.
+  if (!truncated && errors.length === 0) {
+    await projectIndex.save(current, entries);
+  }
+
   return {
     entries,
     grouped: groupVersions(entries),
@@ -439,12 +482,68 @@ async function scanProjects() {
   };
 }
 
+function indexedResult(indexed) {
+  const entries = indexed.entries || [];
+  return {
+    entries,
+    grouped: groupVersions(entries),
+    errors: [],
+    truncated: false,
+    foldersRead: 0,
+    roots: settings.get().roots,
+    cache: cache.stats(),
+    fromIndex: true,
+    indexSavedAt: indexed.savedAt
+  };
+}
+
+function failedScan(error) {
+  return {
+    entries: [],
+    grouped: [],
+    errors: [{ root: 'Startup scan', message: error.message }],
+    truncated: false,
+    foldersRead: 0,
+    roots: settings.get().roots,
+    cache: cache.stats()
+  };
+}
+
+function queueBackgroundResult(result) {
+  queuedBackgroundResult = result;
+  publishBackgroundResult();
+}
+
+function publishBackgroundResult() {
+  if (
+    !startupSnapshotDelivered ||
+    !queuedBackgroundResult ||
+    !mainWindow ||
+    mainWindow.isDestroyed()
+  ) {
+    return;
+  }
+  mainWindow.webContents.send('projects:updated', queuedBackgroundResult);
+  queuedBackgroundResult = null;
+}
+
 ipcMain.handle('projects:scan', async () => {
+  if (startupSnapshot) {
+    const result = startupSnapshot;
+    startupSnapshot = null;
+    startupSnapshotDelivered = true;
+    setTimeout(publishBackgroundResult, 0);
+    return result;
+  }
   if (initialScanPromise) {
     const prefetched = initialScanPromise;
     const result = await prefetched;
     if (initialScanPromise === prefetched) initialScanPromise = null;
     return result;
+  }
+  if (backgroundScanPromise) {
+    const result = await backgroundScanPromise;
+    if (result) return result;
   }
   return scanProjects();
 });
@@ -791,6 +890,139 @@ ipcMain.handle('silence:process', async (event, paths, options) => {
   return { cancelled: false, results, outputRoot };
 });
 
+/* ---------------------- vocal timeline round trip ------------------ */
+
+/** Any WAV in the folder — the source for a split job. */
+ipcMain.handle('vocal:listWav', async (event, folder) => {
+  guardApproved(folder);
+  const files = await media.listAudio(folder, 1);
+  return files
+    .filter((file) => file.ext === '.wav')
+    .map((file) => ({ path: file.path, name: file.name, size: file.size }));
+});
+
+ipcMain.handle('vocal:splitAnalyse', async (event, inputPath, options) => {
+  guardApproved(inputPath);
+  return vocalSplit.analyseSplit(inputPath, options);
+});
+
+ipcMain.handle('vocal:split', async (event, inputPath, options) => {
+  guardApproved(inputPath);
+
+  const ext = path.extname(inputPath);
+  const baseName = path.basename(inputPath, ext);
+  const outDir = path.join(path.dirname(inputPath), `${baseName} (Vocal Split)`);
+
+  const { response } = await dialog.showMessageBox(mainWindow, {
+    type: 'question',
+    buttons: ['Cancel', 'Split'],
+    defaultId: 1,
+    cancelId: 0,
+    title: 'Split vocal',
+    message: 'Split this recording into blocks?',
+    detail: `Block files and a manifest are written to:\n${outDir}\n\nYour original is not touched.`
+  });
+  if (response !== 1) return { cancelled: true };
+
+  return { cancelled: false, ...(await vocalSplit.splitVocal(inputPath, options)) };
+});
+
+/** A single-purpose file picker for the manifest — everything else uses folders. */
+ipcMain.handle('vocal:pickManifest', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Choose a vocal timeline manifest',
+    buttonLabel: 'Use this manifest',
+    filters: [{ name: 'Manifest', extensions: ['json'] }],
+    properties: ['openFile']
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  const chosen = path.resolve(result.filePaths[0]);
+  pickedFolders.add(path.dirname(chosen));
+  return chosen;
+});
+
+ipcMain.handle('vocal:rebuildAnalyse', async (event, manifestPath, blocksFolder) => {
+  guardApproved(manifestPath);
+  guardApproved(blocksFolder);
+  return vocalRebuild.analyseRebuild(manifestPath, blocksFolder);
+});
+
+ipcMain.handle('vocal:rebuild', async (event, manifestPath, blocksFolder, options) => {
+  guardApproved(manifestPath);
+  guardApproved(blocksFolder);
+
+  const { response } = await dialog.showMessageBox(mainWindow, {
+    type: 'question',
+    buttons: ['Cancel', 'Rebuild'],
+    defaultId: 1,
+    cancelId: 0,
+    title: 'Rebuild timeline',
+    message: 'Rebuild a unified WAV from these blocks?',
+    detail: 'Blocks that are missing, the wrong format, or would overlap the next block are left silent and reported rather than guessed at.'
+  });
+  if (response !== 1) return { cancelled: true };
+
+  return { cancelled: false, ...(await vocalRebuild.rebuildTimeline(manifestPath, blocksFolder, options)) };
+});
+
+/* ------------------------- audio finishing ------------------------ */
+
+ipcMain.handle('finish:list', async (event, folder) => {
+  guardApproved(folder);
+  const files = await media.listAudio(folder, 1);
+  return files
+    .filter((file) => file.ext === '.wav')
+    .map((file) => ({ path: file.path, name: file.name, size: file.size }));
+});
+
+ipcMain.handle('finish:analyse', async (event, paths, options) => {
+  const results = [];
+  for (let i = 0; i < paths.length; i += 1) {
+    guardApproved(paths[i]);
+    results.push(await finisher.analyse(paths[i], options));
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('finish:progress', {
+        done: i + 1,
+        total: paths.length,
+        phase: 'analyse'
+      });
+    }
+  }
+  return results;
+});
+
+ipcMain.handle('finish:process', async (event, paths, options) => {
+  const outputRoot = await ensureOutputFolder();
+  if (!outputRoot) throw new Error('No output folder — add a project folder in Settings first.');
+
+  const { response } = await dialog.showMessageBox(mainWindow, {
+    type: 'question',
+    buttons: ['Cancel', 'Create finished copies'],
+    defaultId: 1,
+    cancelId: 0,
+    title: 'Normalize and fit audio',
+    message: `Create finished copies of ${paths.length} WAV file(s)?`,
+    detail: `Copies are written below:\n${path.join(outputRoot, 'Finished')}\n\nYour originals are not touched.`
+  });
+  if (response !== 1) return { cancelled: true, results: [] };
+
+  const results = [];
+  for (let i = 0; i < paths.length; i += 1) {
+    const sourceRoot = guardApproved(paths[i]);
+    results.push(
+      await finisher.processFile(paths[i], outputRoot, { ...options, sourceRoot })
+    );
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('finish:progress', {
+        done: i + 1,
+        total: paths.length,
+        phase: 'process'
+      });
+    }
+  }
+  return { cancelled: false, results, outputRoot: path.join(outputRoot, 'Finished') };
+});
+
 /* ---------------------------- audio QC ---------------------------- */
 
 ipcMain.handle('qc:scan', async (event, folder, options) => {
@@ -807,6 +1039,34 @@ ipcMain.handle('qc:scan', async (event, folder, options) => {
 ipcMain.handle('audio:deep', async (event, folder) => {
   guardApproved(folder);
   return renders.listAllAudio(folder);
+});
+
+/* -------------------------- disk insights ------------------------- */
+
+ipcMain.handle('disk:scan', async (event, folders) => {
+  const token = ++activeDiskScan;
+  const approved = [...new Set((folders || []).map((folder) => {
+    guardApproved(folder);
+    return path.resolve(folder);
+  }))];
+
+  return disk.scanFolders(
+    approved,
+    {
+      maxFiles: 250000,
+      shouldCancel: () => token !== activeDiskScan
+    },
+    (progress) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('disk:progress', progress);
+      }
+    }
+  );
+});
+
+ipcMain.handle('disk:cancel', () => {
+  activeDiskScan += 1;
+  return true;
 });
 
 ipcMain.handle('dedupe:scan', async () => {
