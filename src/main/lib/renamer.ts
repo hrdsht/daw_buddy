@@ -128,7 +128,7 @@ function transform(stem, options, index) {
     case 'addSuffix':
       return `${stem}${options.text || ''}`;
 
-    // "Suraag_Lead Synth_03" → "Lead Synth_03". Removes the project name and
+    // "Demo_Lead Synth_03" → "Lead Synth_03". Removes the project name and
     // whatever separator follows it, wherever in the name it appears.
     case 'removeProjectName': {
       const name = options.projectName || '';
@@ -237,7 +237,7 @@ async function apply(planned, undoLogPath) {
     );
   }
 
-  return { renamed: done.length, failed };
+  return { renamed: done.length, failed, done };
 }
 
 async function undo(undoLogPath) {

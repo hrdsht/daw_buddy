@@ -1782,3 +1782,165 @@ body.theme-light .toast {
     display: none;
   }
 }
+
+/* ==================================================================
+   Smart Renamer Panes & Badges
+   ================================================================== */
+
+.smart-panes {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr;
+  gap: 16px;
+  min-height: 380px;
+  margin-top: 14px;
+}
+
+@media (max-width: 900px) {
+  .smart-panes {
+    grid-template-columns: 1fr;
+  }
+}
+
+.smart-pane {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.smart-pane__header {
+  padding: 10px 14px;
+  background: var(--raised);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  font-size: 12.5px;
+}
+
+.smart-pane__sub {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: normal;
+}
+
+.smart-pane__body {
+  overflow-y: auto;
+  max-height: 480px;
+  flex: 1;
+}
+
+.smart-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+  transition: background 100ms;
+  font-family: var(--mono);
+  font-size: 12px;
+  gap: 10px;
+}
+
+.smart-row:hover {
+  background: var(--hover);
+}
+
+.smart-row.is-selected {
+  background: var(--active);
+  border-left: 3px solid var(--amber);
+}
+
+.smart-row.is-dimmed {
+  opacity: 0.65;
+}
+
+.smart-row__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.smart-badge {
+  font-size: 10.5px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-weight: 500;
+  font-family: var(--face);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.smart-badge--ok {
+  background: rgba(116, 215, 174, 0.15);
+  color: var(--sage);
+}
+
+.smart-badge--warn {
+  background: rgba(240, 166, 58, 0.18);
+  color: var(--amber);
+}
+
+.smart-badge--miss {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--dim);
+}
+
+.smart-select {
+  background: var(--raised);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 3px 6px;
+  font-size: 11.5px;
+  cursor: pointer;
+  max-width: 140px;
+}
+
+.smart-input {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+  width: 100%;
+}
+
+.smart-reason {
+  font-size: 10.5px;
+  color: var(--muted);
+  font-family: var(--face);
+  white-space: nowrap;
+}
+
+.manifest-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.manifest-pill {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: var(--r);
+  background: var(--raised);
+  border: 1px solid var(--line);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.manifest-pill:hover {
+  background: var(--hover);
+}

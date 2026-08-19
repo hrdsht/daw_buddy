@@ -214,7 +214,8 @@ function render() {
   if (view === 'dedupe') return renderDedupe();
   if (view === 'disk') return renderDiskInsights();
   if (view === 'id3') return renderId3Editor();
-  if (view === 'rename') return renderStandaloneRename();
+  if (view === 'rename' || view === 'batch-rename') return renderStandaloneRename();
+  if (view === 'smart-rename') return renderStandaloneSmartRename();
   if (view === 'finish') return renderAudioFinishing();
   if (view === 'silence') return renderStandaloneSilence();
   if (view === 'vocal') return renderStandaloneVocal();
@@ -293,7 +294,12 @@ function goList(folder) {
   browsing = folder || null;
   openProject = null;
   viewEl.scrollTop = 0;
-  refresh();
+  if (browsing || entries.length === 0) {
+    refresh();
+  } else {
+    render();
+    renderCollections();
+  }
 }
 
 function goProject(entry) {
@@ -838,7 +844,8 @@ function renderProjectToolsTab(entry) {
     backBar.append(back);
     viewEl.append(backBar);
 
-    if (projectTool === 'rename') return renderRenameTab(entry);
+    if (projectTool === 'rename' || projectTool === 'batch-rename') return renderRenameTab(entry);
+    if (projectTool === 'smart-rename') return renderSmartRenameTab(entry);
     if (projectTool === 'silence') return renderSilenceTab(entry);
     if (projectTool === 'qc') return renderQcTab(entry);
   }
@@ -856,10 +863,16 @@ function renderProjectToolsTab(entry) {
   const grid = el('div', 'tool-grid');
   [
     {
+      key: 'smart-rename',
+      icon: '🏷',
+      title: 'Smart renamer',
+      text: 'Classify and rename cryptic stem exports into mix-ready instrument categories.'
+    },
+    {
       key: 'rename',
       icon: 'Aa',
-      title: 'Rename files',
-      text: 'Clean up or standardise many audio filenames at once, with a preview before anything changes.'
+      title: 'Batch renamer',
+      text: 'Clean up prefixes/suffixes or apply token templates across audio files.'
     },
     {
       key: 'silence',
@@ -1456,7 +1469,7 @@ function renderRenameTab(entry = null) {
   const projectRecord = entry ? record(entry.path) : {};
 
   const section = el('div', 'section');
-  section.append(headRow(entry ? 'Rename files' : 'Bulk renamer'));
+  section.append(headRow(entry ? 'Rename files' : 'Batch renamer'));
 
   /* which folder */
   const folderBar = el('div', 'callout');
@@ -1520,7 +1533,7 @@ function renderRenameTab(entry = null) {
   const controls = el('div', 'grid2');
 
   const removeField = fieldInput('Remove this text');
-  removeField.input.placeholder = 'e.g. Suraag_';
+  removeField.input.placeholder = 'e.g. Demo_';
   controls.append(removeField.wrap);
 
   const addField = fieldInput('Add this text');
@@ -1688,6 +1701,498 @@ function fieldInput(label) {
   input.type = 'text';
   wrap.append(input);
   return { wrap, input };
+}
+
+
+/* -------------------------- smart renamer ------------------------- */
+
+let smartRenameFolder: string | null = null;
+let smartFiles: Array<{ name: string; path: string }> = [];
+let smartItems: Array<{
+  name: string;
+  path: string;
+  matched: boolean;
+  category: string | null;
+  subtype: string | null;
+  confidence: number;
+  matchedOn: string | null;
+  contested: boolean;
+  articulation: string | null;
+  userCategory?: string | null;
+  userSubtype?: string | null;
+  customName?: string | null;
+  audioFeatures?: any;
+  audioCategory?: string | null;
+  audioSubtype?: string | null;
+  audioConfidence?: number;
+}> = [];
+let smartCategoriesList: Array<{ category: string; subtypes: string[] }> = [];
+let smartSelectedPath: string | null = null;
+let smartSortMode: 'priority' | 'name' = 'priority';
+let smartManifests: any[] = [];
+
+function renderStandaloneSmartRename() {
+  viewEl.innerHTML = '';
+  renderSmartRenameTab(null);
+}
+
+async function renderSmartRenameTab(entry: any = null) {
+  if (!smartRenameFolder && entry) smartRenameFolder = entry.folder;
+  if (!smartRenameFolder && renameFolder) smartRenameFolder = renameFolder;
+
+  const section = el('div', 'section');
+  section.append(headRow('Smart renamer'));
+
+  /* which folder */
+  const folderBar = el('div', 'callout');
+  folderBar.append(
+    el(
+      'div',
+      'page__kicker',
+      'Classify & rename cryptic stems into mix-ready instrument categories'
+    )
+  );
+  const folderPath = el(
+    'div',
+    'mono',
+    smartRenameFolder || 'Choose a folder to begin'
+  );
+  folderPath.style.margin = '6px 0 10px';
+  folderPath.style.wordBreak = 'break-all';
+  folderBar.append(folderPath);
+
+  const pick = el(
+    'button',
+    `pill${smartRenameFolder ? ' pill--sm' : ' pill--solid'}`,
+    smartRenameFolder ? 'Choose a different folder' : 'Choose folder'
+  );
+  pick.addEventListener('click', async () => {
+    const chosen = await window.api.pickFolder();
+    if (chosen) {
+      smartRenameFolder = chosen;
+      smartSelectedPath = null;
+      render();
+    }
+  });
+
+  const bar = el('div', 'tabs');
+  bar.append(pick);
+  if (entry) {
+    const useProject = el('button', 'pill pill--sm', "This project's folder");
+    useProject.addEventListener('click', () => {
+      smartRenameFolder = entry.folder;
+      smartSelectedPath = null;
+      render();
+    });
+    bar.append(useProject);
+  }
+
+  const rescanBtn = el('button', 'pill pill--sm', 'Rescan folder');
+  rescanBtn.addEventListener('click', () => loadFolder());
+  bar.append(rescanBtn);
+
+  folderBar.append(bar);
+  section.append(folderBar);
+
+  /* Manifests / Undo bar */
+  const manifestContainer = el('div');
+  manifestContainer.style.marginBottom = '10px';
+  section.append(manifestContainer);
+
+  /* Controls / Actions toolbar */
+  const toolbar = el('div', 'tabs');
+  toolbar.style.marginBottom = '12px';
+
+  const analyseNamesBtn = el('button', 'pill pill--solid', '⚡ Analyse names');
+  const analyseAudioBtn = el('button', 'pill', '🎧 Analyse audio features');
+
+  const sortToggle = el(
+    'button',
+    'pill',
+    smartSortMode === 'priority' ? 'Sort: Unresolved first' : 'Sort: Folder order'
+  );
+  sortToggle.addEventListener('click', () => {
+    smartSortMode = smartSortMode === 'priority' ? 'name' : 'priority';
+    sortToggle.textContent =
+      smartSortMode === 'priority' ? 'Sort: Unresolved first' : 'Sort: Folder order';
+    renderPanes();
+  });
+
+  toolbar.append(analyseNamesBtn, analyseAudioBtn, sortToggle);
+  section.append(toolbar);
+
+  /* Panes container */
+  const panes = el('div', 'smart-panes');
+
+  const leftPane = el('div', 'smart-pane smart-pane--left');
+  const leftHead = el('div', 'smart-pane__header');
+  const leftTitle = el('span', null, 'Original files');
+  const leftSub = el('span', 'smart-pane__sub', 'Click to arm audio');
+  leftHead.append(leftTitle, leftSub);
+  const leftBody = el('div', 'smart-pane__body');
+  leftPane.append(leftHead, leftBody);
+
+  const rightPane = el('div', 'smart-pane smart-pane--right');
+  const rightHead = el('div', 'smart-pane__header');
+  const rightTitle = el('span', null, 'Suggested name & Category');
+  const rightSub = el('span', 'smart-pane__sub', 'Live indexed output');
+  rightHead.append(rightTitle, rightSub);
+  const rightBody = el('div', 'smart-pane__body');
+  rightPane.append(rightHead, rightBody);
+
+  panes.append(leftPane, rightPane);
+  section.append(panes);
+
+  /* Footer / Commit toolbar */
+  const footBar = el('div', 'callout');
+  footBar.style.marginTop = '14px';
+  const summary = el('p', 'muted');
+  summary.style.margin = '0 0 10px 0';
+  const commitActions = el('div', 'tabs');
+  const commitBtn = el('button', 'pill pill--solid', 'Rename files');
+  const undoLastBtn = el('button', 'pill', 'Undo last rename');
+  commitActions.append(commitBtn, undoLastBtn);
+  footBar.append(summary, commitActions);
+  section.append(footBar);
+
+  viewEl.append(section);
+
+  async function loadFolder() {
+    if (!smartRenameFolder) {
+      summary.textContent = 'Choose a folder to begin classifying stems.';
+      commitBtn.disabled = true;
+      return;
+    }
+    try {
+      smartFiles = await window.api.renameList(smartRenameFolder, [
+        '.wav',
+        '.mp3',
+        '.aiff',
+        '.aif',
+        '.flac'
+      ]);
+      smartCategoriesList = await window.api.smartCategories();
+      try {
+        smartManifests = await window.api.renameManifests(smartRenameFolder);
+      } catch {
+        smartManifests = [];
+      }
+      renderManifests();
+      await runNameAnalysis();
+    } catch (err: any) {
+      summary.textContent = `Error reading folder: ${err.message}`;
+    }
+  }
+
+  function renderManifests() {
+    manifestContainer.innerHTML = '';
+    if (!smartManifests || smartManifests.length === 0) return;
+    const box = el('div', 'callout');
+    box.style.padding = '10px 14px';
+    const kick = el('div', 'page__kicker', 'Previous rename history');
+    const list = el('div', 'manifest-list');
+    smartManifests.slice(0, 3).forEach((m) => {
+      const pill = el('button', 'manifest-pill');
+      pill.type = 'button';
+      const dateStr = m.manifest.at ? new Date(m.manifest.at).toLocaleDateString() : 'recent';
+      pill.textContent = `↩ Revert ${m.manifest.count} files (${dateStr})${m.manifest.undone ? ' · already reverted' : ''}`;
+      if (m.manifest.undone) pill.disabled = true;
+      pill.addEventListener('click', async () => {
+        const res = await window.api.renameManifestRevert(smartRenameFolder, m.file);
+        if (res.ok) {
+          toast('Manifest Reverted', `Restored ${res.reverted} file names`);
+          await loadFolder();
+        } else {
+          toast('Revert Failed', res.message || 'Could not revert manifest', true);
+        }
+      });
+      list.append(pill);
+    });
+    box.append(kick, list);
+    manifestContainer.append(box);
+  }
+
+  async function runNameAnalysis() {
+    if (smartFiles.length === 0) {
+      smartItems = [];
+      renderPanes();
+      return;
+    }
+    const { results } = await window.api.smartClassify(smartRenameFolder, smartFiles);
+    smartItems = results.map((r: any) => ({
+      name: r.name,
+      path: r.path,
+      matched: r.matched,
+      category: r.category,
+      subtype: r.subtype,
+      confidence: r.confidence,
+      matchedOn: r.matchedOn,
+      contested: r.contested,
+      articulation: r.articulation,
+      userCategory: null,
+      userSubtype: null,
+      customName: null
+    }));
+    renderPanes();
+  }
+
+  async function runAudioAnalysis() {
+    if (smartItems.length === 0) return;
+    analyseAudioBtn.disabled = true;
+    analyseAudioBtn.textContent = 'Analysing audio...';
+    let measured = 0;
+    for (const item of smartItems) {
+      const isWav = item.name.toLowerCase().endsWith('.wav');
+      if (isWav && (!item.matched || item.confidence < 0.8)) {
+        try {
+          const res = await window.api.smartAudioFeatures(item.path);
+          if (res && res.ok) {
+            item.audioFeatures = res.features;
+            item.audioCategory = res.category;
+            item.audioSubtype = res.subtype;
+            item.audioConfidence = res.confidence;
+            if (!item.matched && res.category) {
+              item.category = res.category;
+              item.subtype = res.subtype;
+              item.confidence = res.confidence;
+              item.matchedOn = 'audio feature';
+            }
+            measured++;
+          }
+        } catch {
+          /* ignore single file error */
+        }
+      }
+    }
+    analyseAudioBtn.disabled = false;
+    analyseAudioBtn.textContent = '🎧 Analyse audio features';
+    toast('Audio Analysis', `Extracted features for ${measured} file(s)`);
+    renderPanes();
+  }
+
+  analyseNamesBtn.addEventListener('click', () => runNameAnalysis());
+  analyseAudioBtn.addEventListener('click', () => runAudioAnalysis());
+
+  function pathExt(fname: string) {
+    const i = fname.lastIndexOf('.');
+    return i !== -1 ? fname.slice(i) : '';
+  }
+
+  function computeOutputNames() {
+    const counts = new Map<string, number>();
+    const planRows: Array<{ path: string; from: string; to: string; changed: boolean; problem: string | null; item: any }> = [];
+
+    const ordered = [...smartItems].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
+    for (const item of ordered) {
+      const ext = pathExt(item.name);
+      const cat = item.userCategory !== undefined && item.userCategory !== null ? item.userCategory : item.category;
+      const sub = item.userSubtype !== undefined && item.userSubtype !== null ? item.userSubtype : item.subtype;
+
+      if (!cat) {
+        const targetName = item.customName || item.name;
+        planRows.push({
+          path: item.path,
+          from: item.name,
+          to: targetName,
+          changed: targetName !== item.name,
+          problem: null,
+          item
+        });
+        continue;
+      }
+
+      const key = sub ? `${cat}_${sub}` : cat;
+      const currentCount = (counts.get(key) || 0) + 1;
+      counts.set(key, currentCount);
+
+      const targetName = item.customName || `${key}_${currentCount}${ext}`;
+      planRows.push({
+        path: item.path,
+        from: item.name,
+        to: targetName,
+        changed: targetName !== item.name,
+        problem: null,
+        item
+      });
+    }
+
+    const seen = new Map<string, string>();
+    for (const r of planRows) {
+      const lk = r.to.toLowerCase();
+      if (seen.has(lk)) {
+        r.problem = `Same new name as "${seen.get(lk)}"`;
+      } else {
+        seen.set(lk, r.from);
+      }
+    }
+
+    return planRows;
+  }
+
+  function renderPanes() {
+    leftBody.innerHTML = '';
+    rightBody.innerHTML = '';
+
+    const planRows = computeOutputNames();
+    const rowsByPath = new Map(planRows.map((r) => [r.path, r]));
+
+    leftTitle.textContent = `Original files (${smartItems.length})`;
+
+    let displayItems = [...smartItems];
+    if (smartSortMode === 'priority') {
+      displayItems.sort((a, b) => {
+        const rank = (item: any) => {
+          const cat = item.userCategory !== undefined && item.userCategory !== null ? item.userCategory : item.category;
+          if (!cat) return 0;
+          if (item.confidence < 0.8) return 1;
+          return 2;
+        };
+        const diff = rank(a) - rank(b);
+        if (diff !== 0) return diff;
+        return a.name.localeCompare(b.name, undefined, { numeric: true });
+      });
+    } else {
+      displayItems.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    }
+
+    let changingCount = 0;
+    let unresolvedCount = 0;
+
+    for (const item of displayItems) {
+      const planRow = rowsByPath.get(item.path);
+      const isSelected = item.path === smartSelectedPath;
+      const cat = item.userCategory !== undefined && item.userCategory !== null ? item.userCategory : item.category;
+      const sub = item.userSubtype !== undefined && item.userSubtype !== null ? item.userSubtype : item.subtype;
+      const isChanged = planRow ? planRow.changed : false;
+      if (isChanged && !planRow?.problem) changingCount++;
+      if (!cat) unresolvedCount++;
+
+      /* Left Row */
+      const lRow = el('div', `smart-row${isSelected ? ' is-selected' : ''}${cat ? ' is-matched' : ' is-unresolved'}`);
+      const lName = el('span', 'smart-row__name', item.name);
+      lName.title = item.name;
+
+      let badgeType = 'smart-badge--miss';
+      let badgeText = '? Unresolved';
+      if (cat) {
+        if (item.confidence >= 0.8) {
+          badgeType = 'smart-badge--ok';
+          badgeText = `✔ ${sub ? `${cat}_${sub}` : cat}`;
+        } else {
+          badgeType = 'smart-badge--warn';
+          badgeText = `⚠ ${sub ? `${cat}_${sub}` : cat}`;
+        }
+      }
+      const lBadge = el('span', `smart-badge ${badgeType}`, badgeText);
+      lRow.append(lName, lBadge);
+
+      lRow.addEventListener('click', () => {
+        smartSelectedPath = item.path;
+        Player.load({ path: item.path, name: item.name, ext: pathExt(item.name) });
+        renderPanes();
+      });
+      leftBody.append(lRow);
+
+      /* Right Row */
+      const rRow = el('div', `smart-row${isSelected ? ' is-selected' : ''}`);
+      const suggestedText = planRow ? planRow.to : item.name;
+      const rName = el('span', 'smart-row__name', suggestedText);
+      rName.title = suggestedText;
+      rName.style.fontWeight = isChanged ? '600' : 'normal';
+      if (isChanged) rName.style.color = 'var(--amber)';
+
+      const select = document.createElement('select');
+      select.className = 'smart-select';
+      const defOpt = document.createElement('option');
+      defOpt.value = '';
+      defOpt.textContent = '— Unresolved —';
+      select.appendChild(defOpt);
+
+      for (const c of smartCategoriesList) {
+        const opt = document.createElement('option');
+        opt.value = c.category;
+        opt.textContent = `${c.category} (generic)`;
+        if (cat === c.category && !sub) opt.selected = true;
+        select.appendChild(opt);
+
+        for (const s of c.subtypes) {
+          const subOpt = document.createElement('option');
+          subOpt.value = `${c.category}:${s}`;
+          subOpt.textContent = `${c.category} / ${s}`;
+          if (cat === c.category && sub === s) subOpt.selected = true;
+          select.appendChild(subOpt);
+        }
+      }
+
+      select.addEventListener('change', async (e: any) => {
+        const val = e.target.value;
+        if (!val) {
+          item.userCategory = null;
+          item.userSubtype = null;
+        } else if (val.includes(':')) {
+          const [c, s] = val.split(':');
+          item.userCategory = c;
+          item.userSubtype = s;
+        } else {
+          item.userCategory = val;
+          item.userSubtype = null;
+        }
+        item.confidence = 1.0;
+        const tokens = (item.name || '').split(/[^a-zA-Z0-9]+/).filter((t: string) => t.length > 2);
+        if (item.userCategory) {
+          await window.api.userDictLearn(tokens, item.userCategory, item.userSubtype || null);
+        }
+        renderPanes();
+      });
+
+      let reasonText = '';
+      if (item.userCategory) reasonText = 'Manual override';
+      else if (item.matchedOn) reasonText = `Matched "${item.matchedOn}"`;
+      else if (item.audioFeatures) reasonText = `Audio centroid ${item.audioFeatures.centroid}Hz`;
+      const rReason = el('span', 'smart-reason', reasonText);
+
+      rRow.append(rName, select, rReason);
+
+      rRow.addEventListener('click', (e) => {
+        if (e.target && ((e.target as HTMLElement).tagName === 'SELECT' || (e.target as HTMLElement).tagName === 'OPTION')) return;
+        smartSelectedPath = item.path;
+        Player.load({ path: item.path, name: item.name, ext: pathExt(item.name) });
+        renderPanes();
+      });
+      rightBody.append(rRow);
+    }
+
+    summary.textContent = `${changingCount} of ${smartItems.length} files will be renamed · ${unresolvedCount} unresolved (kept original)`;
+    commitBtn.disabled = changingCount === 0;
+    commitBtn.textContent = `Rename ${changingCount} files`;
+
+    commitBtn.onclick = async () => {
+      const plan = {
+        rows: planRows.map((r) => ({
+          path: r.path,
+          from: r.from,
+          to: r.to,
+          changed: r.changed,
+          problem: r.problem
+        })),
+        changing: changingCount,
+        problems: planRows.filter((r) => r.problem).length,
+        tool: 'smart-rename'
+      };
+      const outcome = await window.api.renameApply(plan, { tool: 'smart-rename' });
+      toast('Smart Rename Applied', `Renamed ${outcome.renamed} file(s)${outcome.failed && outcome.failed.length ? ` (${outcome.failed.length} failed)` : ''}`, Boolean(outcome.failed && outcome.failed.length > 0));
+      await loadFolder();
+    };
+
+    undoLastBtn.onclick = async () => {
+      const outcome = await window.api.renameUndo();
+      toast('Undo', `${outcome.reverted} file(s) restored`);
+      await loadFolder();
+    };
+  }
+
+  loadFolder();
 }
 
 /* ------------------------- audio finishing ----------------------- */
@@ -3492,7 +3997,13 @@ function openStandaloneTool(nextView) {
   navigationHistory.visit(captureLocation());
   view = nextView;
 
-  if (nextView === 'rename') renameFolder = null;
+  if (nextView === 'rename' || nextView === 'batch-rename') renameFolder = null;
+  if (nextView === 'smart-rename') {
+    smartRenameFolder = null;
+    smartFiles = [];
+    smartItems = [];
+    smartSelectedPath = null;
+  }
   if (nextView === 'silence') {
     silenceFolder = null;
     silenceResults = [];

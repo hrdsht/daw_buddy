@@ -62,8 +62,25 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('tools:renameList', folder, extensions),
   renamePlan: (files, options) =>
     ipcRenderer.invoke('tools:renamePlan', files, options),
-  renameApply: (planned) => ipcRenderer.invoke('tools:renameApply', planned),
+  renameApply: (planned, meta) => ipcRenderer.invoke('tools:renameApply', planned, meta),
   renameUndo: () => ipcRenderer.invoke('tools:renameUndo'),
+
+  smartClassify: (folder, files) =>
+    ipcRenderer.invoke('tools:smartClassify', folder, files),
+  smartAudioFeatures: (filePath) =>
+    ipcRenderer.invoke('tools:smartAudioFeatures', filePath),
+  smartCategories: () => ipcRenderer.invoke('tools:smartCategories'),
+  userDictGet: () => ipcRenderer.invoke('tools:userDictGet'),
+  userDictAdd: (category, subtype, token) =>
+    ipcRenderer.invoke('tools:userDictAdd', category, subtype, token),
+  userDictLearn: (tokens, category, subtype) =>
+    ipcRenderer.invoke('tools:userDictLearn', tokens, category, subtype),
+  renameManifests: (folder) =>
+    ipcRenderer.invoke('tools:renameManifests', folder),
+  renameManifestPreview: (folder, manifestFile) =>
+    ipcRenderer.invoke('tools:renameManifestPreview', folder, manifestFile),
+  renameManifestRevert: (folder, manifestFile, only) =>
+    ipcRenderer.invoke('tools:renameManifestRevert', folder, manifestFile, only),
 
   qcScan: (folder, options) => ipcRenderer.invoke('qc:scan', folder, options),
   onQcProgress: (callback) => subscribe('qc:progress', callback),
