@@ -1254,19 +1254,20 @@ body.is-mac .topbar {
 
 .scale-notes-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(48px, 1fr));
+  gap: 6px;
 }
 
 .note-badge-card {
   background: var(--raised);
   border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 8px 6px;
+  padding: 6px 4px;
   text-align: center;
   cursor: pointer;
   transition: all 120ms ease;
   user-select: none;
+  min-width: 0;
 }
 .note-badge-card:hover {
   background: var(--hover);

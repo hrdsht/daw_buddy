@@ -809,7 +809,7 @@ function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
       const degName = k.degree ? (DEGREE_NAMES[degInterval] || `${k.degree}`) : 'out of scale';
       const sargam = k.degree ? (SARGAM_NAMES[degInterval] || '') : '';
       rect.innerHTML = `<title>${k.name} (${degName}${sargam ? ` · ${sargam}` : ''})</title>`;
-      rect.addEventListener('click', () => playSynthNote(k.pc, 4, selectedTuningA4));
+      rect.addEventListener('click', () => playSynthNote(k.pc, 4 + k.octave, selectedTuningA4));
       svgKb.appendChild(rect);
     });
 
@@ -825,7 +825,7 @@ function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
       const degName = k.degree ? (DEGREE_NAMES[degInterval] || `${k.degree}`) : 'out of scale';
       const sargam = k.degree ? (SARGAM_NAMES[degInterval] || '') : '';
       rect.innerHTML = `<title>${k.name} (${degName}${sargam ? ` · ${sargam}` : ''})</title>`;
-      rect.addEventListener('click', () => playSynthNote(k.pc, 4, selectedTuningA4));
+      rect.addEventListener('click', () => playSynthNote(k.pc, 4 + k.octave, selectedTuningA4));
       svgKb.appendChild(rect);
     });
 
@@ -842,14 +842,16 @@ function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
       const noteName = DSP.NOTES[notePc];
       const sargam = SARGAM_NAMES[interval] || '';
       const degName = DEGREE_NAMES[interval] || '';
-      const freq = (selectedTuningA4 * Math.pow(2, ((notePc >= tonicPc ? 60 + notePc : 72 + notePc) - 69) / 12)).toFixed(1);
+      const octave = interval < 12 ? (notePc < tonicPc ? 5 : 4) : (4 + Math.floor(interval / 12));
+      const midiVal = 12 * (octave + 1) + notePc;
+      const freq = (selectedTuningA4 * Math.pow(2, (midiVal - 69) / 12)).toFixed(1);
 
       const noteCard = el('div', `note-badge-card ${interval === 0 ? 'note-badge-card--tonic' : ''}`);
       noteCard.append(el('div', 'note-badge__name', noteName));
       noteCard.append(el('div', 'note-badge__sargam', sargam.split(' ')[0]));
       noteCard.append(el('div', 'note-badge__degree', degName));
       noteCard.append(el('div', 'note-badge__freq', `${freq} Hz`));
-      noteCard.addEventListener('click', () => playSynthNote(notePc, 4, selectedTuningA4));
+      noteCard.addEventListener('click', () => playSynthNote(notePc, octave, selectedTuningA4));
       notesGrid.append(noteCard);
     });
     notesSection.append(notesGrid);
