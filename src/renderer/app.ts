@@ -692,7 +692,7 @@ function getAudioContext(): AudioContext | null {
   return _audioCtx;
 }
 
-function playSynthNote(pc: number, octave = 4, a4 = 440, duration = 0.4) {
+function playSynthNote(pc: number, octave = 4, a4 = 440, duration = 0.85) {
   try {
     const ctx = getAudioContext();
     if (!ctx) return;
@@ -704,8 +704,9 @@ function playSynthNote(pc: number, octave = 4, a4 = 440, duration = 0.4) {
     osc.type = 'triangle';
     osc.frequency.setValueAtTime(freq, ctx.currentTime);
 
-    gain.gain.setValueAtTime(0.001, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.22, ctx.currentTime + 0.02);
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.24, ctx.currentTime + 0.03);
+    gain.gain.linearRampToValueAtTime(0.18, ctx.currentTime + duration * 0.35);
     gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
 
     osc.connect(gain);
@@ -720,14 +721,14 @@ function playSynthNote(pc: number, octave = 4, a4 = 440, duration = 0.4) {
 function playFullScale(tonicPc: number, degrees: number[], a4 = 440) {
   degrees.forEach((interval, idx) => {
     const notePc = (tonicPc + interval) % 12;
-    const octave = interval < 12 ? (notePc < tonicPc ? 5 : 4) : 5;
+    const octave = interval < 12 ? (notePc < tonicPc ? 5 : 4) : (4 + Math.floor(interval / 12));
     setTimeout(() => {
-      playSynthNote(notePc, octave, a4, 0.35);
-    }, idx * 220);
+      playSynthNote(notePc, octave, a4, 0.75);
+    }, idx * 440);
   });
   setTimeout(() => {
-    playSynthNote(tonicPc, 5, a4, 0.5);
-  }, degrees.length * 220);
+    playSynthNote(tonicPc, 5, a4, 1.2);
+  }, degrees.length * 440);
 }
 
 function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
