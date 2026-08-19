@@ -3,9 +3,14 @@ name: Release
 # Builds installers when you publish a GitHub Release, and uploads the
 # .exe / .dmg / AppImage to that release. A macOS .dmg can only be built on
 # macOS, so the job fans out across runners.
+#
+# Also runnable on demand (workflow_dispatch): same three-runner build, but the
+# installers go to workflow artifacts instead of a release — so mac/Windows
+# packaging can be dry-run before ever tagging a public version.
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -29,9 +34,22 @@ jobs:
           npm test
 
       # electron-builder runs `npm run build` shape via the dist script, then
-      # packages dist/ + prod deps. --publish always uploads to the release.
+      # packages dist/ + prod deps. On a published release we upload to it
+      # (--publish always); on a manual run we only build (--publish never) and
+      # attach the installers as artifacts below.
       # Unsigned for now (no CSC secrets); see docs/proposals/0003.
-      - name: Build and publish installers
-        run: npm run dist -- --publish always
+      - name: Build installers
+        run: npm run dist -- --publish ${{ github.event_name == 'release' && 'always' || 'never' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload installers as artifacts (manual runs)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ matrix.os }}
+          path: |
+            release/*.exe
+            release/*.dmg
+            release/*.AppImage
+          if-no-files-found: warn
