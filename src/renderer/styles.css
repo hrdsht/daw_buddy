@@ -2835,61 +2835,63 @@ body.theme-light .toast {
   gap: 6px;
 }
 
-/* Select Handle / Grip */
+/* Select Handle / Compact Scalable Checkbox */
 .filerow__select-handle {
-  width: 22px;
-  height: 22px;
-  border-radius: 4px;
+  width: 15px;
+  height: 15px;
+  min-width: 15px;
+  min-height: 15px;
+  border-radius: 3.5px;
   border: 1.5px solid var(--line);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 10px;
+  line-height: 1;
   color: transparent;
   cursor: pointer;
   flex: 0 0 auto;
   transition: all 120ms ease;
   background: rgba(255, 255, 255, 0.02);
-  margin-right: 4px;
+  margin-right: 6px;
   position: relative;
-}
-
-.select-handle__grip {
-  font-size: 10px;
-  letter-spacing: -2px;
-  color: var(--dim);
-  opacity: 0.6;
-  display: block;
-}
-
-.select-handle__check {
-  display: none;
-  font-weight: 800;
-  font-size: 11px;
+  opacity: 0.35;
 }
 
 .filerow:hover .filerow__select-handle,
 .row:hover .filerow__select-handle {
+  opacity: 0.85;
   border-color: var(--muted);
 }
 
 .filerow__select-handle:hover {
+  opacity: 1 !important;
   border-color: var(--amber) !important;
   background: rgba(255, 255, 255, 0.08);
+  transform: scale(1.1);
 }
 
 .filerow__select-handle.is-checked {
+  opacity: 1 !important;
   background: var(--amber) !important;
   border-color: var(--amber) !important;
+  box-shadow: 0 0 6px var(--amber);
 }
 
-.filerow__select-handle.is-checked .select-handle__grip {
+.filerow__select-handle .select-handle__check {
   display: none;
+  font-weight: 900;
+  font-size: 9.5px;
+  color: var(--amber-ink, #000);
 }
 
 .filerow__select-handle.is-checked .select-handle__check {
   display: block;
-  color: var(--amber-ink, #000);
+}
+
+body.multi-select-mode .filerow__select-handle {
+  opacity: 0.85;
+  border-color: var(--muted);
 }
 
 /* Multi-Selected Row State */

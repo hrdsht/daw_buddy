@@ -205,7 +205,7 @@ export function createSelectHandle(item: SelectedItem) {
     `filerow__select-handle ${SelectionState.isSelected(item.id) ? 'is-checked' : ''}`
   );
   handle.title = 'Click to select · Long-press to multi-select';
-  handle.innerHTML = `<span class="select-handle__grip">⋮⋮</span><span class="select-handle__check">✓</span>`;
+  handle.innerHTML = `<span class="select-handle__check">✓</span>`;
   handle.addEventListener('click', (e: MouseEvent) => {
     e.stopPropagation();
     SelectionState.toggle(item);
