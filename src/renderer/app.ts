@@ -229,6 +229,7 @@ function render() {
   backBtn.hidden = view === 'list' && !browsing;
 
   if (view === 'project') return renderProjectPage();
+  if (view === 'thisweek') return renderThisWeek();
   if (view === 'tools') return renderStandaloneTools();
   if (view === 'dedupe') return renderDedupe();
   if (view === 'disk') return renderDiskInsights();
@@ -346,13 +347,35 @@ function renderCollections() {
 
   const shown = groupVersionsOn && groupedRows.length ? groupedRows.length : entries.length;
   const all = collButton('All projects', shown);
-  if (!filterRoot && !favOnly) all.classList.add('is-on');
+  if (!filterRoot && !favOnly && view !== 'thisweek') all.classList.add('is-on');
   all.addEventListener('click', () => {
     filterRoot = null;
     favOnly = false;
     goList(null);
   });
   collectionsEl.append(all);
+
+  // What you have opened or bounced in the last seven days, at a glance. Always
+  // reflects the whole catalogue, so it drops any active browse/filter state.
+  const week = collButton('This week', entries.filter((e) => e.modified >= weekCutoff()).length);
+  if (view === 'thisweek') week.classList.add('is-on');
+  week.addEventListener('click', () => {
+    navigationHistory.visit(captureLocation());
+    filterRoot = null;
+    filterDaw = null;
+    favOnly = false;
+    favFilterEl.classList.toggle('is-on', false);
+    view = 'thisweek';
+    viewEl.scrollTop = 0;
+    if (browsing) {
+      browsing = null;
+      refresh(); // re-scan the full catalogue, then renders this view
+    } else {
+      render();
+      renderCollections();
+    }
+  });
+  collectionsEl.append(week);
 
   const favCount = entries.filter((e) => record(e.path).favourite).length;
   const favs = collButton('Favourites', favCount);
@@ -4427,6 +4450,78 @@ function id3FieldSummary(fields, bytes) {
 }
 
 /* ========================== disk insights ========================= */
+
+/* ============================= this week ========================== */
+
+function startOfDay(ms) {
+  const d = new Date(ms);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+
+// The oldest calendar day that still counts as "this week": today plus the six
+// days before it. Anchored to the start of the day so the filter boundary lines
+// up with the day buckets in dayLabel — no stray same-weekday overlap.
+function weekCutoff() {
+  return startOfDay(Date.now()) - 6 * 86400000;
+}
+
+function dayLabel(ms) {
+  const diff = Math.round((startOfDay(Date.now()) - startOfDay(ms)) / 86400000);
+  if (diff <= 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  return new Date(ms).toLocaleDateString(undefined, { weekday: 'long' });
+}
+
+function renderThisWeek() {
+  viewEl.innerHTML = '';
+  const section = el('div', 'section');
+
+  const cutoff = weekCutoff();
+  const recent = entries
+    .filter((entry) => entry.modified >= cutoff)
+    .sort((a, b) => b.modified - a.modified);
+
+  const folders = new Set(recent.map((entry) => entry.folder).filter(Boolean));
+  const daws = new Set(recent.map((entry) => entry.daw).filter(Boolean));
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  const subtitle = recent.length
+    ? [plural(recent.length, 'project') + ' touched', plural(folders.size, 'folder')]
+        .concat(daws.size ? [plural(daws.size, 'DAW')] : [])
+        .join('  ·  ')
+    : 'Nothing in the last seven days';
+  section.append(headRow('This week', subtitle));
+
+  if (!recent.length) {
+    section.append(
+      el(
+        'div',
+        'callout',
+        'No projects have been modified in the last seven days. As soon as you save a session, it turns up here.'
+      )
+    );
+    viewEl.append(section);
+    return;
+  }
+
+  // Column labels matching the main list grid, so rows read the same way.
+  const head = el('div', 'thead');
+  ['Name', 'BPM', 'Key', 'Audio', 'Saves', 'Modified'].forEach((label) =>
+    head.append(el('span', 'th', label))
+  );
+  section.append(head);
+
+  let currentLabel = null;
+  recent.forEach((entry) => {
+    const label = dayLabel(entry.modified);
+    if (label !== currentLabel) {
+      currentLabel = label;
+      section.append(el('div', 'dayhead', label));
+    }
+    section.append(buildRow(entry));
+  });
+
+  viewEl.append(section);
+}
 
 function renderDiskInsights() {
   viewEl.innerHTML = '';

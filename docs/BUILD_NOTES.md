@@ -1,5 +1,31 @@
 # Build notes
 
+## BUILT 19 Aug — "This week" dashboard (roadmap Tier 4)
+
+A recently-worked-on view over already-scanned data — no new IPC, no
+main-process change, pure renderer (`src/renderer/app.ts` + `styles.css`).
+
+- New sidebar collection **This week** (after "All projects"), showing a live
+  count of sessions modified in the last seven days. Clicking it drops any
+  active browse/filter state and rescans the whole catalogue, so the dashboard
+  always reflects everything, never just a drilled-in subfolder.
+- `renderThisWeek()` filters `entries` to `modified >= weekCutoff()`, sorts
+  newest-first, and groups into **Today / Yesterday / weekday** day buckets,
+  each rendered with the existing `buildRow` (so Play, drag-to-DAW, favourite
+  badges and dbl-click-to-open all work for free). Summary subtitle:
+  "N projects touched · M folders · K DAWs".
+- **Date boundary:** `weekCutoff()` is `startOfDay(now) − 6 days`, anchored to
+  the calendar-day start so the filter edge matches the bucket edge — a file
+  from exactly seven days ago (same weekday as today) can't slip in and render
+  a second group under today's weekday name.
+- **Verified in the running app**, not just tsc. Renderer code isn't reachable
+  by the `tsx` lib tests, so drove the real Electron build over the DevTools
+  protocol against a fixture of four dated `.als` files: scanner produced the
+  entries, the view rendered Today/Monday/Friday with the 12-day-old file
+  correctly excluded, and header/row columns measured pixel-aligned
+  (`th` x-positions == row-cell x-positions). Date-bucket edges unit-checked
+  separately against a fixed "now".
+
 ## BUILT 19 Aug — Shipping: PR CI, app icon, dual-arch mac (toward first release)
 
 The installer pipeline (0003) existed but had never fired — no tags, no
