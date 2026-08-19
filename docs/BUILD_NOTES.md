@@ -28,8 +28,23 @@ release, and two gaps that would have shipped a broken or ugly first build.
   packages with the icon and lamejs, no warnings.
 - **Still deferred** (0003): code signing — Gatekeeper/SmartScreen warn on
   first launch until paid certs are wired as CI secrets.
-- **Next**: tag `v0.2.0` on `main` and publish a Release to exercise the
-  three-runner build and produce the first downloadable installers.
+- **First release fired** as pre-release `v0.2.0-rc.1`. Two bugs, both fixed:
+  1. `403 Forbidden` — the default `GITHUB_TOKEN` is read-only. Added
+     `permissions: contents: write`.
+  2. electron-builder's GitHub publisher derives the tag from package.json
+     version (`v0.2.0`) and tried to *create a second release*, ignoring the
+     `v0.2.0-rc.1` release that triggered the run. Fix: build `--publish never`,
+     then `gh release upload "$TAG"` to the actual triggering tag — decouples
+     asset upload from version/tag naming for good. Also `fail-fast: false` so
+     one platform can't cancel the others.
+  Green on the retry: all three runners built and attached
+  `DAW.Buddy-0.2.0.dmg` (Intel), `-arm64.dmg` (Apple Silicon),
+  `.Setup.0.2.0.exe` (Windows), `.AppImage` (Linux).
+- **Benign CI annotation**: `actions/checkout@v4` + `setup-node@v4` run on a
+  Node 20 runtime GitHub is deprecating (auto-forced to Node 24). Not our
+  `node-version` — waits on the actions' own v5. Nothing to fix now.
+- **Next**: smoke-test the rc installers on real macOS/Windows, then tag
+  `v0.2.0` (same pipeline attaches to it automatically).
 
 ## BUILT 19 Aug — Key detection rework & Scale/Camelot UI (proposal 0007)
 
