@@ -12,9 +12,16 @@ on:
     types: [published]
   workflow_dispatch:
 
+# Upload release assets with the built-in GITHUB_TOKEN.
+permissions:
+  contents: write
+
 jobs:
   build:
     strategy:
+      # Don't let one platform's failure cancel the others — a broken Windows
+      # build shouldn't throw away finished mac/Linux installers.
+      fail-fast: false
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
@@ -34,14 +41,27 @@ jobs:
           npm test
 
       # electron-builder runs `npm run build` shape via the dist script, then
-      # packages dist/ + prod deps. On a published release we upload to it
-      # (--publish always); on a manual run we only build (--publish never) and
-      # attach the installers as artifacts below.
-      # Unsigned for now (no CSC secrets); see docs/proposals/0003.
+      # packages dist/ + prod deps into release/. We never let electron-builder
+      # publish: its GitHub provider derives the tag from package.json version
+      # (v0.2.0), which won't match a pre-release tag like v0.2.0-rc.1 — it would
+      # try to create a second release. Instead we attach to the exact release
+      # that triggered the run, below. Unsigned for now — see docs/proposals/0003.
       - name: Build installers
-        run: npm run dist -- --publish ${{ github.event_name == 'release' && 'always' || 'never' }}
+        run: npm run dist -- --publish never
+
+      # Attach to the triggering release by its real tag (rc or final), so the
+      # version/tag naming never has to line up with package.json.
+      - name: Attach installers to the release
+        if: github.event_name == 'release'
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=(release/*.dmg release/*.exe release/*.AppImage)
+          echo "Uploading: ${files[*]}"
+          gh release upload "$TAG" "${files[@]}" --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
 
       - name: Upload installers as artifacts (manual runs)
         if: github.event_name == 'workflow_dispatch'
