@@ -836,6 +836,45 @@ ipcMain.handle('tools:renameApply', async (event, planned, meta) => {
 
 ipcMain.handle('tools:renameUndo', () => renamer.undo(undoLog()));
 
+ipcMain.handle('tools:dragFiles', async (event, { filePaths, icon }: any) => {
+  try {
+    if (!filePaths || !Array.isArray(filePaths) || filePaths.length === 0) {
+      return { success: false, error: 'No files specified' };
+    }
+    const validFiles: string[] = [];
+    for (const fp of filePaths) {
+      if (typeof fp === 'string' && fp.trim()) {
+        try {
+          const stat = await fsp.stat(fp);
+          if (stat.isFile()) validFiles.push(fp);
+        } catch {
+          // ignore missing
+        }
+      }
+    }
+    if (validFiles.length === 0) {
+      return { success: false, error: 'No valid files to drag' };
+    }
+
+    const iconPath = icon || path.join(__dirname, '..', 'renderer', 'assets', 'dawbuddy-logo-v2.png');
+    if (validFiles.length === 1) {
+      event.sender.startDrag({
+        file: validFiles[0],
+        icon: iconPath
+      });
+    } else {
+      event.sender.startDrag({
+        files: validFiles,
+        icon: iconPath
+      });
+    }
+    return { success: true, count: validFiles.length, files: validFiles };
+  } catch (err: any) {
+    console.error('[dragFiles] Drag failed:', err.message);
+    return { success: false, error: err.message };
+  }
+});
+
 ipcMain.handle('tools:dragMidi', async (event, { filename, data }: any) => {
   try {
     const tempDir = path.join(app.getPath('temp'), 'daw-buddy-midi');

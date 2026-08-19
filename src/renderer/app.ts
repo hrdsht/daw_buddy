@@ -540,9 +540,19 @@ function buildRow(entry) {
   const row = el('article', 'row');
   if (selected === entry.path) row.classList.add('is-selected');
 
+  const fileToDrag = entry.audioPath || entry.sessionPath || entry.path;
+  const item: SelectedItem = {
+    id: entry.path,
+    name: entry.name,
+    path: fileToDrag,
+    size: entry.size,
+    type: 'project'
+  };
+
   /* name */
   const main = el('div', 'row__main');
   const line = el('div', 'row__nameline');
+  line.append(createSelectHandle(item));
   line.append(el('span', 'row__name', entry.name));
 
   if (rec.favourite) line.append(el('span', 'badge badge--fav', 'Fav'));
@@ -641,6 +651,7 @@ function buildRow(entry) {
     goProject(entry.isGroup ? entry.versions[0] : entry)
   );
   row.title = entry.sessionPath;
+  attachDraggableAndSelectable(row, item);
   return row;
 }
 
@@ -1723,6 +1734,17 @@ function renderProjectFilesTab(entry) {
 
   files.forEach((file) => {
     const row = el('div', 'filerow');
+
+    const item: SelectedItem = {
+      id: file.sessionPath,
+      name: basename(file.sessionPath),
+      path: file.sessionPath,
+      size: file.size,
+      type: 'project'
+    };
+
+    row.append(createSelectHandle(item));
+
     row.append(
       el('div', 'projectfile__icon', file.ext.replace('.', '').toUpperCase())
     );
@@ -1752,6 +1774,10 @@ function renderProjectFilesTab(entry) {
         : el('span')
     );
 
+    const dragHint = el('span', 'filerow__drag-hint', '⤓ Drag');
+    dragHint.title = 'Drag project session file';
+    row.append(dragHint);
+
     const actions = el('div', 'tabs');
     const reveal = el('button', 'pill pill--sm', `Show in ${settings.fileManager}`);
     reveal.addEventListener('click', (event) => {
@@ -1769,6 +1795,7 @@ function renderProjectFilesTab(entry) {
 
     row.title = file.sessionPath;
     row.addEventListener('dblclick', () => openWithGuard(file));
+    attachDraggableAndSelectable(row, item);
     section.append(row);
   });
 
@@ -1830,6 +1857,16 @@ async function loadRenders(entry, container) {
 function buildRenderRow(entry, render) {
   const row = el('div', 'filerow');
 
+  const item: SelectedItem = {
+    id: render.primary.path,
+    name: render.label,
+    path: render.primary.path,
+    size: render.size,
+    type: 'render'
+  };
+
+  row.append(createSelectHandle(item));
+
   const play = el('button', 'filerow__play', '▶');
   play.addEventListener('click', (event) => {
     event.stopPropagation();
@@ -1861,6 +1898,10 @@ function buildRenderRow(entry, render) {
       : el('span')
   );
 
+  const dragHint = el('span', 'filerow__drag-hint', '⤓ Drag');
+  dragHint.title = 'Drag file into DAW or Explorer';
+  row.append(dragHint);
+
   const analyse = el('button', 'pill pill--sm', 'Analyse');
   analyse.addEventListener('click', async (event) => {
     event.stopPropagation();
@@ -1869,7 +1910,8 @@ function buildRenderRow(entry, render) {
   row.append(analyse);
 
   row.dataset.path = render.primary.path;
-  row.addEventListener('click', () => Player.load(render.primary));
+  row.addEventListener('dblclick', () => Player.load(render.primary));
+  attachDraggableAndSelectable(row, item);
   return row;
 }
 
@@ -1935,6 +1977,17 @@ async function loadStems(entry, folder, container) {
 
 function buildStemRow(entry, file) {
   const row = el('div', 'filerow');
+
+  const item: SelectedItem = {
+    id: file.path,
+    name: file.name,
+    path: file.path,
+    size: file.size,
+    type: 'stem'
+  };
+
+  row.append(createSelectHandle(item));
+
   const play = el('button', 'filerow__play', '▶');
   play.addEventListener('click', (event) => {
     event.stopPropagation();
@@ -1955,6 +2008,10 @@ function buildStemRow(entry, file) {
   );
   row.append(middle, el('span'));
 
+  const dragHint = el('span', 'filerow__drag-hint', '⤓ Drag');
+  dragHint.title = 'Drag stem into DAW or Explorer';
+  row.append(dragHint);
+
   const actions = el('div', 'filerow__actions');
   actions.append(analyseAudioButton(entry, file));
   const reveal = el('button', 'pill pill--sm', `Show in ${settings.fileManager}`);
@@ -1965,7 +2022,8 @@ function buildStemRow(entry, file) {
   actions.append(reveal);
   row.append(actions);
   row.dataset.path = file.path;
-  row.addEventListener('click', () => Player.load(file));
+  row.addEventListener('dblclick', () => Player.load(file));
+  attachDraggableAndSelectable(row, item);
   return row;
 }
 
@@ -4046,6 +4104,17 @@ function renderAllAudioTab(entry) {
 
         group.slice(0, 200).forEach((file) => {
           const row = el('div', 'filerow');
+
+          const item: SelectedItem = {
+            id: file.path,
+            name: file.name,
+            path: file.path,
+            size: file.size,
+            type: 'audio'
+          };
+
+          row.append(createSelectHandle(item));
+
           const play = el('button', 'filerow__play', '▶');
           play.addEventListener('click', (event) => {
             event.stopPropagation();
@@ -4062,10 +4131,25 @@ function renderAllAudioTab(entry) {
               `${file.ext.replace('.', '').toUpperCase()}  ·  ${formatBytes(file.size)}  ·  ${timeAgo(file.modified)}`
             )
           );
-          row.append(middle, el('span'), analyseAudioButton(entry, file));
+          row.append(middle);
+
+          const dragHint = el('span', 'filerow__drag-hint', '⤓ Drag');
+          dragHint.title = 'Drag audio file into DAW or Explorer';
+          row.append(dragHint);
+
+          const actions = el('div', 'filerow__actions');
+          actions.append(analyseAudioButton(entry, file));
+          const reveal = el('button', 'pill pill--sm', `Show in ${settings.fileManager}`);
+          reveal.addEventListener('click', (event) => {
+            event.stopPropagation();
+            window.api.reveal(file.path);
+          });
+          actions.append(reveal);
+          row.append(actions);
 
           row.dataset.path = file.path;
-          row.addEventListener('click', () => Player.load(file));
+          row.addEventListener('dblclick', () => Player.load(file));
+          attachDraggableAndSelectable(row, item);
           list.append(row);
         });
       }
@@ -5087,6 +5171,303 @@ function toast(title, body, isAlert?) {
   node.append(el('div', 'toast__body', body));
   toastsEl.append(node);
   setTimeout(() => node.remove(), 7000);
+}
+
+/* ==================================================================
+   DRAG-AND-DROP & MULTI-SELECTION SYSTEM
+   ================================================================== */
+
+interface SelectedItem {
+  id: string;
+  name: string;
+  path: string;
+  size?: number;
+  type?: string;
+}
+
+const SelectionState = {
+  active: false,
+  items: new Map<string, SelectedItem>(),
+  lastSelectedId: null as string | null,
+
+  enable() {
+    this.active = true;
+    document.body.classList.add('multi-select-mode');
+    updateSelectionBar();
+    updateSelectionHighlights();
+  },
+
+  disable() {
+    this.active = false;
+    this.items.clear();
+    this.lastSelectedId = null;
+    document.body.classList.remove('multi-select-mode');
+    removeSelectionBar();
+    updateSelectionHighlights();
+  },
+
+  toggle(item: SelectedItem) {
+    if (this.items.has(item.id)) {
+      this.items.delete(item.id);
+      if (this.items.size === 0) {
+        this.disable();
+        return;
+      }
+    } else {
+      if (!this.active) {
+        this.active = true;
+        document.body.classList.add('multi-select-mode');
+      }
+      this.items.set(item.id, item);
+      this.lastSelectedId = item.id;
+    }
+    updateSelectionBar();
+    updateSelectionHighlights();
+  },
+
+  select(item: SelectedItem) {
+    if (!this.active) {
+      this.active = true;
+      document.body.classList.add('multi-select-mode');
+    }
+    this.items.set(item.id, item);
+    this.lastSelectedId = item.id;
+    updateSelectionBar();
+    updateSelectionHighlights();
+  },
+
+  selectAll(items: SelectedItem[]) {
+    if (!this.active) {
+      this.active = true;
+      document.body.classList.add('multi-select-mode');
+    }
+    items.forEach((item) => this.items.set(item.id, item));
+    updateSelectionBar();
+    updateSelectionHighlights();
+  },
+
+  isSelected(id: string) {
+    return this.items.has(id);
+  },
+
+  count() {
+    return this.items.size;
+  },
+
+  getFilePaths(): string[] {
+    return (Array.from(this.items.values()) as SelectedItem[])
+      .map((i) => i.path)
+      .filter(Boolean);
+  },
+
+  getTotalSize(): number {
+    return (Array.from(this.items.values()) as SelectedItem[]).reduce((sum: number, i) => sum + (i.size || 0), 0);
+  }
+};
+
+function updateSelectionHighlights() {
+  document.querySelectorAll('[data-selectable-id]').forEach((node: any) => {
+    const id = node.getAttribute('data-selectable-id');
+    const isSelected = SelectionState.isSelected(id);
+    node.classList.toggle('is-multi-selected', isSelected);
+    const cb = node.querySelector('.filerow__select-handle, .row__select-handle');
+    if (cb) {
+      cb.classList.toggle('is-checked', isSelected);
+    }
+  });
+}
+
+function updateSelectionBar() {
+  let bar = document.querySelector('.floating-selection-bar') as HTMLElement;
+  if (!bar) {
+    bar = el('div', 'floating-selection-bar');
+    document.body.append(bar);
+  }
+
+  const count = SelectionState.count();
+  if (count === 0) {
+    bar.remove();
+    return;
+  }
+
+  const totalSize = SelectionState.getTotalSize();
+  const filePaths = SelectionState.getFilePaths();
+
+  bar.innerHTML = '';
+
+  const left = el('div', 'selection-bar__info');
+  left.append(el('span', 'selection-bar__badge', `${count}`));
+  left.append(
+    el(
+      'span',
+      'selection-bar__label',
+      `${count} file${count === 1 ? '' : 's'} selected${totalSize ? ` · ${formatBytes(totalSize)}` : ''}`
+    )
+  );
+  bar.append(left);
+
+  const actions = el('div', 'selection-bar__actions');
+
+  // Drag button (draggable itself to initiate multi-drag!)
+  const dragBtn = el('button', 'pill pill--solid selection-bar__drag-btn', `⤓ Drag ${count} to DAW`);
+  dragBtn.title = 'Click or drag this button directly into your DAW or a folder!';
+  dragBtn.draggable = true;
+  dragBtn.addEventListener('dragstart', async (e) => {
+    if (e.dataTransfer) {
+      e.dataTransfer.setData('text/plain', filePaths.join('\n'));
+      e.dataTransfer.effectAllowed = 'copy';
+    }
+    if (window.api.dragFiles) {
+      await window.api.dragFiles(filePaths);
+    }
+  });
+  dragBtn.addEventListener('click', async () => {
+    if (window.api.dragFiles) {
+      await window.api.dragFiles(filePaths);
+    }
+  });
+  actions.append(dragBtn);
+
+  // Copy paths button
+  const copyBtn = el('button', 'pill', '📋 Copy Paths');
+  copyBtn.title = 'Copy all selected file paths to clipboard';
+  copyBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(filePaths.join('\n'));
+    toast('Copied', `${count} path${count === 1 ? '' : 's'} copied to clipboard`);
+  });
+  actions.append(copyBtn);
+
+  // Reveal first in Explorer
+  if (filePaths.length > 0) {
+    const revealBtn = el('button', 'pill', `Show in ${settings.fileManager}`);
+    revealBtn.addEventListener('click', () => {
+      window.api.reveal(filePaths[0]);
+    });
+    actions.append(revealBtn);
+  }
+
+  // Clear / Done button
+  const clearBtn = el('button', 'pill pill--ghost', '✕ Clear');
+  clearBtn.title = 'Clear selection (Esc)';
+  clearBtn.addEventListener('click', () => SelectionState.disable());
+  actions.append(clearBtn);
+
+  bar.append(actions);
+}
+
+function removeSelectionBar() {
+  document.querySelectorAll('.floating-selection-bar').forEach((n) => n.remove());
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && SelectionState.active) {
+    SelectionState.disable();
+  }
+});
+
+function createSelectHandle(item: SelectedItem) {
+  const handle = el('div', `filerow__select-handle ${SelectionState.isSelected(item.id) ? 'is-checked' : ''}`);
+  handle.title = 'Click to select · Long-press to multi-select';
+  handle.innerHTML = `<span class="select-handle__grip">⋮⋮</span><span class="select-handle__check">✓</span>`;
+  handle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    SelectionState.toggle(item);
+  });
+  return handle;
+}
+
+function attachDraggableAndSelectable(rowElement: HTMLElement, item: SelectedItem) {
+  rowElement.draggable = true;
+  rowElement.setAttribute('data-selectable-id', item.id);
+  rowElement.classList.add('draggable-row');
+
+  if (SelectionState.isSelected(item.id)) {
+    rowElement.classList.add('is-multi-selected');
+  }
+
+  // Native File Dragging
+  rowElement.addEventListener('dragstart', async (e) => {
+    let pathsToDrag = [item.path];
+    if (SelectionState.active && SelectionState.isSelected(item.id)) {
+      pathsToDrag = SelectionState.getFilePaths();
+    }
+
+    if (e.dataTransfer) {
+      e.dataTransfer.setData('text/plain', pathsToDrag.join('\n'));
+      e.dataTransfer.effectAllowed = 'copy';
+    }
+
+    if (window.api.dragFiles) {
+      await window.api.dragFiles(pathsToDrag);
+    }
+  });
+
+  // Long-press detection (450ms)
+  let pressTimer: any = null;
+  let startX = 0;
+  let startY = 0;
+  let isLongPress = false;
+
+  const onPointerDown = (e: PointerEvent) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    const target = e.target as HTMLElement;
+    if (
+      target.closest('button') ||
+      target.closest('a') ||
+      target.closest('input') ||
+      target.closest('.filerow__select-handle') ||
+      target.closest('.row__select-handle')
+    ) {
+      return;
+    }
+
+    isLongPress = false;
+    startX = e.clientX;
+    startY = e.clientY;
+
+    clearTimeout(pressTimer);
+    pressTimer = setTimeout(() => {
+      isLongPress = true;
+      SelectionState.toggle(item);
+      rowElement.classList.add('row--pulse-select');
+      setTimeout(() => rowElement.classList.remove('row--pulse-select'), 300);
+      try {
+        if ('vibrate' in navigator) navigator.vibrate(40);
+      } catch {}
+    }, 450);
+  };
+
+  const onPointerMove = (e: PointerEvent) => {
+    if (Math.abs(e.clientX - startX) > 8 || Math.abs(e.clientY - startY) > 8) {
+      clearTimeout(pressTimer);
+    }
+  };
+
+  const onPointerUp = () => {
+    clearTimeout(pressTimer);
+  };
+
+  rowElement.addEventListener('pointerdown', onPointerDown);
+  rowElement.addEventListener('pointermove', onPointerMove);
+  rowElement.addEventListener('pointerup', onPointerUp);
+  rowElement.addEventListener('pointercancel', onPointerUp);
+
+  // When multi-select mode is active, clicking row toggles selection
+  rowElement.addEventListener('click', (e) => {
+    if (isLongPress) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    if (e.ctrlKey || e.metaKey || SelectionState.active) {
+      const target = e.target as HTMLElement;
+      if (!target.closest('button') && !target.closest('a')) {
+        e.preventDefault();
+        e.stopPropagation();
+        SelectionState.toggle(item);
+      }
+    }
+  });
 }
 
 boot();
