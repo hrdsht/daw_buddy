@@ -855,6 +855,59 @@ function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
     notesSection.append(notesGrid);
     inspectorCol.append(notesSection);
 
+    // Suggested Indian Raagas & Thaats Box
+    const ragaChroma = new Float64Array(12);
+    degrees.forEach((d) => {
+      ragaChroma[(tonicPc + d) % 12] = 1.0;
+    });
+    const suggestedRagas = rec.ragas && rec.tonic === selectedTonic && rec.scale === selectedScale
+      ? rec.ragas
+      : DSP.findMatchingRagas(ragaChroma, tonicPc, 6);
+
+    if (suggestedRagas && suggestedRagas.length > 0) {
+      const ragasSection = el('div', 'scale-ragas-section');
+      ragasSection.append(el('h4', 'scale-notes__title', 'Matching Indian Raagas & Scale Suggestions'));
+
+      const ragasGrid = el('div', 'scale-ragas-grid');
+      suggestedRagas.forEach((raga: any) => {
+        const isCurrentRaga = selectedScale === raga.name.toLowerCase() || (selectedScale === 'bhairav' && raga.name === 'Bhairav');
+        const card = el('div', `raga-card ${isCurrentRaga ? 'raga-card--active' : ''}`);
+
+        const top = el('div', 'raga-card__header');
+        top.append(el('span', 'raga-card__name', raga.name));
+        top.append(el('span', 'raga-card__pct', `${raga.matchPercent}% Match`));
+        card.append(top);
+
+        const sub = el('div', 'raga-card__thaat', `${raga.thaat} Thaat`);
+        card.append(sub);
+
+        const sargamRow = el('div', 'raga-card__sargam', raga.sargam);
+        card.append(sargamRow);
+
+        if (raga.time || raga.mood) {
+          const metaRow = el('div', 'raga-card__meta');
+          if (raga.time) metaRow.append(el('span', 'raga-card__time', `🕒 ${raga.time}`));
+          if (raga.mood) metaRow.append(el('span', 'raga-card__mood', `✨ ${raga.mood}`));
+          card.append(metaRow);
+        }
+
+        card.title = `Click to load Raaga ${raga.name} on the keyboard & scale audition player`;
+        card.addEventListener('click', () => {
+          selectedScale = raga.degrees ? raga.name.toLowerCase() : selectedScale;
+          if (raga.degrees) {
+            DSP.SCALES[raga.name.toLowerCase()] = raga.degrees;
+            DSP.THAAT_MAP[raga.name.toLowerCase()] = `${raga.thaat} (${raga.name})`;
+          }
+          updateInspector();
+          playFullScale(tonicPc, raga.degrees || degrees, selectedTuningA4);
+        });
+
+        ragasGrid.append(card);
+      });
+      ragasSection.append(ragasGrid);
+      inspectorCol.append(ragasSection);
+    }
+
     // Harmonic Mixing Transitions Card
     if (comp) {
       const harmSection = el('div', 'scale-harm-section');
@@ -1184,6 +1237,34 @@ function renderProjectHarmony(entry, rec, projectBpm) {
   });
 
   kbCol.append(midiBtn);
+
+  // Raaga Suggestions Box below keyboard
+  const ragaChroma = new Float64Array(12);
+  degrees.forEach((d) => {
+    ragaChroma[(tonicPc + d) % 12] = 1.0;
+  });
+  const suggestedRagas = rec.ragas || DSP.findMatchingRagas(ragaChroma, tonicPc, 4);
+  if (suggestedRagas && suggestedRagas.length > 0) {
+    const ragasBox = el('div', 'harmony__ragas-box');
+    const ragasTitle = el('span', 'harmony__ragas-title', 'Raagas:');
+    ragasBox.append(ragasTitle);
+
+    const ragasList = el('div', 'harmony__ragas-list');
+    suggestedRagas.slice(0, 3).forEach((raga: any) => {
+      const chip = el('button', 'harmony__raga-chip');
+      chip.append(el('span', 'harmony__raga-name', raga.name));
+      chip.append(el('span', 'harmony__raga-pct', `${raga.matchPercent}%`));
+      chip.title = `${raga.name} (${raga.thaat} Thaat) · ${raga.time || ''} · Click to inspect`;
+      chip.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openCamelotModal(entry, { ...rec, scale: raga.name.toLowerCase() }, projectBpm);
+      });
+      ragasList.append(chip);
+    });
+    ragasBox.append(ragasList);
+    kbCol.append(ragasBox);
+  }
+
   container.append(kbCol);
 
   // Right column: Camelot wheel with expand interaction

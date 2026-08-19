@@ -253,6 +253,315 @@ export const THAAT_MAP: Record<string, string> = {
   bhupali: 'Bhoop / Bhupali'
 };
 
+export interface RagaSuggestion {
+  name: string;
+  thaat: string;
+  degrees: number[];
+  sargam: string;
+  time?: string;
+  mood?: string;
+  score: number;
+  matchPercent: number;
+}
+
+export const RAGA_DEFINITIONS: Array<{
+  name: string;
+  thaat: string;
+  degrees: number[];
+  sargam: string;
+  time: string;
+  mood: string;
+}> = [
+  {
+    name: 'Bhairav',
+    thaat: 'Bhairav',
+    degrees: [0, 1, 4, 5, 7, 8, 11],
+    sargam: 'S r G m P d N',
+    time: 'Dawn / Early Morning',
+    mood: 'Devotional, Majestic & Serene'
+  },
+  {
+    name: 'Ahir Bhairav',
+    thaat: 'Bhairav',
+    degrees: [0, 1, 4, 5, 7, 9, 10],
+    sargam: 'S r G m P D n',
+    time: 'Morning (1st Prahar)',
+    mood: 'Peaceful, Divine & Uplifting'
+  },
+  {
+    name: 'Bairagi',
+    thaat: 'Bhairav',
+    degrees: [0, 1, 5, 7, 10],
+    sargam: 'S r m P n',
+    time: 'Early Morning',
+    mood: 'Meditative, Renunciant & Pure'
+  },
+  {
+    name: 'Kalingada',
+    thaat: 'Bhairav',
+    degrees: [0, 1, 4, 5, 7, 8, 11],
+    sargam: 'S r G m P d N',
+    time: 'Late Morning',
+    mood: 'Light, Melodic & Devotional'
+  },
+  {
+    name: 'Nat Bhairav',
+    thaat: 'Bhairav',
+    degrees: [0, 2, 4, 5, 7, 8, 11],
+    sargam: 'S R G m P d N',
+    time: 'Morning',
+    mood: 'Soothing & Contemplative'
+  },
+  {
+    name: 'Yaman / Kalyan',
+    thaat: 'Kalyan',
+    degrees: [0, 2, 4, 6, 7, 9, 11],
+    sargam: 'S R G M P D N',
+    time: 'Evening (1st Prahar of Night)',
+    mood: 'Romantic, Graceful & Blissful'
+  },
+  {
+    name: 'Bhoop / Bhupali',
+    thaat: 'Kalyan',
+    degrees: [0, 2, 4, 7, 9],
+    sargam: 'S R G P D',
+    time: 'Early Evening',
+    mood: 'Grand, Peaceful & Soothing'
+  },
+  {
+    name: 'Shuddha Kalyan',
+    thaat: 'Kalyan',
+    degrees: [0, 2, 4, 7, 9, 11],
+    sargam: 'S R G P D N',
+    time: 'Night (1st Prahar)',
+    mood: 'Serene & Stately'
+  },
+  {
+    name: 'Bihag',
+    thaat: 'Bilawal',
+    degrees: [0, 4, 5, 6, 7, 11],
+    sargam: 'S G m M P N',
+    time: 'Late Night (2nd Prahar)',
+    mood: 'Romantic, Expressive & Longing'
+  },
+  {
+    name: 'Hansadhwani',
+    thaat: 'Bilawal',
+    degrees: [0, 2, 4, 7, 11],
+    sargam: 'S R G P N',
+    time: 'Evening',
+    mood: 'Auspicious, Radiant & Joyous'
+  },
+  {
+    name: 'Bilawal / Alhaiya Bilawal',
+    thaat: 'Bilawal',
+    degrees: [0, 2, 4, 5, 7, 9, 11],
+    sargam: 'S R G m P D N',
+    time: 'Late Morning',
+    mood: 'Cheerful, Fresh & Vibrant'
+  },
+  {
+    name: 'Khamaj',
+    thaat: 'Khamaj',
+    degrees: [0, 4, 5, 7, 9, 10, 11],
+    sargam: 'S G m P D N n',
+    time: 'Late Evening',
+    mood: 'Sensuous, Playful & Expressive'
+  },
+  {
+    name: 'Desh',
+    thaat: 'Khamaj',
+    degrees: [0, 2, 5, 7, 10, 11],
+    sargam: 'S R m P N n',
+    time: 'Second Prahar of Night (Monsoon)',
+    mood: 'Patriotic, Romantic & Sweet'
+  },
+  {
+    name: 'Rageshri',
+    thaat: 'Khamaj',
+    degrees: [0, 2, 4, 5, 9, 10],
+    sargam: 'S R G m D n',
+    time: 'Night (2nd Prahar)',
+    mood: 'Romantic, Deep & Tender'
+  },
+  {
+    name: 'Kafi',
+    thaat: 'Kafi',
+    degrees: [0, 2, 3, 5, 7, 9, 10],
+    sargam: 'S R g m P D n',
+    time: 'Midnight (Spring/Holi)',
+    mood: 'Joyful, Passionate & Folk-Rooted'
+  },
+  {
+    name: 'Bhimpalasi',
+    thaat: 'Kafi',
+    degrees: [0, 3, 5, 7, 10, 2, 9],
+    sargam: 'S g m P n (R D in avroha)',
+    time: 'Late Afternoon',
+    mood: 'Tender, Poignant & Longing'
+  },
+  {
+    name: 'Bageshri',
+    thaat: 'Kafi',
+    degrees: [0, 2, 3, 5, 9, 10],
+    sargam: 'S R g m D n',
+    time: 'Midnight',
+    mood: 'Romantic, Introspective & Sweet'
+  },
+  {
+    name: 'Brindavani Sarang',
+    thaat: 'Kafi',
+    degrees: [0, 2, 5, 7, 10, 11],
+    sargam: 'S R m P N (n in avroha)',
+    time: 'Afternoon',
+    mood: 'Refreshing, Sunny & Sparkling'
+  },
+  {
+    name: 'Asavari',
+    thaat: 'Asavari',
+    degrees: [0, 2, 3, 5, 7, 8, 10],
+    sargam: 'S R g m P d n',
+    time: 'Morning (2nd Prahar)',
+    mood: 'Melancholic, Yearning & Tender'
+  },
+  {
+    name: 'Darbari Kanada',
+    thaat: 'Asavari',
+    degrees: [0, 2, 3, 5, 7, 8, 10],
+    sargam: 'S R g m P d n',
+    time: 'Deep Midnight',
+    mood: 'Majestic, Royal, Profound & Slow'
+  },
+  {
+    name: 'Jaunpuri',
+    thaat: 'Asavari',
+    degrees: [0, 2, 3, 5, 7, 8, 10],
+    sargam: 'S R g m P d n',
+    time: 'Late Morning',
+    mood: 'Plaintive, Expressive & Melodic'
+  },
+  {
+    name: 'Bhairavi',
+    thaat: 'Bhairavi',
+    degrees: [0, 1, 3, 5, 7, 8, 10],
+    sargam: 'S r g m P d n',
+    time: 'Morning (Concert Finale / Anytime)',
+    mood: 'Universal, Devotional & Cathartic'
+  },
+  {
+    name: 'Malkauns',
+    thaat: 'Bhairavi',
+    degrees: [0, 3, 5, 8, 10],
+    sargam: 'S g m d n',
+    time: 'Late Night (3rd Prahar)',
+    mood: 'Intense, Meditative & Hypnotic'
+  },
+  {
+    name: 'Miyan Ki Todi',
+    thaat: 'Todi',
+    degrees: [0, 1, 3, 6, 7, 8, 11],
+    sargam: 'S r g M P d N',
+    time: 'Late Morning (2nd Prahar)',
+    mood: 'Pathos, Devotion & Deep Meditation'
+  },
+  {
+    name: 'Gurjari Todi',
+    thaat: 'Todi',
+    degrees: [0, 1, 3, 6, 8, 11],
+    sargam: 'S r g M d N',
+    time: 'Late Morning',
+    mood: 'Deeply Moving & Melancholic'
+  },
+  {
+    name: 'Poorvi',
+    thaat: 'Poorvi',
+    degrees: [0, 1, 4, 5, 6, 7, 8, 11],
+    sargam: 'S r G m M P d N',
+    time: 'Sunset (Sandhiprakash)',
+    mood: 'Twilight, Mysterious & Mystical'
+  },
+  {
+    name: 'Puriya Dhanashree',
+    thaat: 'Poorvi',
+    degrees: [0, 1, 4, 6, 7, 8, 11],
+    sargam: 'S r G M P d N',
+    time: 'Late Afternoon / Dusk',
+    mood: 'Romantic, Serious & Poignant'
+  },
+  {
+    name: 'Marwa',
+    thaat: 'Marwa',
+    degrees: [0, 1, 4, 6, 9, 11],
+    sargam: 'S r G M D N',
+    time: 'Sunset (Sandhiprakash)',
+    mood: 'Anxious, Haunting, Yearning & Unique'
+  },
+  {
+    name: 'Charukesi',
+    thaat: 'Charukesi',
+    degrees: [0, 2, 4, 5, 7, 8, 10],
+    sargam: 'S R G m P d n',
+    time: 'Anytime / Evening',
+    mood: 'Emotional, Melting, Sweet & Soulful'
+  },
+  {
+    name: 'Shivaranjani',
+    thaat: 'Kafi',
+    degrees: [0, 2, 3, 7, 9],
+    sargam: 'S R g P D',
+    time: 'Midnight / Anytime',
+    mood: 'Tearful, Heartfelt, Romantic & Tragic'
+  },
+  {
+    name: 'Kirwani',
+    thaat: 'Kalyan / Melakarta',
+    degrees: [0, 2, 3, 5, 7, 8, 11],
+    sargam: 'S R g m P d N',
+    time: 'Night (1st Prahar)',
+    mood: 'Melancholic yet Elegant'
+  },
+  {
+    name: 'Madhuvanti',
+    thaat: 'Todi',
+    degrees: [0, 2, 3, 6, 7, 9, 11],
+    sargam: 'S R g M P D N',
+    time: 'Late Afternoon / Dusk',
+    mood: 'Sweet, Longing & Romantic'
+  },
+  {
+    name: 'Jog',
+    thaat: 'Kafi',
+    degrees: [0, 3, 4, 5, 7, 10],
+    sargam: 'S g G m P n',
+    time: 'Late Night',
+    mood: 'Enchanting, Intoxicating & Soulful'
+  }
+];
+
+export function findMatchingRagas(chroma: Float64Array, tonicPc: number, topN = 6): RagaSuggestion[] {
+  const scored = RAGA_DEFINITIONS.map((raga) => {
+    const inScale = new Set(raga.degrees.map((d) => (tonicPc + d) % 12));
+    let inside = 0;
+    let outside = 0;
+    for (let pc = 0; pc < 12; pc += 1) {
+      if (inScale.has(pc)) inside += chroma[pc];
+      else outside += chroma[pc];
+    }
+    const total = inside + outside || 1;
+    const coverage = inside / total;
+    const score = Math.max(0, coverage - outside * 1.5);
+    const matchPercent = Math.round(Math.min(99, Math.max(35, score * 100)));
+    return {
+      ...raga,
+      score,
+      matchPercent
+    };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, topN);
+}
+
 const CAMELOT_MAJOR: Record<string, string> = {
   C: '8B', 'C#': '3B', D: '10B', 'D#': '5B', E: '12B', F: '7B',
   'F#': '2B', G: '9B', 'G#': '4B', A: '11B', 'A#': '6B', B: '1B'
@@ -620,6 +929,7 @@ function detectKey(frames: Float32Array[], binHz: number, options: any = {}) {
     tuningA4: tuning.a4,
     tuningCents: tuning.centsOffset,
     thaat: THAAT_MAP[finalScale] || null,
+    ragas: findMatchingRagas(clean, tonicResult.tonicPc),
     profileSays: `${profile.tonic} ${profile.mode}`,
     profileAgrees: agrees,
     ranked: tonicResult.ranked
@@ -695,6 +1005,7 @@ function analyse(channelData: Float32Array | Float64Array, sampleRate: number, o
     tuningA4: key.tuningA4,
     tuningCents: key.tuningCents,
     thaat: key.thaat,
+    ragas: key.ragas,
     analysedSeconds: Math.round(wanted / sampleRate)
   };
 }
@@ -710,9 +1021,11 @@ export const DSP = {
   suppressHarmonics,
   findTonic,
   findScale,
+  findMatchingRagas,
   krumhansl,
   NOTES,
   SCALES,
   THAAT_MAP,
+  RAGA_DEFINITIONS,
   RECOMMENDED_FFT
 };

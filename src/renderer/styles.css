@@ -825,6 +825,61 @@ body.is-mac .topbar {
   cursor: grabbing;
 }
 
+/* Raaga Suggestions Box in Harmony card */
+.harmony__ragas-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.harmony__ragas-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.harmony__ragas-list {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.harmony__raga-chip {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 10.5px;
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: all 120ms ease;
+  user-select: none;
+}
+.harmony__raga-chip:hover {
+  background: var(--hover);
+  border-color: var(--amber);
+  transform: translateY(-1px);
+}
+
+.harmony__raga-name {
+  font-weight: 600;
+}
+
+.harmony__raga-pct {
+  font-size: 9px;
+  font-family: var(--mono);
+  color: var(--amber);
+  font-weight: 700;
+}
+
 .harmony__wheel-col {
   display: flex;
   flex-direction: column;
@@ -1291,6 +1346,100 @@ body.is-mac .topbar {
   font-size: 12px;
   font-weight: 600;
   color: var(--text);
+}
+
+/* Raagas Section in Camelot Modal */
+.scale-ragas-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.scale-ragas-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.raga-card {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: all 140ms ease;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  user-select: none;
+}
+.raga-card:hover {
+  background: var(--hover);
+  border-color: var(--amber);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+.raga-card--active {
+  border-color: var(--amber) !important;
+  background: color-mix(in srgb, var(--amber) 12%, var(--raised)) !important;
+}
+
+.raga-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.raga-card__name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.raga-card__pct {
+  background: color-mix(in srgb, var(--amber) 18%, transparent);
+  color: var(--amber);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.raga-card__thaat {
+  font-size: 11px;
+  color: var(--dim);
+  font-weight: 500;
+}
+
+.raga-card__sargam {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  font-weight: 600;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  padding: 4px 6px;
+  border-radius: 4px;
+  margin-top: 2px;
+}
+
+.raga-card__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 9.5px;
+  color: var(--dim);
+  margin-top: 2px;
+}
+
+.raga-card__time,
+.raga-card__mood {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .scale-modal-actions {
