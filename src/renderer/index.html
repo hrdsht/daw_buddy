@@ -183,21 +183,36 @@
 
       <section class="field">
         <h3>Appearance</h3>
-        <p class="muted">Accent colour and surface. Applies instantly.</p>
-        <div id="accentSwatches" class="appearance-row">
+        <p class="muted">Theme style, accent colour and surface mode. Applies instantly.</p>
+        
+        <div class="appearance-row" id="themeStyles">
+          <button class="pill style-btn" data-style="minimalist">Minimalist (Default)</button>
+          <button class="pill style-btn" data-style="classic">Studio Classic</button>
+        </div>
+
+        <div id="minimalistSwatches" class="appearance-row">
+          <button class="swatch swatch--cyan" data-accent="cyan" title="Electric Cyan" aria-label="Cyan accent"></button>
+          <button class="swatch swatch--mint" data-accent="mint" title="Neon Mint" aria-label="Mint accent"></button>
+          <button class="swatch swatch--lime" data-accent="lime" title="Vibrant Lime" aria-label="Lime accent"></button>
+          <button class="swatch swatch--pink" data-accent="pink" title="Cyber Pink" aria-label="Pink accent"></button>
+          <button class="swatch swatch--mono" data-accent="mono" title="Studio Monochrome" aria-label="Mono accent"></button>
+        </div>
+
+        <div id="classicSwatches" class="appearance-row" hidden>
           <button class="swatch swatch--green" data-accent="green" title="Green" aria-label="Green accent"></button>
           <button class="swatch swatch--blue" data-accent="blue" title="Blue" aria-label="Blue accent"></button>
           <button class="swatch swatch--yellow" data-accent="yellow" title="Yellow" aria-label="Yellow accent"></button>
           <button class="swatch swatch--amber" data-accent="amber" title="Amber" aria-label="Amber accent"></button>
           <button class="swatch swatch--red" data-accent="red" title="Red" aria-label="Red accent"></button>
         </div>
+
         <div id="surfaceModes" class="appearance-row">
           <button class="pill surface-btn" data-surface="dark">Dark</button>
           <button class="pill surface-btn" data-surface="light">Light</button>
           <button class="pill surface-btn" data-surface="amoled">AMOLED</button>
         </div>
         <div class="appearance-row">
-          <button id="resetTheme" class="pill pill--sm">Reset to default</button>
+          <button id="resetTheme" class="pill pill--sm">Reset to default (Dark Minimalist)</button>
         </div>
       </section>
 

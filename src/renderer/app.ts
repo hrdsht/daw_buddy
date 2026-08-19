@@ -35,78 +35,78 @@ const sheetEl = $('sheet');
 const scrimEl = $('scrim');
 const themeToggleEl = $('themeToggle');
 
-const ACCENTS = ['green', 'blue', 'yellow', 'amber', 'red'];
-const SURFACES = ['dark', 'light', 'amoled'];
+import {
+  applyAppearance,
+  currentSurface,
+  currentThemeStyle,
+  THEME_STYLES,
+  MINIMALIST_ACCENTS,
+  CLASSIC_ACCENTS,
+  ACCENTS,
+  SURFACES
+} from './dom';
 
-function currentSurface() {
-  if (document.body.classList.contains('theme-amoled')) return 'amoled';
-  if (document.body.classList.contains('theme-light')) return 'light';
-  return 'dark';
-}
-
-/** Accent (colour) and surface (dark/light/amoled) are independent axes. */
-function applyAppearance(accent, surface) {
-  if (!ACCENTS.includes(accent)) accent = 'green';
-  if (!SURFACES.includes(surface)) surface = 'dark';
-  document.body.dataset.accent = accent;
-  document.body.classList.toggle('theme-light', surface === 'light');
-  document.body.classList.toggle('theme-amoled', surface === 'amoled');
-
-  // The topbar quick-toggle mirrors the light/dark state.
-  const light = surface === 'light';
-  if (themeToggleEl) {
-    themeToggleEl.textContent = light ? 'Dark mode' : 'Light mode';
-    themeToggleEl.setAttribute('aria-pressed', String(light));
-  }
-
-  // Reflect the active choices in the Settings controls.
-  document.querySelectorAll('#accentSwatches .swatch').forEach((node) =>
-    node.classList.toggle('is-on', node.getAttribute('data-accent') === accent)
-  );
-  document.querySelectorAll('#surfaceModes .surface-btn').forEach((node) =>
-    node.classList.toggle('is-on', node.getAttribute('data-surface') === surface)
-  );
-
-  localStorage.setItem('dawBuddyAccent', accent);
-  localStorage.setItem('dawBuddySurface', surface);
-}
-
-// Load saved appearance, migrating the old light/dark-only key.
-const savedAccent = localStorage.getItem('dawBuddyAccent') || 'green';
+// Initialize saved appearance (Default: Minimalist, Dark, Cyan)
+const savedStyle = localStorage.getItem('dawBuddyThemeStyle') || 'minimalist';
+const savedAccent = localStorage.getItem('dawBuddyAccent') || (savedStyle === 'minimalist' ? 'cyan' : 'green');
 let savedSurface = localStorage.getItem('dawBuddySurface');
 if (!savedSurface) {
   savedSurface = localStorage.getItem('dawBuddyTheme') === 'light' ? 'light' : 'dark';
 }
-applyAppearance(savedAccent, savedSurface);
+applyAppearance(savedAccent, savedSurface, savedStyle);
 
-// Topbar button: quick flip between dark and light (keeps the accent).
+// Topbar button: quick flip between dark and light (preserves active theme style and accent).
 themeToggleEl.addEventListener('click', () => {
   const next = currentSurface() === 'light' ? 'dark' : 'light';
-  applyAppearance(document.body.dataset.accent || 'green', next);
+  applyAppearance(document.body.dataset.accent, next, currentThemeStyle());
 });
 
-// Settings — accent swatches, surface modes, reset to default.
-if ($('accentSwatches')) {
-  $('accentSwatches').addEventListener('click', (event) => {
-    const btn = event.target.closest('.swatch');
-    if (btn) applyAppearance(btn.getAttribute('data-accent'), currentSurface());
+// Settings — Theme style switch (Minimalist vs Studio Classic)
+if ($('themeStyles')) {
+  $('themeStyles').addEventListener('click', (event: MouseEvent) => {
+    const btn = (event.target as HTMLElement).closest('.style-btn') as HTMLElement;
+    if (btn) {
+      const style = btn.getAttribute('data-style') || 'minimalist';
+      const defaultAccent = style === 'minimalist' ? 'cyan' : 'green';
+      applyAppearance(defaultAccent, currentSurface(), style);
+    }
   });
 }
+
+// Settings — Minimalist & Classic accent swatches
+['minimalistSwatches', 'classicSwatches'].forEach((id) => {
+  const el = $(id);
+  if (el) {
+    el.addEventListener('click', (event: MouseEvent) => {
+      const btn = (event.target as HTMLElement).closest('.swatch') as HTMLElement;
+      if (btn) {
+        applyAppearance(btn.getAttribute('data-accent') || undefined, currentSurface(), currentThemeStyle());
+      }
+    });
+  }
+});
+
+// Settings — Surface modes (Dark, Light, AMOLED)
 if ($('surfaceModes')) {
-  $('surfaceModes').addEventListener('click', (event) => {
-    const btn = event.target.closest('.surface-btn');
-    if (btn) applyAppearance(document.body.dataset.accent || 'green', btn.getAttribute('data-surface'));
+  $('surfaceModes').addEventListener('click', (event: MouseEvent) => {
+    const btn = (event.target as HTMLElement).closest('.surface-btn') as HTMLElement;
+    if (btn) {
+      applyAppearance(document.body.dataset.accent, btn.getAttribute('data-surface') || undefined, currentThemeStyle());
+    }
   });
 }
+
+// Settings — Reset theme to default (Dark Minimalist with Cyan accent)
+if ($('resetTheme')) {
+  $('resetTheme').addEventListener('click', () => applyAppearance('cyan', 'dark', 'minimalist'));
+}
+
 if ($('miniToggle')) {
   $('miniToggle').addEventListener('click', () => {
     if (window.api && window.api.toggleMiniPlayer) {
       window.api.toggleMiniPlayer();
     }
   });
-}
-if ($('resetTheme')) {
-  $('resetTheme').addEventListener('click', () => applyAppearance('green', 'dark'));
 }
 
 /* ============================== state ============================== */

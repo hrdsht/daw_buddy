@@ -86,7 +86,10 @@ export function toast(title: string, body: string, isAlert = false) {
   setTimeout(() => node.remove(), 7000);
 }
 
-export const ACCENTS = ['green', 'blue', 'yellow', 'amber', 'red'];
+export const THEME_STYLES = ['minimalist', 'classic'];
+export const MINIMALIST_ACCENTS = ['cyan', 'mint', 'lime', 'pink', 'mono'];
+export const CLASSIC_ACCENTS = ['green', 'blue', 'yellow', 'amber', 'red'];
+export const ACCENTS = [...MINIMALIST_ACCENTS, ...CLASSIC_ACCENTS];
 export const SURFACES = ['dark', 'light', 'amoled'];
 
 export function currentSurface(): 'dark' | 'light' | 'amoled' {
@@ -95,12 +98,34 @@ export function currentSurface(): 'dark' | 'light' | 'amoled' {
   return 'dark';
 }
 
-export function applyAppearance(accent: string, surface: string) {
-  if (!ACCENTS.includes(accent)) accent = 'green';
+export function currentThemeStyle(): 'minimalist' | 'classic' {
+  return document.body.dataset.themeStyle === 'classic' ? 'classic' : 'minimalist';
+}
+
+export function applyAppearance(accent?: string, surface?: string, themeStyle?: string) {
+  if (!themeStyle) {
+    themeStyle = localStorage.getItem('dawBuddyThemeStyle') || 'minimalist';
+  }
+  if (!THEME_STYLES.includes(themeStyle)) themeStyle = 'minimalist';
+
+  if (!accent) {
+    accent = localStorage.getItem('dawBuddyAccent') || (themeStyle === 'minimalist' ? 'cyan' : 'green');
+  }
+  if (!ACCENTS.includes(accent)) {
+    accent = themeStyle === 'minimalist' ? 'cyan' : 'green';
+  }
+
+  if (!surface) {
+    surface = localStorage.getItem('dawBuddySurface') || 'dark';
+  }
   if (!SURFACES.includes(surface)) surface = 'dark';
+
+  document.body.dataset.themeStyle = themeStyle;
   document.body.dataset.accent = accent;
   document.body.classList.toggle('theme-light', surface === 'light');
   document.body.classList.toggle('theme-amoled', surface === 'amoled');
+  document.body.classList.toggle('theme-classic', themeStyle === 'classic');
+  document.body.classList.toggle('theme-minimalist', themeStyle === 'minimalist');
 
   const themeToggleEl = $('themeToggle');
   const light = surface === 'light';
@@ -109,13 +134,26 @@ export function applyAppearance(accent: string, surface: string) {
     themeToggleEl.setAttribute('aria-pressed', String(light));
   }
 
-  document.querySelectorAll('#accentSwatches .swatch').forEach((node) =>
+  // Update theme style buttons in settings
+  document.querySelectorAll('#themeStyles .style-btn').forEach((node: any) =>
+    node.classList.toggle('is-on', node.getAttribute('data-style') === themeStyle)
+  );
+
+  // Toggle swatch sets visibility
+  const minSwatches = $('minimalistSwatches');
+  const classicSwatches = $('classicSwatches');
+  if (minSwatches) minSwatches.hidden = themeStyle !== 'minimalist';
+  if (classicSwatches) classicSwatches.hidden = themeStyle !== 'classic';
+
+  // Highlight active swatches and surface buttons
+  document.querySelectorAll('.swatch').forEach((node: any) =>
     node.classList.toggle('is-on', node.getAttribute('data-accent') === accent)
   );
-  document.querySelectorAll('#surfaceModes .surface-btn').forEach((node) =>
+  document.querySelectorAll('#surfaceModes .surface-btn').forEach((node: any) =>
     node.classList.toggle('is-on', node.getAttribute('data-surface') === surface)
   );
 
+  localStorage.setItem('dawBuddyThemeStyle', themeStyle);
   localStorage.setItem('dawBuddyAccent', accent);
   localStorage.setItem('dawBuddySurface', surface);
 }

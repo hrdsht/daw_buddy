@@ -1,36 +1,114 @@
 /* ==================================================================
-   Quiet studio surfaces, green only on the thing you're acting on.
-   No glows, no recessed panels, no borders where a change of shade
-   will do. Structure comes from spacing and elevation.
+   THEME DEFINITIONS
+   Default: Dark Minimalist (Obsidian / Neon Cyan / Precision Grid)
+   Option: Studio Classic (Heritage Console Warm Green / Amber / Slate)
    ================================================================== */
 
 :root {
+  /* Minimalist Dark (Default) */
+  --bg: #0e1210;
+  --surface: #141916;
+  --raised: #1c221e;
+  --hover: #252d28;
+  --active: #2f3933;
+
+  --text: #f5f9f6;
+  --muted: #95a399;
+  --dim: #5f6e64;
+
+  --amber: #00f0ff;
+  --amber-ink: #041014;
+  --sage: #00f0ff;
+  --alert: #ff4d4d;
+
+  --line: rgba(255, 255, 255, 0.08);
+
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Consolas, monospace;
+  --face: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --r: 8px;
+  --r-lg: 12px;
+  --player-h: 88px;
+  --accent-glow: 0 0 14px rgba(0, 240, 255, 0.3);
+}
+
+/* ---- Minimalist Accents (Dark) --------------------------------------- */
+body[data-theme-style="minimalist"][data-accent="cyan"],
+body:not([data-theme-style])[data-accent="cyan"] { --amber: #00f0ff; --amber-ink: #041014; --sage: #00f0ff; --accent-glow: 0 0 14px rgba(0, 240, 255, 0.35); }
+body[data-theme-style="minimalist"][data-accent="mint"],
+body:not([data-theme-style])[data-accent="mint"] { --amber: #00ff95; --amber-ink: #04160c; --sage: #00ff95; --accent-glow: 0 0 14px rgba(0, 255, 149, 0.35); }
+body[data-theme-style="minimalist"][data-accent="lime"],
+body:not([data-theme-style])[data-accent="lime"] { --amber: #9dde64; --amber-ink: #0e170a; --sage: #74d7ae; --accent-glow: 0 0 14px rgba(157, 222, 100, 0.35); }
+body[data-theme-style="minimalist"][data-accent="pink"],
+body:not([data-theme-style])[data-accent="pink"] { --amber: #ff2d78; --amber-ink: #ffffff; --sage: #ff659c; --accent-glow: 0 0 14px rgba(255, 45, 120, 0.35); }
+body[data-theme-style="minimalist"][data-accent="mono"],
+body:not([data-theme-style])[data-accent="mono"] { --amber: #ffffff; --amber-ink: #000000; --sage: #cbd5e1; --accent-glow: 0 0 14px rgba(255, 255, 255, 0.3); }
+
+/* ---- Light Minimalist ------------------------------------------------ */
+body.theme-light,
+body[data-theme-style="minimalist"].theme-light {
+  --bg: #f4f7f5;
+  --surface: #ffffff;
+  --raised: #ebf1ee;
+  --hover: #e0e8e4;
+  --active: #d2ddd8;
+  --text: #121714;
+  --muted: #546459;
+  --dim: #84948a;
+  --amber: #008fa0;
+  --amber-ink: #ffffff;
+  --sage: #0284c7;
+  --alert: #dc2626;
+  --line: rgba(18, 23, 20, 0.09);
+  --accent-glow: 0 2px 8px rgba(0, 143, 160, 0.2);
+}
+
+body[data-theme-style="minimalist"].theme-light[data-accent="cyan"] { --amber: #008fa0; --amber-ink: #ffffff; --sage: #0284c7; }
+body[data-theme-style="minimalist"].theme-light[data-accent="mint"] { --amber: #059669; --amber-ink: #ffffff; --sage: #059669; }
+body[data-theme-style="minimalist"].theme-light[data-accent="lime"] { --amber: #559124; --amber-ink: #ffffff; --sage: #15803d; }
+body[data-theme-style="minimalist"].theme-light[data-accent="pink"] { --amber: #e11d48; --amber-ink: #ffffff; --sage: #db2777; }
+body[data-theme-style="minimalist"].theme-light[data-accent="mono"] { --amber: #18181b; --amber-ink: #ffffff; --sage: #475569; }
+
+/* ---- AMOLED Minimalist ----------------------------------------------- */
+body.theme-amoled,
+body[data-theme-style="minimalist"].theme-amoled {
+  --bg: #000000;
+  --surface: #070908;
+  --raised: #0f1311;
+  --hover: #171d19;
+  --active: #222a25;
+  --line: rgba(255, 255, 255, 0.1);
+}
+
+/* ==================================================================
+   STUDIO CLASSIC THEME (Heritage Console)
+   ================================================================== */
+body[data-theme-style="classic"] {
   --bg: #0b0e0c;
   --surface: #111512;
   --raised: #181d19;
   --hover: #202721;
   --active: #293129;
-
   --text: #f2f6f1;
   --muted: #a3ada1;
   --dim: #6d786b;
-
   --amber: #9dde64;
   --amber-ink: #10170b;
   --sage: #74d7ae;
   --alert: #ef5f52;
-
   --line: rgba(220, 242, 214, 0.08);
-
-  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Consolas, monospace;
-  --face: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-
   --r: 7px;
   --r-lg: 10px;
-  --player-h: 88px;
+  --accent-glow: none;
 }
 
-body.theme-light {
+body[data-theme-style="classic"][data-accent="green"] { --amber: #9dde64; --amber-ink: #10170b; }
+body[data-theme-style="classic"][data-accent="blue"] { --amber: #6db6ff; --amber-ink: #081628; }
+body[data-theme-style="classic"][data-accent="yellow"] { --amber: #e8d15a; --amber-ink: #1e1a05; }
+body[data-theme-style="classic"][data-accent="amber"] { --amber: #f0a63a; --amber-ink: #1a0f02; }
+body[data-theme-style="classic"][data-accent="red"] { --amber: #ef6f63; --amber-ink: #200806; }
+
+body[data-theme-style="classic"].theme-light {
   --bg: #e9eee8;
   --surface: #f8faf7;
   --raised: #edf1ec;
@@ -46,26 +124,13 @@ body.theme-light {
   --line: rgba(25, 42, 23, 0.11);
 }
 
-/* ---- Accent presets ---------------------------------------------------
-   Only the accent (--amber) changes; the ink already contrasts in both
-   surfaces (dark ink on the bright dark-surface accent, near-white ink on
-   the darker light-surface accent). Green is the default in :root /
-   .theme-light, so it needs no override. The key colour (--sage) stays put
-   so key and accent never blur together. */
-body[data-accent="blue"] { --amber: #6db6ff; }
-body[data-accent="yellow"] { --amber: #e8d15a; }
-body[data-accent="amber"] { --amber: #f0a63a; }
-body[data-accent="red"] { --amber: #ef6f63; }
+body[data-theme-style="classic"].theme-light[data-accent="green"] { --amber: #65a832; }
+body[data-theme-style="classic"].theme-light[data-accent="blue"] { --amber: #2f74c8; }
+body[data-theme-style="classic"].theme-light[data-accent="yellow"] { --amber: #a8901f; }
+body[data-theme-style="classic"].theme-light[data-accent="amber"] { --amber: #b9701a; }
+body[data-theme-style="classic"].theme-light[data-accent="red"] { --amber: #c83f35; }
 
-body.theme-light[data-accent="blue"] { --amber: #2f74c8; }
-body.theme-light[data-accent="yellow"] { --amber: #a8901f; }
-body.theme-light[data-accent="amber"] { --amber: #b9701a; }
-body.theme-light[data-accent="red"] { --amber: #c83f35; }
-
-/* ---- AMOLED surface ---------------------------------------------------
-   A dark surface with true-black window and panels; text and accent carry
-   over from :root, so the data-accent rules above still apply. */
-body.theme-amoled {
+body[data-theme-style="classic"].theme-amoled {
   --bg: #000000;
   --surface: #050705;
   --raised: #0c100c;
@@ -82,6 +147,12 @@ body.theme-amoled {
   align-items: center;
   margin-top: 8px;
 }
+.style-btn.is-on {
+  background: var(--amber);
+  color: var(--amber-ink);
+  border-color: transparent;
+  font-weight: 600;
+}
 .swatch {
   width: 26px;
   height: 26px;
@@ -90,15 +161,28 @@ body.theme-amoled {
   outline: 2px solid var(--line);
   cursor: pointer;
   padding: 0;
+  transition: transform 120ms ease;
+}
+.swatch:hover {
+  transform: scale(1.1);
 }
 .swatch.is-on {
   border-color: var(--text);
+  box-shadow: 0 0 8px var(--amber);
 }
+/* Minimalist swatches */
+.swatch--cyan { background: #00f0ff; }
+.swatch--mint { background: #00ff95; }
+.swatch--lime { background: #9dde64; }
+.swatch--pink { background: #ff2d78; }
+.swatch--mono { background: #ffffff; }
+/* Classic swatches */
 .swatch--green { background: #9dde64; }
 .swatch--blue { background: #6db6ff; }
 .swatch--yellow { background: #e8d15a; }
 .swatch--amber { background: #f0a63a; }
 .swatch--red { background: #ef6f63; }
+
 .surface-btn.is-on {
   background: var(--amber);
   color: var(--amber-ink);

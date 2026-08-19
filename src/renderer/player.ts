@@ -582,10 +582,11 @@ const Player = (() => {
     ctx.beginPath();
     ctx.rect(0, 0, playedX, height);
     ctx.clip();
+    const amberHex = (typeof window !== 'undefined' ? getComputedStyle(document.body).getPropertyValue('--amber').trim() : '') || '#00f0ff';
     const lit = ctx.createLinearGradient(0, 0, 0, height);
-    lit.addColorStop(0, 'rgba(240, 166, 58, 0.85)');
-    lit.addColorStop(0.5, '#f0a63a');
-    lit.addColorStop(1, 'rgba(240, 166, 58, 0.85)');
+    lit.addColorStop(0, amberHex);
+    lit.addColorStop(0.5, amberHex);
+    lit.addColorStop(1, amberHex);
     ctx.fillStyle = lit;
     ctx.shadowColor = 'rgba(0, 0, 0, 0)';
     ctx.shadowBlur = 0;

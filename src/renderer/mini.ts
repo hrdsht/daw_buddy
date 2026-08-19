@@ -1,9 +1,9 @@
-'use strict';
+import { applyAppearance } from './dom';
 
-/**
- * Compact Tray / Menu-Bar Mini Player script.
- * Runs in its own lightweight always-on-top window, synchronized with main player.
- */
+const savedStyle = localStorage.getItem('dawBuddyThemeStyle') || 'minimalist';
+const savedAccent = localStorage.getItem('dawBuddyAccent') || (savedStyle === 'minimalist' ? 'cyan' : 'green');
+const savedSurface = localStorage.getItem('dawBuddySurface') || 'dark';
+applyAppearance(savedAccent, savedSurface, savedStyle);
 
 const titleEl = document.getElementById('miniTitle') as HTMLElement;
 const projectEl = document.getElementById('miniProject') as HTMLElement;
@@ -89,7 +89,8 @@ function drawWaveform(peaks: number[] | null, progress: number) {
     ctx.beginPath();
     ctx.rect(0, 0, playedX, height);
     ctx.clip();
-    ctx.fillStyle = '#9dde64';
+    const amberColor = getComputedStyle(document.body).getPropertyValue('--amber').trim() || '#00f0ff';
+    ctx.fillStyle = amberColor;
     ctx.fill();
     ctx.restore();
   }
