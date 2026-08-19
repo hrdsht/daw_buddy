@@ -122,5 +122,11 @@ contextBridge.exposeInMainWorld('api', {
 
   onBounce: (callback) => subscribe('bounce:detected', callback),
   onDedupeProgress: (callback) => subscribe('dedupe:progress', callback),
-  onNoteRenamed: (callback) => subscribe('note:renamed', callback)
+  onNoteRenamed: (callback) => subscribe('note:renamed', callback),
+
+  broadcastPlayerState: (state: any) => ipcRenderer.send('player:broadcast', state),
+  onPlayerSync: (callback: any) => subscribe('player:sync', callback),
+  sendPlayerCommand: (cmd: string, arg?: any) => ipcRenderer.send('player:command', { cmd, arg }),
+  onPlayerCommand: (callback: any) => subscribe('player:command', callback),
+  toggleMiniPlayer: () => ipcRenderer.invoke('tray:toggleMini')
 });

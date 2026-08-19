@@ -630,10 +630,32 @@ const Player = (() => {
     return `${m}:${String(s).padStart(2, '0')}`;
   }
 
+  let lastBroadcast = 0;
+  function broadcastState() {
+    if (window.api && window.api.broadcastPlayerState) {
+      window.api.broadcastPlayerState({
+        playing: !audio.paused,
+        name: current ? current.name : 'No audio loaded',
+        project: current ? current.project || current.where || '' : '',
+        path: current ? current.path : '',
+        currentTime: audio.currentTime,
+        duration: duration(),
+        peaks: peaks ? Array.from(peaks).slice(0, 160) : null,
+        reverb: reverbEnabled,
+        drone: Boolean(droneOsc)
+      });
+    }
+  }
+
   function tick() {
     if (current && duration() > 0) {
       timeEl.textContent = `${clock(audio.currentTime)} / ${clock(duration())}`;
       draw();
+      const now = Date.now();
+      if (!audio.paused && now - lastBroadcast > 200) {
+        lastBroadcast = now;
+        broadcastState();
+      }
     }
     requestAnimationFrame(tick);
   }
@@ -643,6 +665,7 @@ const Player = (() => {
     const rect = canvas.getBoundingClientRect();
     audio.currentTime = ((event.clientX - rect.left) / rect.width) * duration();
     draw();
+    broadcastState();
   });
 
   playBtn.addEventListener('click', toggle);
@@ -654,14 +677,17 @@ const Player = (() => {
   audio.addEventListener('play', () => {
     playBtn.innerHTML = '&#10074;&#10074;';
     emit();
+    broadcastState();
   });
   audio.addEventListener('pause', () => {
     playBtn.innerHTML = '&#9654;';
     emit();
+    broadcastState();
   });
   audio.addEventListener('ended', () => {
     playBtn.innerHTML = '&#9654;';
     emit();
+    broadcastState();
   });
 
   window.addEventListener('resize', draw);
@@ -670,6 +696,29 @@ const Player = (() => {
     listeners.forEach((fn) =>
       fn({ path: current && current.path, playing: !audio.paused })
     );
+  }
+
+  // Handle commands arriving from tray or mini-player window
+  if (typeof window !== 'undefined' && window.api && window.api.onPlayerCommand) {
+    window.api.onPlayerCommand(({ cmd, arg }: any) => {
+      if (cmd === 'togglePlayPause') {
+        toggle();
+      } else if (cmd === 'seek') {
+        if (duration() > 0) {
+          audio.currentTime = Math.max(0, Math.min(duration(), (arg || 0) * duration()));
+          draw();
+          broadcastState();
+        }
+      } else if (cmd === 'toggleVerb') {
+        setReverb(!reverbEnabled);
+        if (verbBtn) verbBtn.classList.toggle('is-on', reverbEnabled);
+        broadcastState();
+      } else if (cmd === 'toggleDrone') {
+        if (droneOsc) stopDrone();
+        else if (current) startDrone('C');
+        broadcastState();
+      }
+    });
   }
 
   requestAnimationFrame(tick);
@@ -682,6 +731,7 @@ const Player = (() => {
     setSoftClip,
     startDrone,
     stopDrone,
+    broadcastState,
     isDroning: () => Boolean(droneOsc),
     getDecoded: () => decoded,
     getCurrent: () => current,

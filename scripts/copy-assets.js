@@ -14,8 +14,8 @@ const root = path.join(__dirname, '..');
 const from = path.join(root, 'src', 'renderer');
 const to = path.join(root, 'dist', 'renderer');
 
-// Individual files (app.js and splash.js are produced by esbuild, not copied).
-const files = ['index.html', 'styles.css', 'splash.html', 'splash.css'];
+// Individual files (app.js, mini.js, and splash.js are produced by esbuild, not copied).
+const files = ['index.html', 'styles.css', 'splash.html', 'splash.css', 'mini.html', 'mini.css'];
 
 // Directories copied whole (recursively).
 const dirs = ['assets'];

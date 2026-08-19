@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Tray, Menu, nativeImage } = require('electron');
 const path = require('path');
 const fsp = require('fs/promises');
 
@@ -35,6 +35,16 @@ const { features: extractFeatures } = require('./lib/features');
 
 let mainWindow: any = null;
 let splashWindow: any = null;
+let miniPlayerWindow: any = null;
+let tray: any = null;
+let lastPlayerState: any = {
+  playing: false,
+  name: 'No audio loaded',
+  project: '',
+  path: '',
+  currentTime: 0,
+  duration: 0
+};
 let store: any = null;
 let settings: any = null;
 let notes: any = null;
@@ -238,11 +248,155 @@ app.whenReady().then(async () => {
       ? splashState.finished
       : Promise.all([splashState.finished, initialScanPromise])
   });
+  createTray();
   restartWatcher();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+function createTray() {
+  if (tray) return;
+  try {
+    const iconPath = path.join(__dirname, '..', 'renderer', 'assets', 'dawbuddy-logo-v2.png');
+    const icon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
+    tray = new Tray(icon);
+    tray.setToolTip('DAW Buddy');
+
+    updateTrayMenu();
+
+    tray.on('click', () => {
+      toggleMiniPlayer();
+    });
+
+    tray.on('double-click', () => {
+      if (mainWindow) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    });
+  } catch (err: any) {
+    console.error('[tray] Could not initialize tray:', err.message);
+  }
+}
+
+function updateTrayMenu() {
+  if (!tray) return;
+  const contextMenu = Menu.buildFromTemplate([
+    { label: `DAW Buddy — ${lastPlayerState.playing ? 'Playing' : 'Paused'}`, enabled: false },
+    { label: lastPlayerState.name ? `♪ ${lastPlayerState.name}` : 'No track loaded', enabled: false },
+    { type: 'separator' },
+    {
+      label: lastPlayerState.playing ? '⏸ Pause' : '▶ Play',
+      click: () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('player:command', { cmd: 'togglePlayPause' });
+        }
+      }
+    },
+    {
+      label: miniPlayerWindow && miniPlayerWindow.isVisible() ? 'Hide Mini Player' : 'Show Mini Player',
+      click: () => toggleMiniPlayer()
+    },
+    {
+      label: 'Open DAW Buddy',
+      click: () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          if (mainWindow.isMinimized()) mainWindow.restore();
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      }
+    },
+    { type: 'separator' },
+    {
+      label: 'Quit',
+      click: () => {
+        quitting = true;
+        app.quit();
+      }
+    }
+  ]);
+  tray.setContextMenu(contextMenu);
+}
+
+function createMiniPlayerWindow() {
+  if (miniPlayerWindow && !miniPlayerWindow.isDestroyed()) return miniPlayerWindow;
+
+  miniPlayerWindow = new BrowserWindow({
+    width: 360,
+    height: 140,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    resizable: false,
+    show: false,
+    skipTaskbar: true,
+    backgroundColor: '#00000000',
+    webPreferences: {
+      preload: path.join(__dirname, '..', 'preload', 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+
+  miniPlayerWindow.loadFile(path.join(__dirname, '..', 'renderer', 'mini.html'));
+
+  miniPlayerWindow.on('closed', () => {
+    miniPlayerWindow = null;
+    updateTrayMenu();
+  });
+
+  return miniPlayerWindow;
+}
+
+function toggleMiniPlayer() {
+  const win = createMiniPlayerWindow();
+  if (win.isVisible()) {
+    win.hide();
+  } else {
+    win.show();
+    win.focus();
+    if (lastPlayerState && win.webContents) {
+      win.webContents.send('player:sync', lastPlayerState);
+    }
+  }
+  updateTrayMenu();
+}
+
+ipcMain.on('player:broadcast', (event, stateData) => {
+  lastPlayerState = { ...lastPlayerState, ...stateData };
+  if (miniPlayerWindow && !miniPlayerWindow.isDestroyed() && miniPlayerWindow.webContents) {
+    miniPlayerWindow.webContents.send('player:sync', lastPlayerState);
+  }
+  if (tray) {
+    tray.setToolTip(`DAW Buddy: ${lastPlayerState.name || 'Ready'}`);
+    updateTrayMenu();
+  }
+});
+
+ipcMain.on('player:command', (event, { cmd, arg }) => {
+  if (cmd === 'expand') {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  } else if (cmd === 'closeMini') {
+    if (miniPlayerWindow && !miniPlayerWindow.isDestroyed()) {
+      miniPlayerWindow.hide();
+      updateTrayMenu();
+    }
+  } else if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('player:command', { cmd, arg });
+  }
+});
+
+ipcMain.handle('tray:toggleMini', () => {
+  toggleMiniPlayer();
+  return { success: true };
 });
 
 app.on('window-all-closed', () => {

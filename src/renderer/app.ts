@@ -98,6 +98,13 @@ if ($('surfaceModes')) {
     if (btn) applyAppearance(document.body.dataset.accent || 'green', btn.getAttribute('data-surface'));
   });
 }
+if ($('miniToggle')) {
+  $('miniToggle').addEventListener('click', () => {
+    if (window.api && window.api.toggleMiniPlayer) {
+      window.api.toggleMiniPlayer();
+    }
+  });
+}
 if ($('resetTheme')) {
   $('resetTheme').addEventListener('click', () => applyAppearance('green', 'dark'));
 }
