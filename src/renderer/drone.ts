@@ -5,9 +5,21 @@ const FLAT_TO_SHARP = {
   Gb: 'F#', Ab: 'G#', Bb: 'A#'
 };
 
-/** Convert an analysed key label such as "G# min" or "Bb major" to a root. */
+/** Convert an analysed key or tonic label such as "G# min", "Bb major", or "A#" to a root. */
 function rootNoteOf(record) {
-  if (!record || !record.key) return null;
+  if (!record) return null;
+  if (record.tonic) {
+    const rawTonic = String(record.tonic).trim();
+    const match = rawTonic.match(/^([A-Ga-g])([#b♭]?)/);
+    if (match) {
+      const letter = match[1].toUpperCase();
+      const accidental = match[2] === '♭' ? 'b' : match[2];
+      const note = `${letter}${accidental}`;
+      return FLAT_TO_SHARP[note] || note;
+    }
+    return FLAT_TO_SHARP[rawTonic] || rawTonic;
+  }
+  if (!record.key) return null;
   const match = String(record.key).trim().match(/^([A-Ga-g])([#b♭]?)/);
   if (!match) return null;
 

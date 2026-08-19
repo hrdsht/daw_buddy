@@ -1,6 +1,6 @@
 # 0007 — Key detection rework
 
-**Status:** proposal, prototype built and measured
+**Status:** built and integrated
 **Date:** 2026-08-18
 **Prompted by:** a song in A# reported as F# min during a demo
 

@@ -836,6 +836,36 @@ ipcMain.handle('tools:renameApply', async (event, planned, meta) => {
 
 ipcMain.handle('tools:renameUndo', () => renamer.undo(undoLog()));
 
+ipcMain.handle('tools:dragMidi', async (event, { filename, data }: any) => {
+  try {
+    const tempDir = path.join(app.getPath('temp'), 'daw-buddy-midi');
+    await fsp.mkdir(tempDir, { recursive: true });
+    const safeName = (filename || 'scale.mid').replace(/[^a-zA-Z0-9_#.-]/g, '_');
+    const filePath = path.join(tempDir, safeName);
+    await fsp.writeFile(filePath, Buffer.from(data));
+    const iconPath = path.join(__dirname, '..', 'renderer', 'assets', 'dawbuddy-logo-v2.png');
+    event.sender.startDrag({
+      file: filePath,
+      icon: iconPath
+    });
+    return { success: true, filePath };
+  } catch (err: any) {
+    console.error('[midi] Drag failed:', err.message);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('tools:saveMidi', async (event, { defaultName, data }: any) => {
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: 'Export Scale MIDI',
+    defaultPath: defaultName || 'scale.mid',
+    filters: [{ name: 'MIDI Files', extensions: ['mid'] }]
+  });
+  if (result.canceled || !result.filePath) return null;
+  await fsp.writeFile(result.filePath, Buffer.from(data));
+  return result.filePath;
+});
+
 /* ------------------------- smart renamer -------------------------- */
 
 ipcMain.handle('tools:smartClassify', async (event, folder, fileList) => {

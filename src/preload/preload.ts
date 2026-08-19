@@ -64,6 +64,8 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('tools:renamePlan', files, options),
   renameApply: (planned, meta) => ipcRenderer.invoke('tools:renameApply', planned, meta),
   renameUndo: () => ipcRenderer.invoke('tools:renameUndo'),
+  dragMidi: (filename, data) => ipcRenderer.invoke('tools:dragMidi', { filename, data }),
+  saveMidi: (defaultName, data) => ipcRenderer.invoke('tools:saveMidi', { defaultName, data }),
 
   smartClassify: (folder, files) =>
     ipcRenderer.invoke('tools:smartClassify', folder, files),

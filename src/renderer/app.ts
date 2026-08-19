@@ -10,6 +10,18 @@ import { parseQuery, hasQuery, matchesQuery } from './search';
 import { findMatches } from './matching';
 import { droneNoteFor } from './drone';
 import { NavigationHistory } from './navigation';
+import { DSP } from './dsp';
+import {
+  layout as kbLayoutFn,
+  highlight as kbHighlightFn,
+  wheelLayout as wheelLayoutFn,
+  compatible as camelotCompatible,
+  codeFor,
+  CAMELOT_KEYS,
+  DEGREE_NAMES,
+  SARGAM_NAMES
+} from './scaleview';
+import { scaleMidi, notesFor } from './midiwrite';
 
 const $ = (id: string): any => document.getElementById(id);
 
@@ -583,6 +595,11 @@ function buildRow(entry) {
     keyCell.append(el('div', 'keycell__key', rec.key));
     if (rec.camelot) keyCell.append(el('div', 'keycell__camelot', rec.camelot));
     row.append(keyCell);
+  } else if (rec.tonic && rec.scale) {
+    const keyCell = el('div');
+    keyCell.append(el('div', 'keycell__key', rec.tonic));
+    keyCell.append(el('div', 'keycell__camelot', rec.scale));
+    row.append(keyCell);
   } else if (activePlayAnalysis.has(entry.path)) {
     row.append(el('div', 'cell cell--empty', 'Analysing…'));
   } else {
@@ -651,12 +668,621 @@ async function playNewest(entry) {
 function siblingsOf(entry) {
   return entries
     .filter((other) => other.folder === entry.folder && other.path !== entry.path)
-    .map((other) => other.name);
+.map((other) => other.name);
 }
 
 function stemsFolderFor(entry) {
   const rec = record(entry.path);
   return rec.stemsPath ? [rec.stemsPath] : [];
+}
+
+/* ==================================================================
+   Camelot Interactive Modal & Scale Inspector
+   ================================================================== */
+
+let _audioCtx: AudioContext | null = null;
+function getAudioContext(): AudioContext | null {
+  if (!_audioCtx) {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (AudioCtx) _audioCtx = new AudioCtx();
+  }
+  if (_audioCtx && _audioCtx.state === 'suspended') {
+    _audioCtx.resume();
+  }
+  return _audioCtx;
+}
+
+function playSynthNote(pc: number, octave = 4, a4 = 440, duration = 0.4) {
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const midi = 12 * (octave + 1) + pc;
+    const freq = a4 * Math.pow(2, (midi - 69) / 12);
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(freq, ctx.currentTime);
+
+    gain.gain.setValueAtTime(0.001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.22, ctx.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + duration);
+  } catch (err) {
+    console.error('Audio synth error:', err);
+  }
+}
+
+function playFullScale(tonicPc: number, degrees: number[], a4 = 440) {
+  degrees.forEach((interval, idx) => {
+    const notePc = (tonicPc + interval) % 12;
+    const octave = interval < 12 ? (notePc < tonicPc ? 5 : 4) : 5;
+    setTimeout(() => {
+      playSynthNote(notePc, octave, a4, 0.35);
+    }, idx * 220);
+  });
+  setTimeout(() => {
+    playSynthNote(tonicPc, 5, a4, 0.5);
+  }, degrees.length * 220);
+}
+
+function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
+  document.querySelectorAll('.camelot-modal-overlay').forEach((node) => node.remove());
+
+  const overlay = el('div', 'modal-overlay camelot-modal-overlay');
+  const dialog = el('div', 'camelot-modal');
+
+  // Header
+  const header = el('div', 'camelot-modal__header');
+  const titleGroup = el('div', 'camelot-modal__titles');
+  titleGroup.append(el('h2', 'camelot-modal__title', 'Camelot Harmonic Wheel & Scale Inspector'));
+
+  let subtitleText = entry.name;
+  if (rec.key) subtitleText += ` · Detected: ${rec.key}${rec.camelot ? ` (${rec.camelot})` : ''}`;
+  else if (rec.tonic && rec.scale) subtitleText += ` · Detected: ${rec.tonic} ${rec.scale}`;
+  if (rec.tuningA4 && rec.tuningA4 !== 440) {
+    subtitleText += ` · Concert Pitch: A4 = ${rec.tuningA4} Hz (${rec.tuningCents > 0 ? '+' : ''}${rec.tuningCents}c)`;
+  }
+  titleGroup.append(el('p', 'camelot-modal__subtitle', subtitleText));
+  header.append(titleGroup);
+
+  const closeBtn = el('button', 'round camelot-modal__close', '✕');
+  closeBtn.title = 'Close (Esc)';
+  closeBtn.addEventListener('click', () => overlay.remove());
+  header.append(closeBtn);
+  dialog.append(header);
+
+  // Body
+  const body = el('div', 'camelot-modal__body');
+
+  let selectedCode = rec.camelot || (rec.tonic && rec.scale === 'major' ? codeFor(rec.tonic, 'maj') : codeFor(rec.tonic, 'min')) || '8A';
+  let selectedTonic = rec.tonic || CAMELOT_KEYS[selectedCode] || 'A';
+  let selectedScale = rec.scale || (selectedCode.endsWith('B') ? 'major' : 'minor');
+  const selectedTuningA4 = rec.tuningA4 || 440;
+
+  const inspectorCol = el('div', 'camelot-modal__inspector');
+
+  function updateInspector() {
+    inspectorCol.innerHTML = '';
+
+    const tonicPc = DSP.NOTES.indexOf(selectedTonic);
+    const degrees = DSP.SCALES[selectedScale] || (selectedCode.endsWith('B') ? DSP.SCALES.major : DSP.SCALES.minor);
+    const thaat = DSP.THAAT_MAP[selectedScale] || (selectedCode.endsWith('B') ? 'Bilawal (Major)' : 'Asavari (Natural Minor)');
+    const comp = camelotCompatible(selectedCode);
+
+    // Inspector Top Card
+    const topCard = el('div', 'scale-inspect-card');
+    const headerRow = el('div', 'scale-inspect__header');
+
+    const keyBadge = el('div', 'scale-inspect__key-badge');
+    keyBadge.append(el('span', 'scale-inspect__camelot-num', selectedCode));
+    keyBadge.append(el('span', 'scale-inspect__key-name', `${selectedTonic} ${selectedScale === 'major' ? 'Major' : selectedScale === 'minor' ? 'Minor' : selectedScale}`));
+    headerRow.append(keyBadge);
+
+    const thaatBadge = el('div', 'scale-inspect__thaat-badge', thaat);
+    headerRow.append(thaatBadge);
+    topCard.append(headerRow);
+
+    // 2-octave Interactive Piano Keyboard
+    const kb = kbLayoutFn(2, 19, 70);
+    const highlightedKeys = kbHighlightFn(kb.keys, tonicPc, degrees);
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svgKb = document.createElementNS(svgNS, 'svg');
+    svgKb.setAttribute('class', 'scale-inspect__keyboard');
+    svgKb.setAttribute('viewBox', `0 0 ${kb.width} ${kb.height}`);
+    svgKb.setAttribute('width', '100%');
+    svgKb.setAttribute('height', '76');
+
+    highlightedKeys.filter((k) => k.type === 'white').forEach((k) => {
+      const rect = document.createElementNS(svgNS, 'rect');
+      rect.setAttribute('x', String(k.x));
+      rect.setAttribute('y', String(k.y));
+      rect.setAttribute('width', String(k.width - 1));
+      rect.setAttribute('height', String(k.height));
+      rect.setAttribute('rx', '3');
+      rect.setAttribute('class', `scale-key scale-key--white scale-key--${k.state}`);
+      const degInterval = ((k.pc - tonicPc) % 12 + 12) % 12;
+      const degName = k.degree ? (DEGREE_NAMES[degInterval] || `${k.degree}`) : 'out of scale';
+      const sargam = k.degree ? (SARGAM_NAMES[degInterval] || '') : '';
+      rect.innerHTML = `<title>${k.name} (${degName}${sargam ? ` · ${sargam}` : ''})</title>`;
+      rect.addEventListener('click', () => playSynthNote(k.pc, 4, selectedTuningA4));
+      svgKb.appendChild(rect);
+    });
+
+    highlightedKeys.filter((k) => k.type === 'black').forEach((k) => {
+      const rect = document.createElementNS(svgNS, 'rect');
+      rect.setAttribute('x', String(k.x));
+      rect.setAttribute('y', String(k.y));
+      rect.setAttribute('width', String(k.width));
+      rect.setAttribute('height', String(k.height));
+      rect.setAttribute('rx', '3');
+      rect.setAttribute('class', `scale-key scale-key--black scale-key--${k.state}`);
+      const degInterval = ((k.pc - tonicPc) % 12 + 12) % 12;
+      const degName = k.degree ? (DEGREE_NAMES[degInterval] || `${k.degree}`) : 'out of scale';
+      const sargam = k.degree ? (SARGAM_NAMES[degInterval] || '') : '';
+      rect.innerHTML = `<title>${k.name} (${degName}${sargam ? ` · ${sargam}` : ''})</title>`;
+      rect.addEventListener('click', () => playSynthNote(k.pc, 4, selectedTuningA4));
+      svgKb.appendChild(rect);
+    });
+
+    topCard.append(svgKb);
+    inspectorCol.append(topCard);
+
+    // Notes & Sargam Grid
+    const notesSection = el('div', 'scale-notes-section');
+    notesSection.append(el('h4', 'scale-notes__title', 'Scale Notes & Indian Sargam Solfege'));
+
+    const notesGrid = el('div', 'scale-notes-grid');
+    degrees.forEach((interval) => {
+      const notePc = (tonicPc + interval) % 12;
+      const noteName = DSP.NOTES[notePc];
+      const sargam = SARGAM_NAMES[interval] || '';
+      const degName = DEGREE_NAMES[interval] || '';
+      const freq = (selectedTuningA4 * Math.pow(2, ((notePc >= tonicPc ? 60 + notePc : 72 + notePc) - 69) / 12)).toFixed(1);
+
+      const noteCard = el('div', `note-badge-card ${interval === 0 ? 'note-badge-card--tonic' : ''}`);
+      noteCard.append(el('div', 'note-badge__name', noteName));
+      noteCard.append(el('div', 'note-badge__sargam', sargam.split(' ')[0]));
+      noteCard.append(el('div', 'note-badge__degree', degName));
+      noteCard.append(el('div', 'note-badge__freq', `${freq} Hz`));
+      noteCard.addEventListener('click', () => playSynthNote(notePc, 4, selectedTuningA4));
+      notesGrid.append(noteCard);
+    });
+    notesSection.append(notesGrid);
+    inspectorCol.append(notesSection);
+
+    // Harmonic Mixing Transitions Card
+    if (comp) {
+      const harmSection = el('div', 'scale-harm-section');
+      harmSection.append(el('h4', 'scale-notes__title', 'Harmonic DJ Mix Relations (In-Key Mixing)'));
+      const harmGrid = el('div', 'scale-harm-grid');
+
+      const relNote = CAMELOT_KEYS[comp.relative];
+      const relMode = comp.relative.endsWith('B') ? 'Major' : 'Minor';
+      harmGrid.append(harmItem('Relative Key (Equal)', comp.relative, `${relNote} ${relMode}`, 'rel', () => selectCode(comp.relative)));
+
+      const upNote = CAMELOT_KEYS[comp.up];
+      const upMode = comp.up.endsWith('B') ? 'Major' : 'Minor';
+      harmGrid.append(harmItem('+1 Energy Boost (Fifth)', comp.up, `${upNote} ${upMode}`, 'up', () => selectCode(comp.up)));
+
+      const downNote = CAMELOT_KEYS[comp.down];
+      const downMode = comp.down.endsWith('B') ? 'Major' : 'Minor';
+      harmGrid.append(harmItem('-1 Energy Drop (Fourth)', comp.down, `${downNote} ${downMode}`, 'down', () => selectCode(comp.down)));
+
+      harmSection.append(harmGrid);
+      inspectorCol.append(harmSection);
+    }
+
+    // Action buttons (Audition scale & Drag MIDI)
+    const actionsRow = el('div', 'scale-modal-actions');
+    const playScaleBtn = el('button', 'pill pill--solid scale-action-btn', '▶ Play Scale Preview');
+    playScaleBtn.addEventListener('click', () => playFullScale(tonicPc, degrees, selectedTuningA4));
+    actionsRow.append(playScaleBtn);
+
+    const midiBtn = el('button', 'pill scale-midi-btn scale-action-btn', '⤓ Export Scale MIDI');
+    const midiNotes = notesFor(tonicPc, degrees, 3);
+    const midiBytes = scaleMidi(midiNotes, { bpm: projectBpm || 120, bars: 4 });
+    const midiFileName = `${entry.name.replace(/[^a-zA-Z0-9_-]/g, '_')}_${selectedTonic}_${selectedScale}.mid`;
+    midiBtn.draggable = true;
+    midiBtn.addEventListener('dragstart', async () => {
+      if (window.api.dragMidi) await window.api.dragMidi(midiFileName, Array.from(midiBytes));
+    });
+    midiBtn.addEventListener('click', async () => {
+      if (window.api.saveMidi) {
+        const saved = await window.api.saveMidi(midiFileName, Array.from(midiBytes));
+        if (saved) toast('MIDI exported', saved);
+      } else {
+        const blob = new Blob([midiBytes.buffer as ArrayBuffer], { type: 'audio/midi' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = midiFileName;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast('MIDI exported', midiFileName);
+      }
+    });
+    actionsRow.append(midiBtn);
+    inspectorCol.append(actionsRow);
+  }
+
+  function harmItem(label: string, code: string, keyName: string, type: string, onClick: () => void) {
+    const item = el('div', `harm-item harm-item--${type}`);
+    item.append(el('div', 'harm-item__label', label));
+    const val = el('div', 'harm-item__val');
+    val.append(el('span', 'harm-item__code', code));
+    val.append(el('span', 'harm-item__name', keyName));
+    item.append(val);
+    item.addEventListener('click', onClick);
+    return item;
+  }
+
+  function selectCode(code: string) {
+    selectedCode = code;
+    selectedTonic = CAMELOT_KEYS[code] || selectedTonic;
+    selectedScale = code.endsWith('B') ? 'major' : 'minor';
+    renderWheel();
+    updateInspector();
+  }
+
+  // Left Column: SVG Wheel Container
+  const wheelCol = el('div', 'camelot-modal__wheel-col');
+  const wheelRadius = 145;
+  const wheel = wheelLayoutFn(wheelRadius);
+  const svgNS = 'http://www.w3.org/2000/svg';
+
+  function renderWheel() {
+    wheelCol.innerHTML = '';
+    const comp = camelotCompatible(selectedCode);
+    const wheelSize = wheelRadius * 2 + 30;
+
+    const svgWheel = document.createElementNS(svgNS, 'svg');
+    svgWheel.setAttribute('class', 'camelot-wheel-modal');
+    svgWheel.setAttribute('viewBox', `-${wheelSize / 2} -${wheelSize / 2} ${wheelSize} ${wheelSize}`);
+    svgWheel.setAttribute('width', String(wheelSize));
+    svgWheel.setAttribute('height', String(wheelSize));
+
+    wheel.segments.forEach((seg) => {
+      const isSelected = seg.code === selectedCode;
+      const isCurrentSong = rec.camelot && seg.code === rec.camelot;
+      const isRelative = comp && seg.code === comp.relative;
+      const isNeighbor = comp && (seg.code === comp.up || seg.code === comp.down);
+
+      let stateClass = 'wheel-modal-seg--default';
+      if (isSelected) stateClass = 'wheel-modal-seg--selected';
+      else if (isCurrentSong) stateClass = 'wheel-modal-seg--current-song';
+      else if (isRelative) stateClass = 'wheel-modal-seg--relative';
+      else if (isNeighbor) stateClass = 'wheel-modal-seg--neighbor';
+
+      const x1_in = seg.innerRadius * Math.cos(seg.startAngle);
+      const y1_in = seg.innerRadius * Math.sin(seg.startAngle);
+      const x2_in = seg.innerRadius * Math.cos(seg.endAngle);
+      const y2_in = seg.innerRadius * Math.sin(seg.endAngle);
+
+      const x1_out = seg.outerRadius * Math.cos(seg.startAngle);
+      const y1_out = seg.outerRadius * Math.sin(seg.startAngle);
+      const x2_out = seg.outerRadius * Math.cos(seg.endAngle);
+      const y2_out = seg.outerRadius * Math.sin(seg.endAngle);
+
+      const pathData = [
+        `M ${x1_in} ${y1_in}`,
+        `L ${x1_out} ${y1_out}`,
+        `A ${seg.outerRadius} ${seg.outerRadius} 0 0 1 ${x2_out} ${y2_out}`,
+        `L ${x2_in} ${y2_in}`,
+        `A ${seg.innerRadius} ${seg.innerRadius} 0 0 0 ${x1_in} ${y1_in}`,
+        'Z'
+      ].join(' ');
+
+      const g = document.createElementNS(svgNS, 'g');
+      g.setAttribute('class', 'wheel-modal-slice-group');
+      g.style.cursor = 'pointer';
+      g.addEventListener('click', () => selectCode(seg.code));
+
+      const path = document.createElementNS(svgNS, 'path');
+      path.setAttribute('d', pathData);
+      path.setAttribute('class', `wheel-modal-seg ${stateClass}`);
+      g.appendChild(path);
+
+      // Label (Camelot Code & Key Name)
+      const lx = seg.labelRadius * Math.cos(seg.labelAngle);
+      const ly = seg.labelRadius * Math.sin(seg.labelAngle);
+
+      const textCode = document.createElementNS(svgNS, 'text');
+      textCode.setAttribute('x', String(lx));
+      textCode.setAttribute('y', String(ly - (seg.ring === 'A' ? 3 : 4)));
+      textCode.setAttribute('text-anchor', 'middle');
+      textCode.setAttribute('dominant-baseline', 'middle');
+      textCode.setAttribute('class', `wheel-modal-code ${isSelected ? 'wheel-modal-code--active' : ''}`);
+      textCode.textContent = seg.code;
+      g.appendChild(textCode);
+
+      const textKey = document.createElementNS(svgNS, 'text');
+      textKey.setAttribute('x', String(lx));
+      textKey.setAttribute('y', String(ly + (seg.ring === 'A' ? 7 : 7)));
+      textKey.setAttribute('text-anchor', 'middle');
+      textKey.setAttribute('dominant-baseline', 'middle');
+      textKey.setAttribute('class', `wheel-modal-key ${isSelected ? 'wheel-modal-key--active' : ''}`);
+      textKey.textContent = `${seg.key}${seg.ring === 'A' ? 'm' : ''}`;
+      g.appendChild(textKey);
+
+      svgWheel.appendChild(g);
+    });
+
+    // Center Hub
+    const centerCircle = document.createElementNS(svgNS, 'circle');
+    centerCircle.setAttribute('cx', '0');
+    centerCircle.setAttribute('cy', '0');
+    centerCircle.setAttribute('r', String(wheelRadius * 0.38));
+    centerCircle.setAttribute('class', 'wheel-modal-center');
+    svgWheel.appendChild(centerCircle);
+
+    const centerCode = document.createElementNS(svgNS, 'text');
+    centerCode.setAttribute('x', '0');
+    centerCode.setAttribute('y', '-10');
+    centerCode.setAttribute('text-anchor', 'middle');
+    centerCode.setAttribute('dominant-baseline', 'middle');
+    centerCode.setAttribute('class', 'wheel-modal-center-code');
+    centerCode.textContent = selectedCode;
+    svgWheel.appendChild(centerCode);
+
+    const centerKey = document.createElementNS(svgNS, 'text');
+    centerKey.setAttribute('x', '0');
+    centerKey.setAttribute('y', '6');
+    centerKey.setAttribute('text-anchor', 'middle');
+    centerKey.setAttribute('dominant-baseline', 'middle');
+    centerKey.setAttribute('class', 'wheel-modal-center-key');
+    centerKey.textContent = `${selectedTonic} ${selectedScale === 'major' ? 'maj' : selectedScale === 'minor' ? 'min' : selectedScale}`;
+    svgWheel.appendChild(centerKey);
+
+    const centerHz = document.createElementNS(svgNS, 'text');
+    centerHz.setAttribute('x', '0');
+    centerHz.setAttribute('y', '18');
+    centerHz.setAttribute('text-anchor', 'middle');
+    centerHz.setAttribute('dominant-baseline', 'middle');
+    centerHz.setAttribute('class', 'wheel-modal-center-hz');
+    centerHz.textContent = `${selectedTuningA4} Hz`;
+    svgWheel.appendChild(centerHz);
+
+    wheelCol.appendChild(svgWheel);
+
+    // Legend below wheel
+    const legend = el('div', 'wheel-legend');
+    legend.append(legendItem('Selected Key', 'selected'));
+    if (rec.camelot) legend.append(legendItem('Current Track', 'current'));
+    legend.append(legendItem('Relative Key', 'relative'));
+    legend.append(legendItem('Harmonic +/- 1', 'neighbor'));
+    wheelCol.appendChild(legend);
+  }
+
+  function legendItem(text: string, type: string) {
+    const item = el('div', 'wheel-legend__item');
+    item.append(el('span', `wheel-legend__dot wheel-legend__dot--${type}`));
+    item.append(el('span', 'wheel-legend__text', text));
+    return item;
+  }
+
+  renderWheel();
+  updateInspector();
+
+  body.append(wheelCol);
+  body.append(inspectorCol);
+  dialog.append(body);
+  overlay.append(dialog);
+
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+  const handleKeydown = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      overlay.remove();
+      document.removeEventListener('keydown', handleKeydown);
+    }
+  };
+  document.addEventListener('keydown', handleKeydown);
+
+  document.body.append(overlay);
+}
+
+function renderProjectHarmony(entry, rec, projectBpm) {
+  let tonic = rec.tonic;
+  let scale = rec.scale;
+  const camelot = rec.camelot;
+
+  if (!tonic && rec.key) {
+    const match = String(rec.key).trim().match(/^([A-Ga-g][#b♭]?)/);
+    if (match) tonic = match[1];
+    if (rec.key.includes('min')) scale = scale || 'minor';
+    else if (rec.key.includes('maj')) scale = scale || 'major';
+  }
+
+  const tonicPc = tonic ? DSP.NOTES.indexOf(tonic) : -1;
+  const degrees = (scale && DSP.SCALES[scale]) || (rec.key?.includes('min') ? DSP.SCALES.minor : DSP.SCALES.major);
+
+  if (tonicPc === -1 || !degrees) {
+    return null;
+  }
+
+  const container = el('div', 'page__harmony');
+
+  // Left column: Keyboard + Drag MIDI button
+  const kbCol = el('div', 'harmony__keyboard-col');
+
+  // Keyboard
+  const kb = kbLayoutFn(2, 13, 50);
+  const highlightedKeys = kbHighlightFn(kb.keys, tonicPc, degrees);
+
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svgKb = document.createElementNS(svgNS, 'svg');
+  svgKb.setAttribute('class', 'scale-keyboard');
+  svgKb.setAttribute('viewBox', `0 0 ${kb.width} ${kb.height}`);
+  svgKb.setAttribute('width', String(kb.width));
+  svgKb.setAttribute('height', String(kb.height));
+
+  // Render whites first
+  highlightedKeys.filter((k) => k.type === 'white').forEach((k) => {
+    const rect = document.createElementNS(svgNS, 'rect');
+    rect.setAttribute('x', String(k.x));
+    rect.setAttribute('y', String(k.y));
+    rect.setAttribute('width', String(k.width - 1));
+    rect.setAttribute('height', String(k.height));
+    rect.setAttribute('rx', '2');
+    rect.setAttribute('class', `scale-key scale-key--white scale-key--${k.state}`);
+    const degName = k.degree ? (DEGREE_NAMES[((k.pc - tonicPc) % 12 + 12) % 12] || `${k.degree}`) : 'out of scale';
+    rect.innerHTML = `<title>${k.name} (${degName})</title>`;
+    svgKb.appendChild(rect);
+  });
+
+  // Render blacks on top
+  highlightedKeys.filter((k) => k.type === 'black').forEach((k) => {
+    const rect = document.createElementNS(svgNS, 'rect');
+    rect.setAttribute('x', String(k.x));
+    rect.setAttribute('y', String(k.y));
+    rect.setAttribute('width', String(k.width));
+    rect.setAttribute('height', String(k.height));
+    rect.setAttribute('rx', '2');
+    rect.setAttribute('class', `scale-key scale-key--black scale-key--${k.state}`);
+    const degName = k.degree ? (DEGREE_NAMES[((k.pc - tonicPc) % 12 + 12) % 12] || `${k.degree}`) : 'out of scale';
+    rect.innerHTML = `<title>${k.name} (${degName})</title>`;
+    svgKb.appendChild(rect);
+  });
+
+  kbCol.append(svgKb);
+
+  // Drag MIDI button
+  const midiBtn = el('button', 'pill pill--sm scale-midi-btn', '⤓ Drag MIDI to DAW');
+  midiBtn.title = 'Drag to your DAW track or click to export MIDI file';
+  midiBtn.draggable = true;
+
+  const midiNotes = notesFor(tonicPc, degrees, 3);
+  const midiBytes = scaleMidi(midiNotes, { bpm: projectBpm || 120, bars: 4 });
+  const midiFileName = `${entry.name.replace(/[^a-zA-Z0-9_-]/g, '_')}_${tonic}_${scale || 'scale'}.mid`;
+
+  midiBtn.addEventListener('dragstart', async () => {
+    if (window.api.dragMidi) {
+      await window.api.dragMidi(midiFileName, Array.from(midiBytes));
+    }
+  });
+
+  midiBtn.addEventListener('click', async () => {
+    if (window.api.saveMidi) {
+      const saved = await window.api.saveMidi(midiFileName, Array.from(midiBytes));
+      if (saved) toast('MIDI exported', saved);
+    } else {
+      const blob = new Blob([midiBytes.buffer as ArrayBuffer], { type: 'audio/midi' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = midiFileName;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast('MIDI exported', midiFileName);
+    }
+  });
+
+  kbCol.append(midiBtn);
+  container.append(kbCol);
+
+  // Right column: Camelot wheel with expand interaction
+  const wheelCol = el('div', 'harmony__wheel-col');
+  wheelCol.title = 'Click to expand Camelot wheel & inspect all scales';
+  wheelCol.style.cursor = 'pointer';
+  wheelCol.addEventListener('click', () => openCamelotModal(entry, rec, projectBpm));
+
+  const wheelRadius = 40;
+  const wheel = wheelLayoutFn(wheelRadius);
+  const comp = camelot ? camelotCompatible(camelot) : null;
+
+  const svgWheel = document.createElementNS(svgNS, 'svg');
+  const wheelSize = wheelRadius * 2 + 12;
+  svgWheel.setAttribute('class', 'camelot-wheel');
+  svgWheel.setAttribute('viewBox', `-${wheelSize / 2} -${wheelSize / 2} ${wheelSize} ${wheelSize}`);
+  svgWheel.setAttribute('width', String(wheelSize));
+  svgWheel.setAttribute('height', String(wheelSize));
+
+  wheel.segments.forEach((seg) => {
+    const isCurrent = camelot && seg.code === camelot;
+    const isRelative = comp && seg.code === comp.relative;
+    const isNeighbor = comp && (seg.code === comp.up || seg.code === comp.down);
+
+    let stateClass = 'wheel-seg--dim';
+    if (isCurrent) stateClass = 'wheel-seg--current';
+    else if (isRelative) stateClass = 'wheel-seg--relative';
+    else if (isNeighbor) stateClass = 'wheel-seg--neighbor';
+
+    const x1_in = seg.innerRadius * Math.cos(seg.startAngle);
+    const y1_in = seg.innerRadius * Math.sin(seg.startAngle);
+    const x2_in = seg.innerRadius * Math.cos(seg.endAngle);
+    const y2_in = seg.innerRadius * Math.sin(seg.endAngle);
+
+    const x1_out = seg.outerRadius * Math.cos(seg.startAngle);
+    const y1_out = seg.outerRadius * Math.sin(seg.startAngle);
+    const x2_out = seg.outerRadius * Math.cos(seg.endAngle);
+    const y2_out = seg.outerRadius * Math.sin(seg.endAngle);
+
+    const pathData = [
+      `M ${x1_in} ${y1_in}`,
+      `L ${x1_out} ${y1_out}`,
+      `A ${seg.outerRadius} ${seg.outerRadius} 0 0 1 ${x2_out} ${y2_out}`,
+      `L ${x2_in} ${y2_in}`,
+      `A ${seg.innerRadius} ${seg.innerRadius} 0 0 0 ${x1_in} ${y1_in}`,
+      'Z'
+    ].join(' ');
+
+    const path = document.createElementNS(svgNS, 'path');
+    path.setAttribute('d', pathData);
+    path.setAttribute('class', `wheel-segment ${stateClass}`);
+    path.innerHTML = `<title>${seg.code} (${seg.key} ${seg.mode}) · Click to expand wheel</title>`;
+    svgWheel.appendChild(path);
+  });
+
+  const centerCircle = document.createElementNS(svgNS, 'circle');
+  centerCircle.setAttribute('cx', '0');
+  centerCircle.setAttribute('cy', '0');
+  centerCircle.setAttribute('r', String(wheelRadius * 0.38));
+  centerCircle.setAttribute('class', 'wheel-center');
+  svgWheel.appendChild(centerCircle);
+
+  const centerText = document.createElementNS(svgNS, 'text');
+  centerText.setAttribute('x', '0');
+  centerText.setAttribute('y', camelot ? '-2' : '0');
+  centerText.setAttribute('text-anchor', 'middle');
+  centerText.setAttribute('dominant-baseline', 'middle');
+  centerText.setAttribute('class', 'wheel-center-text');
+  centerText.textContent = camelot || tonic || '';
+  svgWheel.appendChild(centerText);
+
+  if (camelot) {
+    const centerSub = document.createElementNS(svgNS, 'text');
+    centerSub.setAttribute('x', '0');
+    centerSub.setAttribute('y', '9');
+    centerSub.setAttribute('text-anchor', 'middle');
+    centerSub.setAttribute('dominant-baseline', 'middle');
+    centerSub.setAttribute('class', 'wheel-center-sub');
+    centerSub.textContent = tonic ? `${tonic} ${rec.key?.includes('maj') ? 'maj' : 'min'}` : '';
+    svgWheel.appendChild(centerSub);
+  }
+
+  wheelCol.append(svgWheel);
+
+  const expandBtn = el('button', 'harmony__expand-btn', '⤢ All Scales');
+  expandBtn.title = 'View full Camelot wheel & explore all 24 scales';
+  expandBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openCamelotModal(entry, rec, projectBpm);
+  });
+  wheelCol.append(expandBtn);
+
+  if (!camelot && (rec.modal || scale)) {
+    const modalBadge = el('div', 'wheel-modal-note', 'Modal · outside 5ths');
+    wheelCol.append(modalBadge);
+  }
+
+  container.append(wheelCol);
+  return container;
 }
 
 /* =========================== project page ========================== */
@@ -692,13 +1318,21 @@ function renderProjectPage() {
   const facts = el('div', 'page__facts');
   if (projectBpm !== null) facts.append(fact('BPM', formatBpm(projectBpm)));
   else if (entry.bpmError) facts.append(fact('BPM', 'not readable'));
-  if (rec.key) facts.append(fact('Key', `${rec.key}${rec.camelot ? ` (${rec.camelot})` : ''}`));
+  if (rec.key) {
+    facts.append(fact('Key', `${rec.key}${rec.camelot ? ` (${rec.camelot})` : ''}`));
+  } else if (rec.tonic && rec.scale) {
+    facts.append(fact('Scale', `Tonic ${rec.tonic} · ${rec.scale}`));
+  }
   facts.append(fact('Saves', String(entry.backupCount)));
   facts.append(fact('Audio', String(entry.audioCount)));
   facts.append(fact('Modified', timeAgo(entry.modified)));
   if (entry.packaged) facts.append(fact('Exported', timeAgo(entry.packagedAt)));
   titles.append(facts);
   head.append(titles);
+
+  const harmony = renderProjectHarmony(entry, rec, projectBpm);
+  if (harmony) head.append(harmony);
+
   viewEl.append(head);
 
   /* actions */
@@ -1260,16 +1894,16 @@ function analyseAudioButton(entry, file) {
   return button;
 }
 
-async function analyseRender(entry, render, buttonEl, { refresh = true } = {}) {
+async function analyseRender(entry, renderItem, buttonEl, { refresh = true } = {}) {
   buttonEl.disabled = true;
   buttonEl.textContent = 'Reading…';
 
   try {
     const current = Player.getCurrent();
     const decoded =
-      current && current.path === render.primary.path && Player.getDecoded()
+      current && current.path === renderItem.primary.path && Player.getDecoded()
         ? Player.getDecoded()
-        : await Player.load(render.primary, { autoplay: false });
+        : await Player.load(renderItem.primary, { autoplay: false });
 
     if (!decoded) {
       toast('Analysis failed', 'That file could not be decoded.', true);
@@ -1277,8 +1911,8 @@ async function analyseRender(entry, render, buttonEl, { refresh = true } = {}) {
     }
 
     buttonEl.textContent = 'Analysing…';
-    const result = await analyseAudioFile(render.primary, decoded);
-    await storeAnalysis(entry, render.primary, result);
+    const result = await analyseAudioFile(renderItem.primary, decoded);
+    await storeAnalysis(entry, renderItem.primary, result);
     showAnalysisResult(entry, result);
     if (refresh) render();
   } catch (error) {
@@ -1341,14 +1975,28 @@ async function storeAnalysis(entry, file, result) {
     camelot: result.camelot,
     keyConfidence: result.keyConfidence,
     keyAlternate: result.keyAlternate,
+    tonic: result.tonic,
+    tonicConfidence: result.tonicConfidence,
+    scale: result.scale,
+    scaleConfidence: result.scaleConfidence,
+    modal: result.modal,
     detectedBpm: result.bpm,
     analysedFrom: file.name
   });
 }
 
 function showAnalysisResult(entry, result) {
+  let keyDescription;
+  if (result.key) {
+    keyDescription = `${result.key}${result.camelot ? ` (${result.camelot})` : ''}`;
+  } else if (result.tonic && result.scale) {
+    keyDescription = `Tonic ${result.tonic} · ${result.scale}`;
+  } else {
+    keyDescription = 'Key not detected';
+  }
+
   const detected = [
-    result.key ? `${result.key}${result.camelot ? ` (${result.camelot})` : ''}` : 'Key not detected',
+    keyDescription,
     result.bpm ? `${result.bpm} BPM` : 'BPM not detected'
   ].join(' · ');
   const drift = entry.bpm && result.bpm ? Math.abs(entry.bpm - result.bpm) : null;
