@@ -27,6 +27,11 @@ const dedupe = require('./lib/dedupe');
 const disk = require('./lib/disk');
 const procs = require('./lib/procs');
 const webhook = require('./lib/webhook');
+const matcher = require('./lib/matcher');
+const { DICTIONARY } = require('./lib/instruments');
+const { UserDictionary, merge: mergeDict } = require('./lib/userdict');
+const renamelog = require('./lib/renamelog');
+const { features: extractFeatures } = require('./lib/features');
 
 let mainWindow: any = null;
 let splashWindow: any = null;
@@ -35,6 +40,7 @@ let settings: any = null;
 let notes: any = null;
 let cache: any = null;
 let projectIndex: any = null;
+let userDictionary: any = null;
 let initialScanPromise = null;
 let backgroundScanPromise = null;
 let startupSnapshot = null;
@@ -222,6 +228,9 @@ app.whenReady().then(async () => {
       mainWindow.webContents.send('note:renamed', { sessionPath, file: newFile });
     }
   };
+
+  userDictionary = new UserDictionary(path.join(dataDir(), 'userdict.json'));
+  await userDictionary.load();
 
   createWindow({
     splash: splashState.splash,
@@ -802,20 +811,192 @@ ipcMain.handle('tools:renamePlan', (event, files, options) =>
   renamer.plan(files, options)
 );
 
-ipcMain.handle('tools:renameApply', async (event, planned) => {
+ipcMain.handle('tools:renameApply', async (event, planned, meta) => {
   if (!planned || !Array.isArray(planned.rows)) throw new Error('Invalid rename plan.');
   const renameable = new Set(['.wav', '.mp3', '.aiff', '.aif', '.flac']);
+  let targetFolder: string | null = null;
   planned.rows.forEach((row) => {
     const dir = path.dirname(row.path);
+    if (!targetFolder) targetFolder = dir;
     guardApproved(dir);
     if (!renameable.has(path.extname(row.path).toLowerCase())) {
       throw new Error('Only audio files can be renamed here.');
     }
   });
-  return renamer.apply(planned, undoLog());
+  const result = await renamer.apply(planned, undoLog());
+  if (result.renamed > 0 && targetFolder && result.done) {
+    try {
+      await renamelog.write(targetFolder, result.done, meta || { tool: planned.tool || 'rename' });
+    } catch (e: any) {
+      console.error('[renamelog] Failed to write manifest:', e.message);
+    }
+  }
+  return result;
 });
 
 ipcMain.handle('tools:renameUndo', () => renamer.undo(undoLog()));
+
+ipcMain.handle('tools:dragMidi', async (event, { filename, data }: any) => {
+  try {
+    const tempDir = path.join(app.getPath('temp'), 'daw-buddy-midi');
+    await fsp.mkdir(tempDir, { recursive: true });
+    const safeName = (filename || 'scale.mid').replace(/[^a-zA-Z0-9_#.-]/g, '_');
+    const filePath = path.join(tempDir, safeName);
+    await fsp.writeFile(filePath, Buffer.from(data));
+    const iconPath = path.join(__dirname, '..', 'renderer', 'assets', 'dawbuddy-logo-v2.png');
+    event.sender.startDrag({
+      file: filePath,
+      icon: iconPath
+    });
+    return { success: true, filePath };
+  } catch (err: any) {
+    console.error('[midi] Drag failed:', err.message);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('tools:saveMidi', async (event, { defaultName, data }: any) => {
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: 'Export Scale MIDI',
+    defaultPath: defaultName || 'scale.mid',
+    filters: [{ name: 'MIDI Files', extensions: ['mid'] }]
+  });
+  if (result.canceled || !result.filePath) return null;
+  await fsp.writeFile(result.filePath, Buffer.from(data));
+  return result.filePath;
+});
+
+/* ------------------------- smart renamer -------------------------- */
+
+ipcMain.handle('tools:smartClassify', async (event, folder, fileList) => {
+  guardApproved(folder);
+  const files = Array.isArray(fileList) ? fileList : [];
+  const results = files.map((file) => {
+    const fileName = typeof file === 'string' ? file : file.name;
+    const filePath = typeof file === 'string' ? path.join(folder, file) : (file.path || path.join(folder, file.name));
+    guardApproved(filePath);
+
+    const classification = matcher.classify(fileName);
+    return {
+      name: fileName,
+      path: filePath,
+      ...classification,
+      suggestedStem: matcher.nameFor(classification)
+    };
+  });
+
+  return {
+    results,
+    categories: matcher.categories(),
+    dictStats: userDictionary ? userDictionary.stats() : null
+  };
+});
+
+ipcMain.handle('tools:smartAudioFeatures', async (event, filePath) => {
+  guardApproved(filePath);
+  try {
+    const ext = path.extname(filePath).toLowerCase();
+    if (ext !== '.wav') {
+      return { ok: false, error: 'Audio feature analysis currently supports WAV files only' };
+    }
+    const buf = await fsp.readFile(filePath);
+    const parsed = silence.parseWav(buf);
+    if (!parsed || !parsed.fmt) {
+      return { ok: false, error: 'Could not parse WAV structure' };
+    }
+    const { fmt, dataOffset, dataSize } = parsed;
+    const sampleRate = fmt.sampleRate || 44100;
+    const bytesPerSample = Math.floor(fmt.bitsPerSample / 8);
+    const blockAlign = fmt.blockAlign || (fmt.numChannels * bytesPerSample);
+    const totalFrames = Math.min(Math.floor(dataSize / blockAlign), sampleRate * 5);
+
+    const pcm = new Float32Array(totalFrames);
+    for (let frame = 0; frame < totalFrames; frame++) {
+      let sum = 0;
+      for (let channel = 0; channel < fmt.numChannels; channel++) {
+        const offset = dataOffset + frame * blockAlign + channel * bytesPerSample;
+        if (offset + bytesPerSample <= buf.length) {
+          sum += silence.readMagnitude(buf, offset, fmt);
+        }
+      }
+      pcm[frame] = sum / fmt.numChannels;
+    }
+
+    const feats = extractFeatures(pcm, sampleRate);
+
+    let guessedCat: string | null = null;
+    let guessedSub: string | null = null;
+    let confidence = 0;
+
+    if (feats.lowRatio120 > 0.90 && feats.t60ms > 800) {
+      guessedCat = 'bass'; guessedSub = 'sub'; confidence = 0.85;
+    } else if (feats.lowRatio150 > 0.75 && feats.crestDb > 18 && feats.activeMs < 350) {
+      guessedCat = 'bass'; guessedSub = 'plucky'; confidence = 0.80;
+    } else if (feats.lowRatio150 > 0.60) {
+      guessedCat = 'bass'; guessedSub = 'reese'; confidence = 0.75;
+    } else if (feats.centroid < 350 && feats.t60ms < 900 && feats.crestDb > 12) {
+      guessedCat = 'drums'; guessedSub = 'kick'; confidence = 0.85;
+    } else if (feats.centroid > 7000 && feats.t60ms < 250) {
+      guessedCat = 'drums'; guessedSub = 'hihat'; confidence = 0.85;
+    } else if (feats.centroid > 5000 && feats.t60ms >= 200 && feats.t60ms <= 1000) {
+      guessedCat = 'drums'; guessedSub = 'snare'; confidence = 0.80;
+    } else if (feats.centroid >= 200 && feats.centroid <= 2500 && feats.t60ms > 1000 && feats.crestDb < 12) {
+      guessedCat = 'synth'; guessedSub = 'pad'; confidence = 0.70;
+    } else if (feats.zcr > 10000 && feats.t60ms > 1200) {
+      guessedCat = 'fx'; guessedSub = 'riser'; confidence = 0.65;
+    } else if (feats.t60ms < 400 && feats.crestDb > 15) {
+      guessedCat = 'percs'; guessedSub = null; confidence = 0.60;
+    }
+
+    return {
+      ok: true,
+      features: feats,
+      category: guessedCat,
+      subtype: guessedSub,
+      confidence
+    };
+  } catch (err: any) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('tools:smartCategories', () => matcher.categories());
+
+ipcMain.handle('tools:userDictGet', () => {
+  return {
+    data: userDictionary ? userDictionary.data : {},
+    stats: userDictionary ? userDictionary.stats() : { categories: 0, tokens: 0, disabled: 0, pending: 0 }
+  };
+});
+
+ipcMain.handle('tools:userDictAdd', async (event, category, subtype, token) => {
+  if (!userDictionary) return { ok: false, reason: 'Dictionary not initialized' };
+  const res = userDictionary.addToken(category, subtype, token, matcher.SINGLE);
+  if (res.ok) await userDictionary.save();
+  return res;
+});
+
+ipcMain.handle('tools:userDictLearn', async (event, tokens, category, subtype) => {
+  if (!userDictionary) return [];
+  const promoted = userDictionary.learn(tokens, category, subtype, matcher.SINGLE);
+  await userDictionary.save();
+  return promoted;
+});
+
+ipcMain.handle('tools:renameManifests', async (event, folder) => {
+  guardApproved(folder);
+  return renamelog.list(folder);
+});
+
+ipcMain.handle('tools:renameManifestPreview', async (event, folder, manifestFile) => {
+  guardApproved(folder);
+  return renamelog.preview(folder, manifestFile);
+});
+
+ipcMain.handle('tools:renameManifestRevert', async (event, folder, manifestFile, only) => {
+  guardApproved(folder);
+  return renamelog.revert(folder, manifestFile, only);
+});
 
 /* ---------------------------- de-dupe ----------------------------- */
 
@@ -925,6 +1106,35 @@ ipcMain.handle('vocal:split', async (event, inputPath, options) => {
   if (response !== 1) return { cancelled: true };
 
   return { cancelled: false, ...(await vocalSplit.splitVocal(inputPath, options)) };
+});
+
+/** Split several selected recordings after one confirmation, one file at a time. */
+ipcMain.handle('vocal:splitBatch', async (event, inputPaths, options) => {
+  const paths = [...new Set(Array.isArray(inputPaths) ? inputPaths : [])];
+  if (paths.length === 0) return { cancelled: false, results: [] };
+  paths.forEach((target) => guardApproved(target));
+
+  const { response } = await dialog.showMessageBox(mainWindow, {
+    type: 'question',
+    buttons: ['Cancel', 'Split selected'],
+    defaultId: 1,
+    cancelId: 0,
+    title: 'Split vocals',
+    message: `Split ${paths.length} selected recording${paths.length === 1 ? '' : 's'} into blocks?`,
+    detail: 'Each recording gets its own Vocal Split folder beside the source. Originals are never changed.'
+  });
+  if (response !== 1) return { cancelled: true, results: [] };
+
+  const results = [];
+  for (const target of paths) {
+    try {
+      results.push(await vocalSplit.splitVocal(target, options));
+    } catch (error) {
+      results.push({ success: false, path: target, error: error.message });
+    }
+  }
+
+  return { cancelled: false, results };
 });
 
 /** A single-purpose file picker for the manifest — everything else uses folders. */

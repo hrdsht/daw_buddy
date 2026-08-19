@@ -16,7 +16,15 @@ function flatKeysArePlayableByTheSynth() {
   assert.equal(rootNoteOf({ key: 'E♭ min' }), 'D#');
 }
 
+function tonicIsPlayableEvenWithoutKey() {
+  assert.equal(rootNoteOf({ tonic: 'A#', scale: 'bhairav', key: null }), 'A#');
+  assert.equal(rootNoteOf({ tonic: 'Bb', scale: 'bhairavi', key: null }), 'A#');
+}
+
 playingProjectWinsOverStaleSelection();
 console.log('ok - playingProjectWinsOverStaleSelection');
 flatKeysArePlayableByTheSynth();
 console.log('ok - flatKeysArePlayableByTheSynth');
+tonicIsPlayableEvenWithoutKey();
+console.log('ok - tonicIsPlayableEvenWithoutKey');
+

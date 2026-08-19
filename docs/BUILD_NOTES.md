@@ -1,5 +1,25 @@
 # Build notes
 
+## BUILT 19 Aug — Key detection rework & Scale/Camelot UI (proposal 0007)
+
+- **Key detection engine rework**:
+  - `src/renderer/dsp.ts` upgraded to 16,384-point FFT (`RECOMMENDED_FFT = 16384`) with sub-60Hz frequency resolution (2.69 Hz/bin).
+  - Constant-Q chroma integration (`chromaFromSpectrum`) measuring semitone energy directly across MIDI 33–96 with octave weighting.
+  - Subtractive harmonic suppression (`suppressHarmonics`) removing 5th, 3rd, and 7th overtone leakage to eliminate false fifth/third votes (e.g. F for A#).
+  - Decoupled tonic-first analysis (`findTonic`) using presence, frame stability, and 5th/4th support.
+  - 16 scale shapes recognised (`findScale`): Major, Minor, Harmonic/Melodic Minor, Dorian, Phrygian, Lydian, Mixolydian, Bhairav, Bhairavi, Todi, Yaman, Charukesi, Pentatonic Major/Minor, Blues.
+  - Reports `tonic`, `scale`, `key` (only for Western major/minor), `camelot` (only for Western major/minor), and `modal` flag.
+- **Data storage & drone playback**:
+  - `notes.ts` updated with `tonic`, `scale`, `modal`, `scaleConfidence` fields.
+  - `drone.ts` `rootNoteOf` updated to prioritize `record.tonic`, allowing modal and raga tracks without a Western key to play the correct root drone.
+- **Scale view & Camelot wheel UI on Project Page**:
+  - Integrated 2-octave proportioned Scale Keyboard (`scaleview.ts`), highlighting Tonic in amber, in-scale notes in crisp tint, and out-of-scale notes dimmed, with hover scale degree tooltips.
+  - Added **Drag MIDI to DAW** button (`midiwrite.ts` generating 4-bar sustained chord SMF format 0 at project tempo), supporting native Electron file dragging into DAWs (`tools:dragMidi`) and click-to-export.
+  - Added Camelot Wheel SVG widget (`scaleview.ts`) showing the 12-position circle of fifths with active key and compatible neighbours (relative, +1, -1), or displaying modal status when outside the Western circle.
+- **Verified**:
+  - Tested on synthetic raga at 58 Hz, 117 Hz, 233 Hz (A# Bhairav correctly identified at all registers).
+  - `test/scaleview.test.js`, `test/midiwrite.test.js`, `test/dsp.test.js`, `test/drone.test.js` all pass.
+
 ## BUILT 17 Aug — vocal timeline round trip (proposal 0005, Phase 1 + 2)
 
 - New sidebar tool **Vocal reconstruction**, with **Split vocal** and

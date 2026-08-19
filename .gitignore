@@ -17,4 +17,6 @@ Thumbs.db
 # Editor
 .vscode/
 .idea/
+# Visual Studio's local workspace cache
+.vs/
 *.swp

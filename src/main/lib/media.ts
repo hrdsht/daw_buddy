@@ -146,7 +146,7 @@ function parseVersion(stem) {
   return { base: match[1], version: Number(match[2]) };
 }
 
-// "Suraag_Lead Synth" -> "lead". Used to label stems.
+// "Demo_Lead Synth" -> "lead". Used to label stems.
 function detectPart(stem) {
   const lower = stem.toLowerCase();
   const found = STEM_WORDS.find((word) =>

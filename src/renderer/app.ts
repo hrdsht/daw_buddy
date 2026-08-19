@@ -10,6 +10,18 @@ import { parseQuery, hasQuery, matchesQuery } from './search';
 import { findMatches } from './matching';
 import { droneNoteFor } from './drone';
 import { NavigationHistory } from './navigation';
+import { DSP } from './dsp';
+import {
+  layout as kbLayoutFn,
+  highlight as kbHighlightFn,
+  wheelLayout as wheelLayoutFn,
+  compatible as camelotCompatible,
+  codeFor,
+  CAMELOT_KEYS,
+  DEGREE_NAMES,
+  SARGAM_NAMES
+} from './scaleview';
+import { scaleMidi, notesFor } from './midiwrite';
 
 const $ = (id: string): any => document.getElementById(id);
 
@@ -214,7 +226,8 @@ function render() {
   if (view === 'dedupe') return renderDedupe();
   if (view === 'disk') return renderDiskInsights();
   if (view === 'id3') return renderId3Editor();
-  if (view === 'rename') return renderStandaloneRename();
+  if (view === 'rename' || view === 'batch-rename') return renderStandaloneRename();
+  if (view === 'smart-rename') return renderStandaloneSmartRename();
   if (view === 'finish') return renderAudioFinishing();
   if (view === 'silence') return renderStandaloneSilence();
   if (view === 'vocal') return renderStandaloneVocal();
@@ -293,7 +306,12 @@ function goList(folder) {
   browsing = folder || null;
   openProject = null;
   viewEl.scrollTop = 0;
-  refresh();
+  if (browsing || entries.length === 0) {
+    refresh();
+  } else {
+    render();
+    renderCollections();
+  }
 }
 
 function goProject(entry) {
@@ -577,6 +595,11 @@ function buildRow(entry) {
     keyCell.append(el('div', 'keycell__key', rec.key));
     if (rec.camelot) keyCell.append(el('div', 'keycell__camelot', rec.camelot));
     row.append(keyCell);
+  } else if (rec.tonic && rec.scale) {
+    const keyCell = el('div');
+    keyCell.append(el('div', 'keycell__key', rec.tonic));
+    keyCell.append(el('div', 'keycell__camelot', rec.scale));
+    row.append(keyCell);
   } else if (activePlayAnalysis.has(entry.path)) {
     row.append(el('div', 'cell cell--empty', 'Analysing…'));
   } else {
@@ -645,12 +668,702 @@ async function playNewest(entry) {
 function siblingsOf(entry) {
   return entries
     .filter((other) => other.folder === entry.folder && other.path !== entry.path)
-    .map((other) => other.name);
+.map((other) => other.name);
 }
 
 function stemsFolderFor(entry) {
   const rec = record(entry.path);
   return rec.stemsPath ? [rec.stemsPath] : [];
+}
+
+/* ==================================================================
+   Camelot Interactive Modal & Scale Inspector
+   ================================================================== */
+
+let _audioCtx: AudioContext | null = null;
+function getAudioContext(): AudioContext | null {
+  if (!_audioCtx) {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (AudioCtx) _audioCtx = new AudioCtx();
+  }
+  if (_audioCtx && _audioCtx.state === 'suspended') {
+    _audioCtx.resume();
+  }
+  return _audioCtx;
+}
+
+function playSynthNote(pc: number, octave = 4, a4 = 440, duration = 0.4) {
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const midi = 12 * (octave + 1) + pc;
+    const freq = a4 * Math.pow(2, (midi - 69) / 12);
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(freq, ctx.currentTime);
+
+    gain.gain.setValueAtTime(0.001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.22, ctx.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + duration);
+  } catch (err) {
+    console.error('Audio synth error:', err);
+  }
+}
+
+function playFullScale(tonicPc: number, degrees: number[], a4 = 440) {
+  degrees.forEach((interval, idx) => {
+    const notePc = (tonicPc + interval) % 12;
+    const octave = interval < 12 ? (notePc < tonicPc ? 5 : 4) : 5;
+    setTimeout(() => {
+      playSynthNote(notePc, octave, a4, 0.35);
+    }, idx * 220);
+  });
+  setTimeout(() => {
+    playSynthNote(tonicPc, 5, a4, 0.5);
+  }, degrees.length * 220);
+}
+
+function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
+  document.querySelectorAll('.camelot-modal-overlay').forEach((node) => node.remove());
+
+  const overlay = el('div', 'modal-overlay camelot-modal-overlay');
+  const dialog = el('div', 'camelot-modal');
+
+  // Header
+  const header = el('div', 'camelot-modal__header');
+  const titleGroup = el('div', 'camelot-modal__titles');
+  titleGroup.append(el('h2', 'camelot-modal__title', 'Camelot Harmonic Wheel & Scale Inspector'));
+
+  let subtitleText = entry.name;
+  if (rec.key) subtitleText += ` · Detected: ${rec.key}${rec.camelot ? ` (${rec.camelot})` : ''}`;
+  else if (rec.tonic && rec.scale) subtitleText += ` · Detected: ${rec.tonic} ${rec.scale}`;
+  if (rec.tuningA4 && rec.tuningA4 !== 440) {
+    subtitleText += ` · Concert Pitch: A4 = ${rec.tuningA4} Hz (${rec.tuningCents > 0 ? '+' : ''}${rec.tuningCents}c)`;
+  }
+  titleGroup.append(el('p', 'camelot-modal__subtitle', subtitleText));
+  header.append(titleGroup);
+
+  const closeBtn = el('button', 'round camelot-modal__close', '✕');
+  closeBtn.title = 'Close (Esc)';
+  closeBtn.addEventListener('click', () => overlay.remove());
+  header.append(closeBtn);
+  dialog.append(header);
+
+  // Body
+  const body = el('div', 'camelot-modal__body');
+
+  let selectedCode = rec.camelot || (rec.tonic && rec.scale === 'major' ? codeFor(rec.tonic, 'maj') : codeFor(rec.tonic, 'min')) || '8A';
+  let selectedTonic = rec.tonic || CAMELOT_KEYS[selectedCode] || 'A';
+  let selectedScale = rec.scale || (selectedCode.endsWith('B') ? 'major' : 'minor');
+  const selectedTuningA4 = rec.tuningA4 || 440;
+
+  const inspectorCol = el('div', 'camelot-modal__inspector');
+
+  function updateInspector() {
+    inspectorCol.innerHTML = '';
+
+    const tonicPc = DSP.NOTES.indexOf(selectedTonic);
+    const degrees = DSP.SCALES[selectedScale] || (selectedCode.endsWith('B') ? DSP.SCALES.major : DSP.SCALES.minor);
+    const thaat = DSP.THAAT_MAP[selectedScale] || (selectedCode.endsWith('B') ? 'Bilawal (Major)' : 'Asavari (Natural Minor)');
+    const comp = camelotCompatible(selectedCode);
+
+    // Inspector Top Card
+    const topCard = el('div', 'scale-inspect-card');
+    const headerRow = el('div', 'scale-inspect__header');
+
+    const keyBadge = el('div', 'scale-inspect__key-badge');
+    keyBadge.append(el('span', 'scale-inspect__camelot-num', selectedCode));
+    keyBadge.append(el('span', 'scale-inspect__key-name', `${selectedTonic} ${selectedScale === 'major' ? 'Major' : selectedScale === 'minor' ? 'Minor' : selectedScale}`));
+    headerRow.append(keyBadge);
+
+    const thaatBadge = el('div', 'scale-inspect__thaat-badge', thaat);
+    headerRow.append(thaatBadge);
+    topCard.append(headerRow);
+
+    // 2-octave Interactive Piano Keyboard
+    const kb = kbLayoutFn(2, 19, 70);
+    const highlightedKeys = kbHighlightFn(kb.keys, tonicPc, degrees);
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svgKb = document.createElementNS(svgNS, 'svg');
+    svgKb.setAttribute('class', 'scale-inspect__keyboard');
+    svgKb.setAttribute('viewBox', `0 0 ${kb.width} ${kb.height}`);
+    svgKb.setAttribute('width', '100%');
+    svgKb.setAttribute('height', '76');
+
+    highlightedKeys.filter((k) => k.type === 'white').forEach((k) => {
+      const rect = document.createElementNS(svgNS, 'rect');
+      rect.setAttribute('x', String(k.x));
+      rect.setAttribute('y', String(k.y));
+      rect.setAttribute('width', String(k.width - 1));
+      rect.setAttribute('height', String(k.height));
+      rect.setAttribute('rx', '3');
+      rect.setAttribute('class', `scale-key scale-key--white scale-key--${k.state}`);
+      const degInterval = ((k.pc - tonicPc) % 12 + 12) % 12;
+      const degName = k.degree ? (DEGREE_NAMES[degInterval] || `${k.degree}`) : 'out of scale';
+      const sargam = k.degree ? (SARGAM_NAMES[degInterval] || '') : '';
+      rect.innerHTML = `<title>${k.name} (${degName}${sargam ? ` · ${sargam}` : ''})</title>`;
+      rect.addEventListener('click', () => playSynthNote(k.pc, 4, selectedTuningA4));
+      svgKb.appendChild(rect);
+    });
+
+    highlightedKeys.filter((k) => k.type === 'black').forEach((k) => {
+      const rect = document.createElementNS(svgNS, 'rect');
+      rect.setAttribute('x', String(k.x));
+      rect.setAttribute('y', String(k.y));
+      rect.setAttribute('width', String(k.width));
+      rect.setAttribute('height', String(k.height));
+      rect.setAttribute('rx', '3');
+      rect.setAttribute('class', `scale-key scale-key--black scale-key--${k.state}`);
+      const degInterval = ((k.pc - tonicPc) % 12 + 12) % 12;
+      const degName = k.degree ? (DEGREE_NAMES[degInterval] || `${k.degree}`) : 'out of scale';
+      const sargam = k.degree ? (SARGAM_NAMES[degInterval] || '') : '';
+      rect.innerHTML = `<title>${k.name} (${degName}${sargam ? ` · ${sargam}` : ''})</title>`;
+      rect.addEventListener('click', () => playSynthNote(k.pc, 4, selectedTuningA4));
+      svgKb.appendChild(rect);
+    });
+
+    topCard.append(svgKb);
+    inspectorCol.append(topCard);
+
+    // Notes & Sargam Grid
+    const notesSection = el('div', 'scale-notes-section');
+    notesSection.append(el('h4', 'scale-notes__title', 'Scale Notes & Indian Sargam Solfege'));
+
+    const notesGrid = el('div', 'scale-notes-grid');
+    degrees.forEach((interval) => {
+      const notePc = (tonicPc + interval) % 12;
+      const noteName = DSP.NOTES[notePc];
+      const sargam = SARGAM_NAMES[interval] || '';
+      const degName = DEGREE_NAMES[interval] || '';
+      const freq = (selectedTuningA4 * Math.pow(2, ((notePc >= tonicPc ? 60 + notePc : 72 + notePc) - 69) / 12)).toFixed(1);
+
+      const noteCard = el('div', `note-badge-card ${interval === 0 ? 'note-badge-card--tonic' : ''}`);
+      noteCard.append(el('div', 'note-badge__name', noteName));
+      noteCard.append(el('div', 'note-badge__sargam', sargam.split(' ')[0]));
+      noteCard.append(el('div', 'note-badge__degree', degName));
+      noteCard.append(el('div', 'note-badge__freq', `${freq} Hz`));
+      noteCard.addEventListener('click', () => playSynthNote(notePc, 4, selectedTuningA4));
+      notesGrid.append(noteCard);
+    });
+    notesSection.append(notesGrid);
+    inspectorCol.append(notesSection);
+
+    // Suggested Indian Raagas & Thaats Box
+    const ragaChroma = new Float64Array(12);
+    degrees.forEach((d) => {
+      ragaChroma[(tonicPc + d) % 12] = 1.0;
+    });
+    const suggestedRagas = rec.ragas && rec.tonic === selectedTonic && rec.scale === selectedScale
+      ? rec.ragas
+      : DSP.findMatchingRagas(ragaChroma, tonicPc, 6);
+
+    if (suggestedRagas && suggestedRagas.length > 0) {
+      const ragasSection = el('div', 'scale-ragas-section');
+      ragasSection.append(el('h4', 'scale-notes__title', 'Matching Indian Raagas & Scale Suggestions'));
+
+      const ragasGrid = el('div', 'scale-ragas-grid');
+      suggestedRagas.forEach((raga: any) => {
+        const isCurrentRaga = selectedScale === raga.name.toLowerCase() || (selectedScale === 'bhairav' && raga.name === 'Bhairav');
+        const card = el('div', `raga-card ${isCurrentRaga ? 'raga-card--active' : ''}`);
+
+        const top = el('div', 'raga-card__header');
+        top.append(el('span', 'raga-card__name', raga.name));
+        top.append(el('span', 'raga-card__pct', `${raga.matchPercent}% Match`));
+        card.append(top);
+
+        const sub = el('div', 'raga-card__thaat', `${raga.thaat} Thaat`);
+        card.append(sub);
+
+        const sargamRow = el('div', 'raga-card__sargam', raga.sargam);
+        card.append(sargamRow);
+
+        if (raga.time || raga.mood) {
+          const metaRow = el('div', 'raga-card__meta');
+          if (raga.time) metaRow.append(el('span', 'raga-card__time', `🕒 ${raga.time}`));
+          if (raga.mood) metaRow.append(el('span', 'raga-card__mood', `✨ ${raga.mood}`));
+          card.append(metaRow);
+        }
+
+        card.title = `Click to load Raaga ${raga.name} on the keyboard & scale audition player`;
+        card.addEventListener('click', () => {
+          selectedScale = raga.degrees ? raga.name.toLowerCase() : selectedScale;
+          if (raga.degrees) {
+            DSP.SCALES[raga.name.toLowerCase()] = raga.degrees;
+            DSP.THAAT_MAP[raga.name.toLowerCase()] = `${raga.thaat} (${raga.name})`;
+          }
+          updateInspector();
+          playFullScale(tonicPc, raga.degrees || degrees, selectedTuningA4);
+        });
+
+        ragasGrid.append(card);
+      });
+      ragasSection.append(ragasGrid);
+      inspectorCol.append(ragasSection);
+    }
+
+    // Harmonic Mixing Transitions Card
+    if (comp) {
+      const harmSection = el('div', 'scale-harm-section');
+      harmSection.append(el('h4', 'scale-notes__title', 'Harmonic DJ Mix Relations (In-Key Mixing)'));
+      const harmGrid = el('div', 'scale-harm-grid');
+
+      const relNote = CAMELOT_KEYS[comp.relative];
+      const relMode = comp.relative.endsWith('B') ? 'Major' : 'Minor';
+      harmGrid.append(harmItem('Relative Key (Equal)', comp.relative, `${relNote} ${relMode}`, 'rel', () => selectCode(comp.relative)));
+
+      const upNote = CAMELOT_KEYS[comp.up];
+      const upMode = comp.up.endsWith('B') ? 'Major' : 'Minor';
+      harmGrid.append(harmItem('+1 Energy Boost (Fifth)', comp.up, `${upNote} ${upMode}`, 'up', () => selectCode(comp.up)));
+
+      const downNote = CAMELOT_KEYS[comp.down];
+      const downMode = comp.down.endsWith('B') ? 'Major' : 'Minor';
+      harmGrid.append(harmItem('-1 Energy Drop (Fourth)', comp.down, `${downNote} ${downMode}`, 'down', () => selectCode(comp.down)));
+
+      harmSection.append(harmGrid);
+      inspectorCol.append(harmSection);
+    }
+
+    // Action buttons (Audition scale & Drag MIDI)
+    const actionsRow = el('div', 'scale-modal-actions');
+    const playScaleBtn = el('button', 'pill pill--solid scale-action-btn', '▶ Play Scale Preview');
+    playScaleBtn.addEventListener('click', () => playFullScale(tonicPc, degrees, selectedTuningA4));
+    actionsRow.append(playScaleBtn);
+
+    const midiBtn = el('button', 'pill scale-midi-btn scale-action-btn', '⤓ Export Scale MIDI');
+    const midiNotes = notesFor(tonicPc, degrees, 3);
+    const midiBytes = scaleMidi(midiNotes, { bpm: projectBpm || 120, bars: 4 });
+    const midiFileName = `${entry.name.replace(/[^a-zA-Z0-9_-]/g, '_')}_${selectedTonic}_${selectedScale}.mid`;
+    midiBtn.draggable = true;
+    midiBtn.addEventListener('dragstart', async () => {
+      if (window.api.dragMidi) await window.api.dragMidi(midiFileName, Array.from(midiBytes));
+    });
+    midiBtn.addEventListener('click', async () => {
+      if (window.api.saveMidi) {
+        const saved = await window.api.saveMidi(midiFileName, Array.from(midiBytes));
+        if (saved) toast('MIDI exported', saved);
+      } else {
+        const blob = new Blob([midiBytes.buffer as ArrayBuffer], { type: 'audio/midi' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = midiFileName;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast('MIDI exported', midiFileName);
+      }
+    });
+    actionsRow.append(midiBtn);
+    inspectorCol.append(actionsRow);
+  }
+
+  function harmItem(label: string, code: string, keyName: string, type: string, onClick: () => void) {
+    const item = el('div', `harm-item harm-item--${type}`);
+    item.append(el('div', 'harm-item__label', label));
+    const val = el('div', 'harm-item__val');
+    val.append(el('span', 'harm-item__code', code));
+    val.append(el('span', 'harm-item__name', keyName));
+    item.append(val);
+    item.addEventListener('click', onClick);
+    return item;
+  }
+
+  function selectCode(code: string) {
+    selectedCode = code;
+    selectedTonic = CAMELOT_KEYS[code] || selectedTonic;
+    selectedScale = code.endsWith('B') ? 'major' : 'minor';
+    renderWheel();
+    updateInspector();
+  }
+
+  // Left Column: SVG Wheel Container
+  const wheelCol = el('div', 'camelot-modal__wheel-col');
+  const wheelRadius = 145;
+  const wheel = wheelLayoutFn(wheelRadius);
+  const svgNS = 'http://www.w3.org/2000/svg';
+
+  function renderWheel() {
+    wheelCol.innerHTML = '';
+    const comp = camelotCompatible(selectedCode);
+    const wheelSize = wheelRadius * 2 + 30;
+
+    const svgWheel = document.createElementNS(svgNS, 'svg');
+    svgWheel.setAttribute('class', 'camelot-wheel-modal');
+    svgWheel.setAttribute('viewBox', `-${wheelSize / 2} -${wheelSize / 2} ${wheelSize} ${wheelSize}`);
+    svgWheel.setAttribute('width', String(wheelSize));
+    svgWheel.setAttribute('height', String(wheelSize));
+
+    wheel.segments.forEach((seg) => {
+      const isSelected = seg.code === selectedCode;
+      const isCurrentSong = rec.camelot && seg.code === rec.camelot;
+      const isRelative = comp && seg.code === comp.relative;
+      const isNeighbor = comp && (seg.code === comp.up || seg.code === comp.down);
+
+      let stateClass = 'wheel-modal-seg--default';
+      if (isSelected) stateClass = 'wheel-modal-seg--selected';
+      else if (isCurrentSong) stateClass = 'wheel-modal-seg--current-song';
+      else if (isRelative) stateClass = 'wheel-modal-seg--relative';
+      else if (isNeighbor) stateClass = 'wheel-modal-seg--neighbor';
+
+      const x1_in = seg.innerRadius * Math.cos(seg.startAngle);
+      const y1_in = seg.innerRadius * Math.sin(seg.startAngle);
+      const x2_in = seg.innerRadius * Math.cos(seg.endAngle);
+      const y2_in = seg.innerRadius * Math.sin(seg.endAngle);
+
+      const x1_out = seg.outerRadius * Math.cos(seg.startAngle);
+      const y1_out = seg.outerRadius * Math.sin(seg.startAngle);
+      const x2_out = seg.outerRadius * Math.cos(seg.endAngle);
+      const y2_out = seg.outerRadius * Math.sin(seg.endAngle);
+
+      const pathData = [
+        `M ${x1_in} ${y1_in}`,
+        `L ${x1_out} ${y1_out}`,
+        `A ${seg.outerRadius} ${seg.outerRadius} 0 0 1 ${x2_out} ${y2_out}`,
+        `L ${x2_in} ${y2_in}`,
+        `A ${seg.innerRadius} ${seg.innerRadius} 0 0 0 ${x1_in} ${y1_in}`,
+        'Z'
+      ].join(' ');
+
+      const g = document.createElementNS(svgNS, 'g');
+      g.setAttribute('class', 'wheel-modal-slice-group');
+      g.style.cursor = 'pointer';
+      g.addEventListener('click', () => selectCode(seg.code));
+
+      const path = document.createElementNS(svgNS, 'path');
+      path.setAttribute('d', pathData);
+      path.setAttribute('class', `wheel-modal-seg ${stateClass}`);
+      g.appendChild(path);
+
+      // Label (Camelot Code & Key Name)
+      const lx = seg.labelRadius * Math.cos(seg.labelAngle);
+      const ly = seg.labelRadius * Math.sin(seg.labelAngle);
+
+      const textCode = document.createElementNS(svgNS, 'text');
+      textCode.setAttribute('x', String(lx));
+      textCode.setAttribute('y', String(ly - (seg.ring === 'A' ? 3 : 4)));
+      textCode.setAttribute('text-anchor', 'middle');
+      textCode.setAttribute('dominant-baseline', 'middle');
+      textCode.setAttribute('class', `wheel-modal-code ${isSelected ? 'wheel-modal-code--active' : ''}`);
+      textCode.textContent = seg.code;
+      g.appendChild(textCode);
+
+      const textKey = document.createElementNS(svgNS, 'text');
+      textKey.setAttribute('x', String(lx));
+      textKey.setAttribute('y', String(ly + (seg.ring === 'A' ? 7 : 7)));
+      textKey.setAttribute('text-anchor', 'middle');
+      textKey.setAttribute('dominant-baseline', 'middle');
+      textKey.setAttribute('class', `wheel-modal-key ${isSelected ? 'wheel-modal-key--active' : ''}`);
+      textKey.textContent = `${seg.key}${seg.ring === 'A' ? 'm' : ''}`;
+      g.appendChild(textKey);
+
+      svgWheel.appendChild(g);
+    });
+
+    // Center Hub
+    const centerCircle = document.createElementNS(svgNS, 'circle');
+    centerCircle.setAttribute('cx', '0');
+    centerCircle.setAttribute('cy', '0');
+    centerCircle.setAttribute('r', String(wheelRadius * 0.38));
+    centerCircle.setAttribute('class', 'wheel-modal-center');
+    svgWheel.appendChild(centerCircle);
+
+    const centerCode = document.createElementNS(svgNS, 'text');
+    centerCode.setAttribute('x', '0');
+    centerCode.setAttribute('y', '-10');
+    centerCode.setAttribute('text-anchor', 'middle');
+    centerCode.setAttribute('dominant-baseline', 'middle');
+    centerCode.setAttribute('class', 'wheel-modal-center-code');
+    centerCode.textContent = selectedCode;
+    svgWheel.appendChild(centerCode);
+
+    const centerKey = document.createElementNS(svgNS, 'text');
+    centerKey.setAttribute('x', '0');
+    centerKey.setAttribute('y', '6');
+    centerKey.setAttribute('text-anchor', 'middle');
+    centerKey.setAttribute('dominant-baseline', 'middle');
+    centerKey.setAttribute('class', 'wheel-modal-center-key');
+    centerKey.textContent = `${selectedTonic} ${selectedScale === 'major' ? 'maj' : selectedScale === 'minor' ? 'min' : selectedScale}`;
+    svgWheel.appendChild(centerKey);
+
+    const centerHz = document.createElementNS(svgNS, 'text');
+    centerHz.setAttribute('x', '0');
+    centerHz.setAttribute('y', '18');
+    centerHz.setAttribute('text-anchor', 'middle');
+    centerHz.setAttribute('dominant-baseline', 'middle');
+    centerHz.setAttribute('class', 'wheel-modal-center-hz');
+    centerHz.textContent = `${selectedTuningA4} Hz`;
+    svgWheel.appendChild(centerHz);
+
+    wheelCol.appendChild(svgWheel);
+
+    // Legend below wheel
+    const legend = el('div', 'wheel-legend');
+    legend.append(legendItem('Selected Key', 'selected'));
+    if (rec.camelot) legend.append(legendItem('Current Track', 'current'));
+    legend.append(legendItem('Relative Key', 'relative'));
+    legend.append(legendItem('Harmonic +/- 1', 'neighbor'));
+    wheelCol.appendChild(legend);
+  }
+
+  function legendItem(text: string, type: string) {
+    const item = el('div', 'wheel-legend__item');
+    item.append(el('span', `wheel-legend__dot wheel-legend__dot--${type}`));
+    item.append(el('span', 'wheel-legend__text', text));
+    return item;
+  }
+
+  renderWheel();
+  updateInspector();
+
+  body.append(wheelCol);
+  body.append(inspectorCol);
+  dialog.append(body);
+  overlay.append(dialog);
+
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+  const handleKeydown = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      overlay.remove();
+      document.removeEventListener('keydown', handleKeydown);
+    }
+  };
+  document.addEventListener('keydown', handleKeydown);
+
+  document.body.append(overlay);
+}
+
+function renderProjectHarmony(entry, rec, projectBpm) {
+  let tonic = rec.tonic;
+  let scale = rec.scale;
+  const camelot = rec.camelot;
+
+  if (!tonic && rec.key) {
+    const match = String(rec.key).trim().match(/^([A-Ga-g][#b♭]?)/);
+    if (match) tonic = match[1];
+    if (rec.key.includes('min')) scale = scale || 'minor';
+    else if (rec.key.includes('maj')) scale = scale || 'major';
+  }
+
+  const tonicPc = tonic ? DSP.NOTES.indexOf(tonic) : -1;
+  const degrees = (scale && DSP.SCALES[scale]) || (rec.key?.includes('min') ? DSP.SCALES.minor : DSP.SCALES.major);
+
+  if (tonicPc === -1 || !degrees) {
+    return null;
+  }
+
+  const container = el('div', 'page__harmony');
+
+  // Left column: Keyboard + Drag MIDI button
+  const kbCol = el('div', 'harmony__keyboard-col');
+
+  // Keyboard
+  const kb = kbLayoutFn(2, 13, 50);
+  const highlightedKeys = kbHighlightFn(kb.keys, tonicPc, degrees);
+
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svgKb = document.createElementNS(svgNS, 'svg');
+  svgKb.setAttribute('class', 'scale-keyboard');
+  svgKb.setAttribute('viewBox', `0 0 ${kb.width} ${kb.height}`);
+  svgKb.setAttribute('width', String(kb.width));
+  svgKb.setAttribute('height', String(kb.height));
+
+  // Render whites first
+  highlightedKeys.filter((k) => k.type === 'white').forEach((k) => {
+    const rect = document.createElementNS(svgNS, 'rect');
+    rect.setAttribute('x', String(k.x));
+    rect.setAttribute('y', String(k.y));
+    rect.setAttribute('width', String(k.width - 1));
+    rect.setAttribute('height', String(k.height));
+    rect.setAttribute('rx', '2');
+    rect.setAttribute('class', `scale-key scale-key--white scale-key--${k.state}`);
+    const degName = k.degree ? (DEGREE_NAMES[((k.pc - tonicPc) % 12 + 12) % 12] || `${k.degree}`) : 'out of scale';
+    rect.innerHTML = `<title>${k.name} (${degName})</title>`;
+    svgKb.appendChild(rect);
+  });
+
+  // Render blacks on top
+  highlightedKeys.filter((k) => k.type === 'black').forEach((k) => {
+    const rect = document.createElementNS(svgNS, 'rect');
+    rect.setAttribute('x', String(k.x));
+    rect.setAttribute('y', String(k.y));
+    rect.setAttribute('width', String(k.width));
+    rect.setAttribute('height', String(k.height));
+    rect.setAttribute('rx', '2');
+    rect.setAttribute('class', `scale-key scale-key--black scale-key--${k.state}`);
+    const degName = k.degree ? (DEGREE_NAMES[((k.pc - tonicPc) % 12 + 12) % 12] || `${k.degree}`) : 'out of scale';
+    rect.innerHTML = `<title>${k.name} (${degName})</title>`;
+    svgKb.appendChild(rect);
+  });
+
+  kbCol.append(svgKb);
+
+  // Drag MIDI button
+  const midiBtn = el('button', 'pill pill--sm scale-midi-btn', '⤓ Drag MIDI to DAW');
+  midiBtn.title = 'Drag to your DAW track or click to export MIDI file';
+  midiBtn.draggable = true;
+
+  const midiNotes = notesFor(tonicPc, degrees, 3);
+  const midiBytes = scaleMidi(midiNotes, { bpm: projectBpm || 120, bars: 4 });
+  const midiFileName = `${entry.name.replace(/[^a-zA-Z0-9_-]/g, '_')}_${tonic}_${scale || 'scale'}.mid`;
+
+  midiBtn.addEventListener('dragstart', async () => {
+    if (window.api.dragMidi) {
+      await window.api.dragMidi(midiFileName, Array.from(midiBytes));
+    }
+  });
+
+  midiBtn.addEventListener('click', async () => {
+    if (window.api.saveMidi) {
+      const saved = await window.api.saveMidi(midiFileName, Array.from(midiBytes));
+      if (saved) toast('MIDI exported', saved);
+    } else {
+      const blob = new Blob([midiBytes.buffer as ArrayBuffer], { type: 'audio/midi' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = midiFileName;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast('MIDI exported', midiFileName);
+    }
+  });
+
+  kbCol.append(midiBtn);
+
+  // Raaga Suggestions Box below keyboard
+  const ragaChroma = new Float64Array(12);
+  degrees.forEach((d) => {
+    ragaChroma[(tonicPc + d) % 12] = 1.0;
+  });
+  const suggestedRagas = rec.ragas || DSP.findMatchingRagas(ragaChroma, tonicPc, 4);
+  if (suggestedRagas && suggestedRagas.length > 0) {
+    const ragasBox = el('div', 'harmony__ragas-box');
+    const ragasTitle = el('span', 'harmony__ragas-title', 'Raagas:');
+    ragasBox.append(ragasTitle);
+
+    const ragasList = el('div', 'harmony__ragas-list');
+    suggestedRagas.slice(0, 3).forEach((raga: any) => {
+      const chip = el('button', 'harmony__raga-chip');
+      chip.append(el('span', 'harmony__raga-name', raga.name));
+      chip.append(el('span', 'harmony__raga-pct', `${raga.matchPercent}%`));
+      chip.title = `${raga.name} (${raga.thaat} Thaat) · ${raga.time || ''} · Click to inspect`;
+      chip.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openCamelotModal(entry, { ...rec, scale: raga.name.toLowerCase() }, projectBpm);
+      });
+      ragasList.append(chip);
+    });
+    ragasBox.append(ragasList);
+    kbCol.append(ragasBox);
+  }
+
+  container.append(kbCol);
+
+  // Right column: Camelot wheel with expand interaction
+  const wheelCol = el('div', 'harmony__wheel-col');
+  wheelCol.title = 'Click to expand Camelot wheel & inspect all scales';
+  wheelCol.style.cursor = 'pointer';
+  wheelCol.addEventListener('click', () => openCamelotModal(entry, rec, projectBpm));
+
+  const wheelRadius = 40;
+  const wheel = wheelLayoutFn(wheelRadius);
+  const comp = camelot ? camelotCompatible(camelot) : null;
+
+  const svgWheel = document.createElementNS(svgNS, 'svg');
+  const wheelSize = wheelRadius * 2 + 12;
+  svgWheel.setAttribute('class', 'camelot-wheel');
+  svgWheel.setAttribute('viewBox', `-${wheelSize / 2} -${wheelSize / 2} ${wheelSize} ${wheelSize}`);
+  svgWheel.setAttribute('width', String(wheelSize));
+  svgWheel.setAttribute('height', String(wheelSize));
+
+  wheel.segments.forEach((seg) => {
+    const isCurrent = camelot && seg.code === camelot;
+    const isRelative = comp && seg.code === comp.relative;
+    const isNeighbor = comp && (seg.code === comp.up || seg.code === comp.down);
+
+    let stateClass = 'wheel-seg--dim';
+    if (isCurrent) stateClass = 'wheel-seg--current';
+    else if (isRelative) stateClass = 'wheel-seg--relative';
+    else if (isNeighbor) stateClass = 'wheel-seg--neighbor';
+
+    const x1_in = seg.innerRadius * Math.cos(seg.startAngle);
+    const y1_in = seg.innerRadius * Math.sin(seg.startAngle);
+    const x2_in = seg.innerRadius * Math.cos(seg.endAngle);
+    const y2_in = seg.innerRadius * Math.sin(seg.endAngle);
+
+    const x1_out = seg.outerRadius * Math.cos(seg.startAngle);
+    const y1_out = seg.outerRadius * Math.sin(seg.startAngle);
+    const x2_out = seg.outerRadius * Math.cos(seg.endAngle);
+    const y2_out = seg.outerRadius * Math.sin(seg.endAngle);
+
+    const pathData = [
+      `M ${x1_in} ${y1_in}`,
+      `L ${x1_out} ${y1_out}`,
+      `A ${seg.outerRadius} ${seg.outerRadius} 0 0 1 ${x2_out} ${y2_out}`,
+      `L ${x2_in} ${y2_in}`,
+      `A ${seg.innerRadius} ${seg.innerRadius} 0 0 0 ${x1_in} ${y1_in}`,
+      'Z'
+    ].join(' ');
+
+    const path = document.createElementNS(svgNS, 'path');
+    path.setAttribute('d', pathData);
+    path.setAttribute('class', `wheel-segment ${stateClass}`);
+    path.innerHTML = `<title>${seg.code} (${seg.key} ${seg.mode}) · Click to expand wheel</title>`;
+    svgWheel.appendChild(path);
+  });
+
+  const centerCircle = document.createElementNS(svgNS, 'circle');
+  centerCircle.setAttribute('cx', '0');
+  centerCircle.setAttribute('cy', '0');
+  centerCircle.setAttribute('r', String(wheelRadius * 0.38));
+  centerCircle.setAttribute('class', 'wheel-center');
+  svgWheel.appendChild(centerCircle);
+
+  const centerText = document.createElementNS(svgNS, 'text');
+  centerText.setAttribute('x', '0');
+  centerText.setAttribute('y', camelot ? '-2' : '0');
+  centerText.setAttribute('text-anchor', 'middle');
+  centerText.setAttribute('dominant-baseline', 'middle');
+  centerText.setAttribute('class', 'wheel-center-text');
+  centerText.textContent = camelot || tonic || '';
+  svgWheel.appendChild(centerText);
+
+  if (camelot) {
+    const centerSub = document.createElementNS(svgNS, 'text');
+    centerSub.setAttribute('x', '0');
+    centerSub.setAttribute('y', '9');
+    centerSub.setAttribute('text-anchor', 'middle');
+    centerSub.setAttribute('dominant-baseline', 'middle');
+    centerSub.setAttribute('class', 'wheel-center-sub');
+    centerSub.textContent = tonic ? `${tonic} ${rec.key?.includes('maj') ? 'maj' : 'min'}` : '';
+    svgWheel.appendChild(centerSub);
+  }
+
+  wheelCol.append(svgWheel);
+
+  const expandBtn = el('button', 'harmony__expand-btn', '⤢ All Scales');
+  expandBtn.title = 'View full Camelot wheel & explore all 24 scales';
+  expandBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openCamelotModal(entry, rec, projectBpm);
+  });
+  wheelCol.append(expandBtn);
+
+  if (!camelot && (rec.modal || scale)) {
+    const modalBadge = el('div', 'wheel-modal-note', 'Modal · outside 5ths');
+    wheelCol.append(modalBadge);
+  }
+
+  container.append(wheelCol);
+  return container;
 }
 
 /* =========================== project page ========================== */
@@ -686,13 +1399,21 @@ function renderProjectPage() {
   const facts = el('div', 'page__facts');
   if (projectBpm !== null) facts.append(fact('BPM', formatBpm(projectBpm)));
   else if (entry.bpmError) facts.append(fact('BPM', 'not readable'));
-  if (rec.key) facts.append(fact('Key', `${rec.key}${rec.camelot ? ` (${rec.camelot})` : ''}`));
+  if (rec.key) {
+    facts.append(fact('Key', `${rec.key}${rec.camelot ? ` (${rec.camelot})` : ''}`));
+  } else if (rec.tonic && rec.scale) {
+    facts.append(fact('Scale', `Tonic ${rec.tonic} · ${rec.scale}`));
+  }
   facts.append(fact('Saves', String(entry.backupCount)));
   facts.append(fact('Audio', String(entry.audioCount)));
   facts.append(fact('Modified', timeAgo(entry.modified)));
   if (entry.packaged) facts.append(fact('Exported', timeAgo(entry.packagedAt)));
   titles.append(facts);
   head.append(titles);
+
+  const harmony = renderProjectHarmony(entry, rec, projectBpm);
+  if (harmony) head.append(harmony);
+
   viewEl.append(head);
 
   /* actions */
@@ -838,7 +1559,8 @@ function renderProjectToolsTab(entry) {
     backBar.append(back);
     viewEl.append(backBar);
 
-    if (projectTool === 'rename') return renderRenameTab(entry);
+    if (projectTool === 'rename' || projectTool === 'batch-rename') return renderRenameTab(entry);
+    if (projectTool === 'smart-rename') return renderSmartRenameTab(entry);
     if (projectTool === 'silence') return renderSilenceTab(entry);
     if (projectTool === 'qc') return renderQcTab(entry);
   }
@@ -856,10 +1578,16 @@ function renderProjectToolsTab(entry) {
   const grid = el('div', 'tool-grid');
   [
     {
+      key: 'smart-rename',
+      icon: '🏷',
+      title: 'Smart renamer',
+      text: 'Classify and rename cryptic stem exports into mix-ready instrument categories.'
+    },
+    {
       key: 'rename',
       icon: 'Aa',
-      title: 'Rename files',
-      text: 'Clean up or standardise many audio filenames at once, with a preview before anything changes.'
+      title: 'Batch renamer',
+      text: 'Clean up prefixes/suffixes or apply token templates across audio files.'
     },
     {
       key: 'silence',
@@ -1247,16 +1975,16 @@ function analyseAudioButton(entry, file) {
   return button;
 }
 
-async function analyseRender(entry, render, buttonEl, { refresh = true } = {}) {
+async function analyseRender(entry, renderItem, buttonEl, { refresh = true } = {}) {
   buttonEl.disabled = true;
   buttonEl.textContent = 'Reading…';
 
   try {
     const current = Player.getCurrent();
     const decoded =
-      current && current.path === render.primary.path && Player.getDecoded()
+      current && current.path === renderItem.primary.path && Player.getDecoded()
         ? Player.getDecoded()
-        : await Player.load(render.primary, { autoplay: false });
+        : await Player.load(renderItem.primary, { autoplay: false });
 
     if (!decoded) {
       toast('Analysis failed', 'That file could not be decoded.', true);
@@ -1264,8 +1992,8 @@ async function analyseRender(entry, render, buttonEl, { refresh = true } = {}) {
     }
 
     buttonEl.textContent = 'Analysing…';
-    const result = await analyseAudioFile(render.primary, decoded);
-    await storeAnalysis(entry, render.primary, result);
+    const result = await analyseAudioFile(renderItem.primary, decoded);
+    await storeAnalysis(entry, renderItem.primary, result);
     showAnalysisResult(entry, result);
     if (refresh) render();
   } catch (error) {
@@ -1328,14 +2056,28 @@ async function storeAnalysis(entry, file, result) {
     camelot: result.camelot,
     keyConfidence: result.keyConfidence,
     keyAlternate: result.keyAlternate,
+    tonic: result.tonic,
+    tonicConfidence: result.tonicConfidence,
+    scale: result.scale,
+    scaleConfidence: result.scaleConfidence,
+    modal: result.modal,
     detectedBpm: result.bpm,
     analysedFrom: file.name
   });
 }
 
 function showAnalysisResult(entry, result) {
+  let keyDescription;
+  if (result.key) {
+    keyDescription = `${result.key}${result.camelot ? ` (${result.camelot})` : ''}`;
+  } else if (result.tonic && result.scale) {
+    keyDescription = `Tonic ${result.tonic} · ${result.scale}`;
+  } else {
+    keyDescription = 'Key not detected';
+  }
+
   const detected = [
-    result.key ? `${result.key}${result.camelot ? ` (${result.camelot})` : ''}` : 'Key not detected',
+    keyDescription,
     result.bpm ? `${result.bpm} BPM` : 'BPM not detected'
   ].join(' · ');
   const drift = entry.bpm && result.bpm ? Math.abs(entry.bpm - result.bpm) : null;
@@ -1456,7 +2198,7 @@ function renderRenameTab(entry = null) {
   const projectRecord = entry ? record(entry.path) : {};
 
   const section = el('div', 'section');
-  section.append(headRow(entry ? 'Rename files' : 'Bulk renamer'));
+  section.append(headRow(entry ? 'Rename files' : 'Batch renamer'));
 
   /* which folder */
   const folderBar = el('div', 'callout');
@@ -1520,7 +2262,7 @@ function renderRenameTab(entry = null) {
   const controls = el('div', 'grid2');
 
   const removeField = fieldInput('Remove this text');
-  removeField.input.placeholder = 'e.g. Suraag_';
+  removeField.input.placeholder = 'e.g. Demo_';
   controls.append(removeField.wrap);
 
   const addField = fieldInput('Add this text');
@@ -1688,6 +2430,498 @@ function fieldInput(label) {
   input.type = 'text';
   wrap.append(input);
   return { wrap, input };
+}
+
+
+/* -------------------------- smart renamer ------------------------- */
+
+let smartRenameFolder: string | null = null;
+let smartFiles: Array<{ name: string; path: string }> = [];
+let smartItems: Array<{
+  name: string;
+  path: string;
+  matched: boolean;
+  category: string | null;
+  subtype: string | null;
+  confidence: number;
+  matchedOn: string | null;
+  contested: boolean;
+  articulation: string | null;
+  userCategory?: string | null;
+  userSubtype?: string | null;
+  customName?: string | null;
+  audioFeatures?: any;
+  audioCategory?: string | null;
+  audioSubtype?: string | null;
+  audioConfidence?: number;
+}> = [];
+let smartCategoriesList: Array<{ category: string; subtypes: string[] }> = [];
+let smartSelectedPath: string | null = null;
+let smartSortMode: 'priority' | 'name' = 'priority';
+let smartManifests: any[] = [];
+
+function renderStandaloneSmartRename() {
+  viewEl.innerHTML = '';
+  renderSmartRenameTab(null);
+}
+
+async function renderSmartRenameTab(entry: any = null) {
+  if (!smartRenameFolder && entry) smartRenameFolder = entry.folder;
+  if (!smartRenameFolder && renameFolder) smartRenameFolder = renameFolder;
+
+  const section = el('div', 'section');
+  section.append(headRow('Smart renamer'));
+
+  /* which folder */
+  const folderBar = el('div', 'callout');
+  folderBar.append(
+    el(
+      'div',
+      'page__kicker',
+      'Classify & rename cryptic stems into mix-ready instrument categories'
+    )
+  );
+  const folderPath = el(
+    'div',
+    'mono',
+    smartRenameFolder || 'Choose a folder to begin'
+  );
+  folderPath.style.margin = '6px 0 10px';
+  folderPath.style.wordBreak = 'break-all';
+  folderBar.append(folderPath);
+
+  const pick = el(
+    'button',
+    `pill${smartRenameFolder ? ' pill--sm' : ' pill--solid'}`,
+    smartRenameFolder ? 'Choose a different folder' : 'Choose folder'
+  );
+  pick.addEventListener('click', async () => {
+    const chosen = await window.api.pickFolder();
+    if (chosen) {
+      smartRenameFolder = chosen;
+      smartSelectedPath = null;
+      render();
+    }
+  });
+
+  const bar = el('div', 'tabs');
+  bar.append(pick);
+  if (entry) {
+    const useProject = el('button', 'pill pill--sm', "This project's folder");
+    useProject.addEventListener('click', () => {
+      smartRenameFolder = entry.folder;
+      smartSelectedPath = null;
+      render();
+    });
+    bar.append(useProject);
+  }
+
+  const rescanBtn = el('button', 'pill pill--sm', 'Rescan folder');
+  rescanBtn.addEventListener('click', () => loadFolder());
+  bar.append(rescanBtn);
+
+  folderBar.append(bar);
+  section.append(folderBar);
+
+  /* Manifests / Undo bar */
+  const manifestContainer = el('div');
+  manifestContainer.style.marginBottom = '10px';
+  section.append(manifestContainer);
+
+  /* Controls / Actions toolbar */
+  const toolbar = el('div', 'tabs');
+  toolbar.style.marginBottom = '12px';
+
+  const analyseNamesBtn = el('button', 'pill pill--solid', '⚡ Analyse names');
+  const analyseAudioBtn = el('button', 'pill', '🎧 Analyse audio features');
+
+  const sortToggle = el(
+    'button',
+    'pill',
+    smartSortMode === 'priority' ? 'Sort: Unresolved first' : 'Sort: Folder order'
+  );
+  sortToggle.addEventListener('click', () => {
+    smartSortMode = smartSortMode === 'priority' ? 'name' : 'priority';
+    sortToggle.textContent =
+      smartSortMode === 'priority' ? 'Sort: Unresolved first' : 'Sort: Folder order';
+    renderPanes();
+  });
+
+  toolbar.append(analyseNamesBtn, analyseAudioBtn, sortToggle);
+  section.append(toolbar);
+
+  /* Panes container */
+  const panes = el('div', 'smart-panes');
+
+  const leftPane = el('div', 'smart-pane smart-pane--left');
+  const leftHead = el('div', 'smart-pane__header');
+  const leftTitle = el('span', null, 'Original files');
+  const leftSub = el('span', 'smart-pane__sub', 'Click to arm audio');
+  leftHead.append(leftTitle, leftSub);
+  const leftBody = el('div', 'smart-pane__body');
+  leftPane.append(leftHead, leftBody);
+
+  const rightPane = el('div', 'smart-pane smart-pane--right');
+  const rightHead = el('div', 'smart-pane__header');
+  const rightTitle = el('span', null, 'Suggested name & Category');
+  const rightSub = el('span', 'smart-pane__sub', 'Live indexed output');
+  rightHead.append(rightTitle, rightSub);
+  const rightBody = el('div', 'smart-pane__body');
+  rightPane.append(rightHead, rightBody);
+
+  panes.append(leftPane, rightPane);
+  section.append(panes);
+
+  /* Footer / Commit toolbar */
+  const footBar = el('div', 'callout');
+  footBar.style.marginTop = '14px';
+  const summary = el('p', 'muted');
+  summary.style.margin = '0 0 10px 0';
+  const commitActions = el('div', 'tabs');
+  const commitBtn = el('button', 'pill pill--solid', 'Rename files');
+  const undoLastBtn = el('button', 'pill', 'Undo last rename');
+  commitActions.append(commitBtn, undoLastBtn);
+  footBar.append(summary, commitActions);
+  section.append(footBar);
+
+  viewEl.append(section);
+
+  async function loadFolder() {
+    if (!smartRenameFolder) {
+      summary.textContent = 'Choose a folder to begin classifying stems.';
+      commitBtn.disabled = true;
+      return;
+    }
+    try {
+      smartFiles = await window.api.renameList(smartRenameFolder, [
+        '.wav',
+        '.mp3',
+        '.aiff',
+        '.aif',
+        '.flac'
+      ]);
+      smartCategoriesList = await window.api.smartCategories();
+      try {
+        smartManifests = await window.api.renameManifests(smartRenameFolder);
+      } catch {
+        smartManifests = [];
+      }
+      renderManifests();
+      await runNameAnalysis();
+    } catch (err: any) {
+      summary.textContent = `Error reading folder: ${err.message}`;
+    }
+  }
+
+  function renderManifests() {
+    manifestContainer.innerHTML = '';
+    if (!smartManifests || smartManifests.length === 0) return;
+    const box = el('div', 'callout');
+    box.style.padding = '10px 14px';
+    const kick = el('div', 'page__kicker', 'Previous rename history');
+    const list = el('div', 'manifest-list');
+    smartManifests.slice(0, 3).forEach((m) => {
+      const pill = el('button', 'manifest-pill');
+      pill.type = 'button';
+      const dateStr = m.manifest.at ? new Date(m.manifest.at).toLocaleDateString() : 'recent';
+      pill.textContent = `↩ Revert ${m.manifest.count} files (${dateStr})${m.manifest.undone ? ' · already reverted' : ''}`;
+      if (m.manifest.undone) pill.disabled = true;
+      pill.addEventListener('click', async () => {
+        const res = await window.api.renameManifestRevert(smartRenameFolder, m.file);
+        if (res.ok) {
+          toast('Manifest Reverted', `Restored ${res.reverted} file names`);
+          await loadFolder();
+        } else {
+          toast('Revert Failed', res.message || 'Could not revert manifest', true);
+        }
+      });
+      list.append(pill);
+    });
+    box.append(kick, list);
+    manifestContainer.append(box);
+  }
+
+  async function runNameAnalysis() {
+    if (smartFiles.length === 0) {
+      smartItems = [];
+      renderPanes();
+      return;
+    }
+    const { results } = await window.api.smartClassify(smartRenameFolder, smartFiles);
+    smartItems = results.map((r: any) => ({
+      name: r.name,
+      path: r.path,
+      matched: r.matched,
+      category: r.category,
+      subtype: r.subtype,
+      confidence: r.confidence,
+      matchedOn: r.matchedOn,
+      contested: r.contested,
+      articulation: r.articulation,
+      userCategory: null,
+      userSubtype: null,
+      customName: null
+    }));
+    renderPanes();
+  }
+
+  async function runAudioAnalysis() {
+    if (smartItems.length === 0) return;
+    analyseAudioBtn.disabled = true;
+    analyseAudioBtn.textContent = 'Analysing audio...';
+    let measured = 0;
+    for (const item of smartItems) {
+      const isWav = item.name.toLowerCase().endsWith('.wav');
+      if (isWav && (!item.matched || item.confidence < 0.8)) {
+        try {
+          const res = await window.api.smartAudioFeatures(item.path);
+          if (res && res.ok) {
+            item.audioFeatures = res.features;
+            item.audioCategory = res.category;
+            item.audioSubtype = res.subtype;
+            item.audioConfidence = res.confidence;
+            if (!item.matched && res.category) {
+              item.category = res.category;
+              item.subtype = res.subtype;
+              item.confidence = res.confidence;
+              item.matchedOn = 'audio feature';
+            }
+            measured++;
+          }
+        } catch {
+          /* ignore single file error */
+        }
+      }
+    }
+    analyseAudioBtn.disabled = false;
+    analyseAudioBtn.textContent = '🎧 Analyse audio features';
+    toast('Audio Analysis', `Extracted features for ${measured} file(s)`);
+    renderPanes();
+  }
+
+  analyseNamesBtn.addEventListener('click', () => runNameAnalysis());
+  analyseAudioBtn.addEventListener('click', () => runAudioAnalysis());
+
+  function pathExt(fname: string) {
+    const i = fname.lastIndexOf('.');
+    return i !== -1 ? fname.slice(i) : '';
+  }
+
+  function computeOutputNames() {
+    const counts = new Map<string, number>();
+    const planRows: Array<{ path: string; from: string; to: string; changed: boolean; problem: string | null; item: any }> = [];
+
+    const ordered = [...smartItems].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
+    for (const item of ordered) {
+      const ext = pathExt(item.name);
+      const cat = item.userCategory !== undefined && item.userCategory !== null ? item.userCategory : item.category;
+      const sub = item.userSubtype !== undefined && item.userSubtype !== null ? item.userSubtype : item.subtype;
+
+      if (!cat) {
+        const targetName = item.customName || item.name;
+        planRows.push({
+          path: item.path,
+          from: item.name,
+          to: targetName,
+          changed: targetName !== item.name,
+          problem: null,
+          item
+        });
+        continue;
+      }
+
+      const key = sub ? `${cat}_${sub}` : cat;
+      const currentCount = (counts.get(key) || 0) + 1;
+      counts.set(key, currentCount);
+
+      const targetName = item.customName || `${key}_${currentCount}${ext}`;
+      planRows.push({
+        path: item.path,
+        from: item.name,
+        to: targetName,
+        changed: targetName !== item.name,
+        problem: null,
+        item
+      });
+    }
+
+    const seen = new Map<string, string>();
+    for (const r of planRows) {
+      const lk = r.to.toLowerCase();
+      if (seen.has(lk)) {
+        r.problem = `Same new name as "${seen.get(lk)}"`;
+      } else {
+        seen.set(lk, r.from);
+      }
+    }
+
+    return planRows;
+  }
+
+  function renderPanes() {
+    leftBody.innerHTML = '';
+    rightBody.innerHTML = '';
+
+    const planRows = computeOutputNames();
+    const rowsByPath = new Map(planRows.map((r) => [r.path, r]));
+
+    leftTitle.textContent = `Original files (${smartItems.length})`;
+
+    let displayItems = [...smartItems];
+    if (smartSortMode === 'priority') {
+      displayItems.sort((a, b) => {
+        const rank = (item: any) => {
+          const cat = item.userCategory !== undefined && item.userCategory !== null ? item.userCategory : item.category;
+          if (!cat) return 0;
+          if (item.confidence < 0.8) return 1;
+          return 2;
+        };
+        const diff = rank(a) - rank(b);
+        if (diff !== 0) return diff;
+        return a.name.localeCompare(b.name, undefined, { numeric: true });
+      });
+    } else {
+      displayItems.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    }
+
+    let changingCount = 0;
+    let unresolvedCount = 0;
+
+    for (const item of displayItems) {
+      const planRow = rowsByPath.get(item.path);
+      const isSelected = item.path === smartSelectedPath;
+      const cat = item.userCategory !== undefined && item.userCategory !== null ? item.userCategory : item.category;
+      const sub = item.userSubtype !== undefined && item.userSubtype !== null ? item.userSubtype : item.subtype;
+      const isChanged = planRow ? planRow.changed : false;
+      if (isChanged && !planRow?.problem) changingCount++;
+      if (!cat) unresolvedCount++;
+
+      /* Left Row */
+      const lRow = el('div', `smart-row${isSelected ? ' is-selected' : ''}${cat ? ' is-matched' : ' is-unresolved'}`);
+      const lName = el('span', 'smart-row__name', item.name);
+      lName.title = item.name;
+
+      let badgeType = 'smart-badge--miss';
+      let badgeText = '? Unresolved';
+      if (cat) {
+        if (item.confidence >= 0.8) {
+          badgeType = 'smart-badge--ok';
+          badgeText = `✔ ${sub ? `${cat}_${sub}` : cat}`;
+        } else {
+          badgeType = 'smart-badge--warn';
+          badgeText = `⚠ ${sub ? `${cat}_${sub}` : cat}`;
+        }
+      }
+      const lBadge = el('span', `smart-badge ${badgeType}`, badgeText);
+      lRow.append(lName, lBadge);
+
+      lRow.addEventListener('click', () => {
+        smartSelectedPath = item.path;
+        Player.load({ path: item.path, name: item.name, ext: pathExt(item.name) });
+        renderPanes();
+      });
+      leftBody.append(lRow);
+
+      /* Right Row */
+      const rRow = el('div', `smart-row${isSelected ? ' is-selected' : ''}`);
+      const suggestedText = planRow ? planRow.to : item.name;
+      const rName = el('span', 'smart-row__name', suggestedText);
+      rName.title = suggestedText;
+      rName.style.fontWeight = isChanged ? '600' : 'normal';
+      if (isChanged) rName.style.color = 'var(--amber)';
+
+      const select = document.createElement('select');
+      select.className = 'smart-select';
+      const defOpt = document.createElement('option');
+      defOpt.value = '';
+      defOpt.textContent = '— Unresolved —';
+      select.appendChild(defOpt);
+
+      for (const c of smartCategoriesList) {
+        const opt = document.createElement('option');
+        opt.value = c.category;
+        opt.textContent = `${c.category} (generic)`;
+        if (cat === c.category && !sub) opt.selected = true;
+        select.appendChild(opt);
+
+        for (const s of c.subtypes) {
+          const subOpt = document.createElement('option');
+          subOpt.value = `${c.category}:${s}`;
+          subOpt.textContent = `${c.category} / ${s}`;
+          if (cat === c.category && sub === s) subOpt.selected = true;
+          select.appendChild(subOpt);
+        }
+      }
+
+      select.addEventListener('change', async (e: any) => {
+        const val = e.target.value;
+        if (!val) {
+          item.userCategory = null;
+          item.userSubtype = null;
+        } else if (val.includes(':')) {
+          const [c, s] = val.split(':');
+          item.userCategory = c;
+          item.userSubtype = s;
+        } else {
+          item.userCategory = val;
+          item.userSubtype = null;
+        }
+        item.confidence = 1.0;
+        const tokens = (item.name || '').split(/[^a-zA-Z0-9]+/).filter((t: string) => t.length > 2);
+        if (item.userCategory) {
+          await window.api.userDictLearn(tokens, item.userCategory, item.userSubtype || null);
+        }
+        renderPanes();
+      });
+
+      let reasonText = '';
+      if (item.userCategory) reasonText = 'Manual override';
+      else if (item.matchedOn) reasonText = `Matched "${item.matchedOn}"`;
+      else if (item.audioFeatures) reasonText = `Audio centroid ${item.audioFeatures.centroid}Hz`;
+      const rReason = el('span', 'smart-reason', reasonText);
+
+      rRow.append(rName, select, rReason);
+
+      rRow.addEventListener('click', (e) => {
+        if (e.target && ((e.target as HTMLElement).tagName === 'SELECT' || (e.target as HTMLElement).tagName === 'OPTION')) return;
+        smartSelectedPath = item.path;
+        Player.load({ path: item.path, name: item.name, ext: pathExt(item.name) });
+        renderPanes();
+      });
+      rightBody.append(rRow);
+    }
+
+    summary.textContent = `${changingCount} of ${smartItems.length} files will be renamed · ${unresolvedCount} unresolved (kept original)`;
+    commitBtn.disabled = changingCount === 0;
+    commitBtn.textContent = `Rename ${changingCount} files`;
+
+    commitBtn.onclick = async () => {
+      const plan = {
+        rows: planRows.map((r) => ({
+          path: r.path,
+          from: r.from,
+          to: r.to,
+          changed: r.changed,
+          problem: r.problem
+        })),
+        changing: changingCount,
+        problems: planRows.filter((r) => r.problem).length,
+        tool: 'smart-rename'
+      };
+      const outcome = await window.api.renameApply(plan, { tool: 'smart-rename' });
+      toast('Smart Rename Applied', `Renamed ${outcome.renamed} file(s)${outcome.failed && outcome.failed.length ? ` (${outcome.failed.length} failed)` : ''}`, Boolean(outcome.failed && outcome.failed.length > 0));
+      await loadFolder();
+    };
+
+    undoLastBtn.onclick = async () => {
+      const outcome = await window.api.renameUndo();
+      toast('Undo', `${outcome.reverted} file(s) restored`);
+      await loadFolder();
+    };
+  }
+
+  loadFolder();
 }
 
 /* ------------------------- audio finishing ----------------------- */
@@ -2233,8 +3467,8 @@ function renderSilenceTab(entry = null) {
 let vocalTab = 'split';
 let vocalFolder = null;
 let vocalFiles = [];
-let vocalFile = null;
-let vocalSplitPreview = null;
+let vocalSelected = new Set();
+let vocalSplitPreviews = new Map();
 let vocalManifestPath = null;
 let vocalBlocksFolder = null;
 let vocalRebuildPreview = null;
@@ -2289,8 +3523,8 @@ function renderVocalSplitTab(section) {
     const chosen = await window.api.pickFolder();
     if (chosen) {
       vocalFolder = chosen;
-      vocalFile = null;
-      vocalSplitPreview = null;
+      vocalSelected = new Set();
+      vocalSplitPreviews = new Map();
       try {
         vocalFiles = await window.api.vocalListWav(chosen);
       } catch (err) {
@@ -2304,26 +3538,56 @@ function renderVocalSplitTab(section) {
   section.append(folderBar);
 
   if (vocalFolder) {
-    const fileList = el('div');
+    const fileList = el('div', 'vocal-file-list');
     if (vocalFiles.length === 0) {
       fileList.append(el('p', 'muted', 'No WAV files in this folder.'));
     } else {
+      const selectionBar = el('div', 'tabs vocal-selection-bar');
+      const selectAllBtn = el('button', 'pill pill--sm', 'Select all');
+      const clearBtn = el('button', 'pill pill--sm', 'Clear');
+      const selectionCount = el(
+        'span',
+        'muted',
+        `${vocalSelected.size} of ${vocalFiles.length} selected`
+      );
+      selectAllBtn.disabled = vocalSelected.size === vocalFiles.length;
+      clearBtn.disabled = vocalSelected.size === 0;
+      selectAllBtn.addEventListener('click', () => {
+        vocalSelected = new Set(vocalFiles.map((file) => file.path));
+        vocalSplitPreviews = new Map();
+        render();
+      });
+      clearBtn.addEventListener('click', () => {
+        vocalSelected = new Set();
+        vocalSplitPreviews = new Map();
+        render();
+      });
+      selectionBar.append(selectAllBtn, clearBtn, selectionCount);
+      fileList.append(selectionBar);
+
       vocalFiles.forEach((file) => {
-        const row = el('div', `dupe${vocalFile === file.path ? ' is-on' : ''}`);
-        row.style.cursor = 'pointer';
-        row.append(el('div', 'dupe__name', file.name));
-        row.addEventListener('click', () => {
-          vocalFile = file.path;
-          vocalSplitPreview = null;
+        const row = el('label', `vocal-file-row${vocalSelected.has(file.path) ? ' is-on' : ''}`);
+        const check = el('input', 'check');
+        check.type = 'checkbox';
+        check.checked = vocalSelected.has(file.path);
+        check.addEventListener('change', () => {
+          if (check.checked) vocalSelected.add(file.path);
+          else vocalSelected.delete(file.path);
+          vocalSplitPreviews = new Map();
           render();
         });
+        const fileCopy = el('span', 'vocal-file-row__copy');
+        const name = el('span', 'vocal-file-row__name', file.name);
+        name.title = file.name;
+        fileCopy.append(name, el('span', 'vocal-file-row__meta', formatBytes(file.size)));
+        row.append(check, fileCopy);
         fileList.append(row);
       });
     }
     section.append(fileList);
   }
 
-  if (!vocalFile) {
+  if (vocalSelected.size === 0) {
     viewEl.append(section);
     return;
   }
@@ -2377,8 +3641,8 @@ function renderVocalSplitTab(section) {
 
   const actions = el('div', 'tabs');
   actions.style.marginTop = '6px';
-  const analyseBtn = el('button', 'pill pill--solid', 'Analyse');
-  const splitBtn = el('button', 'pill', 'Split into blocks');
+  const analyseBtn = el('button', 'pill pill--solid', `Analyse selected (${vocalSelected.size})`);
+  const splitBtn = el('button', 'pill', 'Split selected');
   splitBtn.disabled = true;
   actions.append(analyseBtn, splitBtn);
   section.append(actions);
@@ -2391,56 +3655,76 @@ function renderVocalSplitTab(section) {
   viewEl.append(section);
 
   analyseBtn.addEventListener('click', async () => {
+    const selectedFiles = vocalFiles.filter((file) => vocalSelected.has(file.path));
     analyseBtn.disabled = true;
     analyseBtn.textContent = 'Analysing…';
     results.innerHTML = '';
     splitBtn.disabled = true;
+    vocalSplitPreviews = new Map();
 
-    try {
-      vocalSplitPreview = await window.api.vocalSplitAnalyse(vocalFile, options());
-      if (vocalSplitPreview.error) {
-        status.textContent = vocalSplitPreview.error;
-      } else if (vocalSplitPreview.skip) {
-        status.textContent = vocalSplitPreview.reason;
-      } else {
-        status.textContent = `${vocalSplitPreview.blockCount} block(s) found in ${vocalSplitPreview.duration.toFixed(1)}s`;
-        splitBtn.disabled = false;
-        vocalSplitPreview.segments
-          .filter((segment) => segment.type === 'block')
-          .forEach((segment) => {
-            const row = el('div', 'dupe');
-            row.append(el('div', 'dupe__name', segment.id));
-            row.append(
-              el(
-                'div',
-                'dupe__where',
-                `${segment.startSec.toFixed(2)}s – ${segment.endSec.toFixed(2)}s (${segment.durationSec.toFixed(2)}s)`
-              )
-            );
-            results.append(row);
-          });
+    for (let index = 0; index < selectedFiles.length; index += 1) {
+      const file = selectedFiles[index];
+      status.textContent = `Analysing ${index + 1} of ${selectedFiles.length} — ${file.name}`;
+      try {
+        const preview = await window.api.vocalSplitAnalyse(file.path, options());
+        vocalSplitPreviews.set(file.path, preview);
+
+        const row = el('div', 'vocal-analysis-row');
+        const copy = el('div');
+        copy.append(el('div', 'vocal-file-row__name', file.name));
+        const summary = preview.error
+          ? preview.error
+          : preview.skip
+            ? preview.reason
+            : `${preview.blockCount} block(s) · ${preview.duration.toFixed(1)}s`;
+        copy.append(el('div', 'vocal-file-row__meta', summary));
+        row.append(copy);
+        results.append(row);
+      } catch (err) {
+        vocalSplitPreviews.set(file.path, { path: file.path, error: err.message });
+        const row = el('div', 'vocal-analysis-row');
+        row.append(el('div', 'vocal-file-row__name', file.name));
+        row.append(el('div', 'vocal-analysis-row__error', err.message));
+        results.append(row);
       }
-    } catch (err) {
-      status.textContent = err.message;
     }
 
+    const ready = selectedFiles.filter((file) => {
+      const preview = vocalSplitPreviews.get(file.path);
+      return preview && !preview.error && !preview.skip && preview.blockCount > 0;
+    });
+    status.textContent = `${ready.length} of ${selectedFiles.length} selected file(s) ready to split`;
+    splitBtn.disabled = ready.length === 0;
+    splitBtn.textContent = `Split selected (${ready.length})`;
+
     analyseBtn.disabled = false;
-    analyseBtn.textContent = 'Analyse';
+    analyseBtn.textContent = `Analyse selected (${vocalSelected.size})`;
   });
 
   splitBtn.addEventListener('click', async () => {
+    const paths = vocalFiles
+      .filter((file) => vocalSelected.has(file.path))
+      .filter((file) => {
+        const preview = vocalSplitPreviews.get(file.path);
+        return preview && !preview.error && !preview.skip && preview.blockCount > 0;
+      })
+      .map((file) => file.path);
+    if (paths.length === 0) return;
+
     splitBtn.disabled = true;
     splitBtn.textContent = 'Splitting…';
 
     try {
-      const outcome = await window.api.vocalSplit(vocalFile, options());
+      const outcome = await window.api.vocalSplitBatch(paths, options());
       if (!outcome.cancelled) {
+        const done = outcome.results.filter((result) => result.success && result.modified);
+        const skipped = outcome.results.filter((result) => !result.success || !result.modified);
+        const blocks = done.reduce((sum, result) => sum + (result.blockCount || 0), 0);
         toast(
-          'Vocal split',
-          outcome.modified
-            ? `${outcome.blockCount} block(s) written to ${basename(outcome.outputFolder)}`
-            : outcome.message || outcome.error,
-          !outcome.success || !outcome.modified
+          'Vocals split',
+          `${done.length} file(s) · ${blocks} block(s) written` +
+            (skipped.length ? ` · ${skipped.length} skipped` : ''),
+          skipped.length > 0
         );
       }
     } catch (err) {
@@ -2448,7 +3732,7 @@ function renderVocalSplitTab(section) {
     }
 
     splitBtn.disabled = false;
-    splitBtn.textContent = 'Split into blocks';
+    splitBtn.textContent = `Split selected (${paths.length})`;
   });
 }
 
@@ -3442,7 +4726,13 @@ function openStandaloneTool(nextView) {
   navigationHistory.visit(captureLocation());
   view = nextView;
 
-  if (nextView === 'rename') renameFolder = null;
+  if (nextView === 'rename' || nextView === 'batch-rename') renameFolder = null;
+  if (nextView === 'smart-rename') {
+    smartRenameFolder = null;
+    smartFiles = [];
+    smartItems = [];
+    smartSelectedPath = null;
+  }
   if (nextView === 'silence') {
     silenceFolder = null;
     silenceResults = [];
@@ -3452,8 +4742,8 @@ function openStandaloneTool(nextView) {
     vocalTab = 'split';
     vocalFolder = null;
     vocalFiles = [];
-    vocalFile = null;
-    vocalSplitPreview = null;
+    vocalSelected = new Set();
+    vocalSplitPreviews = new Map();
     vocalManifestPath = null;
     vocalBlocksFolder = null;
     vocalRebuildPreview = null;
