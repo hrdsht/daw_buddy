@@ -100,6 +100,10 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('silence:process', paths, options),
   onSilenceProgress: (callback) => subscribe('silence:progress', callback),
 
+  trimAnalyse: (inputPath) => ipcRenderer.invoke('trim:analyse', inputPath),
+  trimProcess: (inputPath, startSec, endSec) =>
+    ipcRenderer.invoke('trim:process', inputPath, startSec, endSec),
+
   vocalListWav: (folder) => ipcRenderer.invoke('vocal:listWav', folder),
   vocalSplitAnalyse: (inputPath, options) =>
     ipcRenderer.invoke('vocal:splitAnalyse', inputPath, options),

@@ -1,5 +1,48 @@
 # Build notes
 
+## BUILT 19 Aug — Waveform drag-to-trim (roadmap Tier 4 / feature audit)
+
+Crop a WAV to a hand-chosen region and save a safe copy. New project tool
+**Trim audio** (Tools tab): pick a WAV, drag two handles on its waveform,
+audition the region on a loop, export a trimmed copy. Original only ever read.
+
+- **`lib/trim.ts`** (new, unit-tested): `trimWav(inputPath, startSec, endSec,
+  outputRoot, {sourceRoot})` reuses `silence.parseWav` + `buildHeader` for a
+  sample-accurate slice. Seconds→frames is done here against the file's OWN
+  sample rate (not the browser's `<audio>.duration`), clamped to `[0,
+  totalFrames]` with a minimum length — so the exported region is exactly what
+  the waveform showed and the right handle clamps to true EOF. Output lands in
+  the app output folder under the same `<root>-<hash>/<relative>` layout as the
+  silence trimmer, suffixed " (trim)". WAV-only; compressed/degenerate inputs
+  are refused, never silently mangled.
+- **IPC:** `trim:analyse` / `trim:process` in `main.ts` (guardApproved +
+  ensureOutputFolder), whitelisted in preload. One file per call — a trim is a
+  chosen region, not a batch, so no confirm dialog; the output path is toasted.
+- **Player region audition:** new `playRegion(start,end,{loop})` / `stopRegion`
+  / `seek` on the player. Region plays through the SAME `<audio>` element (and
+  its reverb/drone chain); the tick loop enforces the end. The player is a
+  singleton, so `play()`, a canvas-scrub, and `load()` all `clearRegion()` —
+  otherwise the next full-file play from the bottom bar would truncate at a
+  stale `regionEnd`.
+- **UI:** `renderTrimTab` draws a dedicated `<canvas>` waveform (peaks from the
+  decoded AudioBuffer) with two draggable handles (pointer events), the region
+  in the theme accent and the discarded ends dimmed, a Start/End/Length
+  readout, and Audition/Stop/Reset/Export. Export disables on a WAV-less source
+  or a degenerate region.
+- **Verified end to end.** Content: a unit test (`test/trim.test.js`, wired into
+  `npm test`) synthesises a WAV whose tone starts at exactly 2.0s, trims
+  `[1.0,3.0]`, and asserts exact kept frame count, the marker landing on the
+  right output frame, a clean `parseWav` of the output, and an untouched source
+  — plus clamping and compressed-input refusal. In-app (driven over the
+  DevTools protocol against a real fixture): navigate → pick WAV → drag the end
+  handle to 40% → export writes a file that re-parses as a valid **1.200s** WAV.
+  Region-leak guard confirmed behaviourally: after auditioning `[0,1.2s]`,
+  normal playback of the 3s file reached 0:02 — past the stale 1.2s end.
+- **Known v1 limit (loud):** export is WAV-only. MP3/FLAC can be auditioned but
+  not exported yet — `convert.ts` already has a decode/encode pipeline, so MP3
+  trim can follow. The bounce watcher groups wav+mp3 and MP3 bounces are common
+  here, so this is the obvious next extension.
+
 ## BUILT 19 Aug — "This week" dashboard (roadmap Tier 4)
 
 A recently-worked-on view over already-scanned data — no new IPC, no

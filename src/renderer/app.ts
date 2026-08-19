@@ -1606,6 +1606,7 @@ function renderProjectToolsTab(entry) {
     if (projectTool === 'rename' || projectTool === 'batch-rename') return renderRenameTab(entry);
     if (projectTool === 'smart-rename') return renderSmartRenameTab(entry);
     if (projectTool === 'silence') return renderSilenceTab(entry);
+    if (projectTool === 'trim') return renderTrimTab(entry);
     if (projectTool === 'qc') return renderQcTab(entry);
   }
 
@@ -1638,6 +1639,12 @@ function renderProjectToolsTab(entry) {
       icon: '✂',
       title: 'Strip silence',
       text: 'Find trailing silence in WAV files and make trimmed copies without touching the originals.'
+    },
+    {
+      key: 'trim',
+      icon: '⇥',
+      title: 'Trim audio',
+      text: 'Drag handles on the waveform to crop a WAV to a chosen region, audition it, and save a copy.'
     },
     {
       key: 'qc',
@@ -3262,6 +3269,311 @@ function renderAudioFinishing() {
   });
 
   paint();
+}
+
+/* --------------------------- waveform trim ------------------------ */
+
+let trimFolder = null;
+let trimFile = null; // { path, name, size }
+let trimStart = 0; // seconds
+let trimEnd = null; // seconds, null until a file's length is known
+let trimDuration = 0; // authoritative length from trim:analyse (WAV frames / sr)
+let trimPeaks = null; // Float32Array of 0..1 peaks, or null while decoding
+let trimLoadToken = 0; // guards against a slow decode landing after a newer pick
+
+function buildTrimPeaks(buffer, buckets) {
+  const data = buffer.getChannelData(0);
+  const n = data.length;
+  const peaks = new Float32Array(buckets);
+  const size = Math.max(1, Math.floor(n / buckets));
+  let max = 0;
+  for (let b = 0; b < buckets; b += 1) {
+    const start = b * size;
+    let peak = 0;
+    for (let i = 0; i < size && start + i < n; i += 1) {
+      const v = Math.abs(data[start + i]);
+      if (v > peak) peak = v;
+    }
+    peaks[b] = peak;
+    if (peak > max) max = peak;
+  }
+  if (max > 0) for (let b = 0; b < buckets; b += 1) peaks[b] /= max;
+  return peaks;
+}
+
+async function selectTrimFile(file) {
+  trimFile = file;
+  trimPeaks = null;
+  trimStart = 0;
+  trimEnd = null;
+  trimDuration = 0;
+  const token = ++trimLoadToken;
+  render(); // reflect the selection + a "decoding" state immediately
+
+  // Authoritative shape from the WAV itself (frames / sample rate).
+  const info = await window.api.trimAnalyse(file.path);
+  if (token !== trimLoadToken) return;
+  if (info.error) {
+    toast('Cannot read file', info.error, true);
+    return;
+  }
+  trimDuration = info.duration;
+  trimStart = 0;
+  trimEnd = info.duration;
+
+  // Decode for the waveform + wire the audio element for region audition.
+  const decoded = await Player.load(file, { autoplay: false });
+  if (token !== trimLoadToken) return;
+  if (decoded) trimPeaks = buildTrimPeaks(decoded, 1000);
+  render();
+}
+
+function renderTrimTab(entry = null) {
+  if (!trimFolder && entry) trimFolder = entry.folder;
+
+  const section = el('div', 'section');
+  section.append(headRow('Trim audio', 'Crop a WAV to a chosen region and save a copy'));
+  section.append(
+    el(
+      'div',
+      'callout',
+      'Drag the two handles to choose a region, audition it on a loop, then export a trimmed copy. WAV sources only — other formats can be auditioned but not yet exported. Your original is never touched.'
+    )
+  );
+
+  /* folder */
+  const folderBar = el('div', 'callout');
+  folderBar.append(el('div', 'page__kicker', 'Reading WAVs from'));
+  const folderPath = el('div', 'mono', trimFolder || 'Choose a folder to begin');
+  folderPath.style.cssText = 'margin:6px 0 10px;word-break:break-all';
+  folderBar.append(folderPath);
+
+  const bar = el('div', 'tabs');
+  const pick = el(
+    'button',
+    `pill${trimFolder ? ' pill--sm' : ' pill--solid'}`,
+    trimFolder ? 'Choose a different folder' : 'Choose folder'
+  );
+  pick.addEventListener('click', async () => {
+    const chosen = await window.api.pickFolder();
+    if (chosen) {
+      trimFolder = chosen;
+      trimFile = null;
+      trimPeaks = null;
+      render();
+    }
+  });
+  bar.append(pick);
+  if (entry) {
+    const useProject = el('button', 'pill pill--sm', "This project's folder");
+    useProject.addEventListener('click', () => {
+      trimFolder = entry.folder;
+      trimFile = null;
+      trimPeaks = null;
+      render();
+    });
+    bar.append(useProject);
+  }
+  folderBar.append(bar);
+  section.append(folderBar);
+
+  /* file list */
+  const fileWrap = el('div');
+  section.append(fileWrap);
+
+  /* editor */
+  const editor = el('div');
+  editor.style.marginTop = '14px';
+  section.append(editor);
+  viewEl.append(section);
+
+  if (trimFolder) {
+    fileWrap.append(el('p', 'muted', 'Loading WAV files…'));
+    window.api.silenceList(trimFolder).then((files) => {
+      fileWrap.innerHTML = '';
+      if (!files.length) {
+        fileWrap.append(el('div', 'callout callout--warn', 'No WAV files in this folder.'));
+        return;
+      }
+      const listEl = el('div', 'trim-files');
+      files.forEach((file) => {
+        const item = el('button', 'trim-file');
+        if (trimFile && trimFile.path === file.path) item.classList.add('is-on');
+        item.append(el('span', 'trim-file__name', file.name));
+        item.append(el('span', 'trim-file__size', formatBytes(file.size)));
+        item.addEventListener('click', () => selectTrimFile(file));
+        listEl.append(item);
+      });
+      fileWrap.append(listEl);
+    });
+  }
+
+  if (trimFile) buildTrimEditor(editor);
+}
+
+function buildTrimEditor(mount) {
+  mount.innerHTML = '';
+  if (!trimPeaks || !trimEnd) {
+    mount.append(el('p', 'muted', 'Decoding waveform…'));
+    return;
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.className = 'trim-canvas';
+  mount.append(canvas);
+
+  const readout = el('div', 'trim-readout');
+  mount.append(readout);
+
+  const controls = el('div', 'tabs');
+  const audition = el('button', 'pill pill--solid', '▶ Audition region');
+  const stop = el('button', 'pill', '■ Stop');
+  const reset = el('button', 'pill pill--sm', 'Reset region');
+  const exportBtn = el('button', 'pill pill--sm', 'Export trimmed copy');
+  controls.append(audition, stop, reset, exportBtn);
+  mount.append(controls);
+
+  const accent =
+    getComputedStyle(document.documentElement).getPropertyValue('--amber').trim() || '#9dde64';
+
+  const isWav = /\.wav$/i.test(trimFile.name);
+  if (!isWav) {
+    const note = el(
+      'div',
+      'muted',
+      'This is not a WAV — you can audition the region, but export is WAV-only for now.'
+    );
+    note.style.marginTop = '8px';
+    mount.append(note);
+  }
+
+  function fmtTime(s) {
+    if (!Number.isFinite(s)) return '0:00.000';
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    const ms = Math.round((s - Math.floor(s)) * 1000);
+    return `${m}:${String(sec).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
+  }
+
+  function updateReadout() {
+    readout.innerHTML = '';
+    readout.append(el('span', 'trim-readout__item', `Start ${fmtTime(trimStart)}`));
+    readout.append(el('span', 'trim-readout__item', `End ${fmtTime(trimEnd)}`));
+    readout.append(
+      el('span', 'trim-readout__item trim-readout__len', `Length ${fmtTime(Math.max(0, trimEnd - trimStart))}`)
+    );
+    exportBtn.disabled = !isWav || !(trimEnd - trimStart > 0.01);
+  }
+
+  function draw() {
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth || 600;
+    const h = 160;
+    if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+    }
+    const c = canvas.getContext('2d');
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.clearRect(0, 0, w, h);
+    const mid = h / 2;
+    const amp = h * 0.44;
+    const step = w / trimPeaks.length;
+    const x0 = (trimStart / trimDuration) * w;
+    const x1 = (trimEnd / trimDuration) * w;
+
+    function wave(color, clipX0, clipX1) {
+      c.save();
+      c.beginPath();
+      c.rect(clipX0, 0, Math.max(0, clipX1 - clipX0), h);
+      c.clip();
+      c.beginPath();
+      for (let i = 0; i < trimPeaks.length; i += 1) {
+        const x = i * step;
+        const y = trimPeaks[i] * amp;
+        if (i === 0) c.moveTo(x, mid - y);
+        else c.lineTo(x, mid - y);
+      }
+      for (let i = trimPeaks.length - 1; i >= 0; i -= 1) {
+        c.lineTo(i * step, mid + trimPeaks[i] * amp);
+      }
+      c.closePath();
+      c.fillStyle = color;
+      c.fill();
+      c.restore();
+    }
+
+    wave('rgba(150,160,150,0.32)', 0, w); // the whole file, dimmed
+    wave(accent, x0, x1); // the chosen region, in the theme accent
+    c.fillStyle = 'rgba(0,0,0,0.34)'; // darken the discarded ends
+    c.fillRect(0, 0, x0, h);
+    c.fillRect(x1, 0, w - x1, h);
+    c.strokeStyle = accent;
+    c.lineWidth = 2;
+    [x0, x1].forEach((x) => {
+      c.beginPath();
+      c.moveTo(x, 0);
+      c.lineTo(x, h);
+      c.stroke();
+    });
+  }
+
+  let dragging = null;
+  function xToSec(clientX) {
+    const rect = canvas.getBoundingClientRect();
+    const frac = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    return frac * trimDuration;
+  }
+  function moveHandle(clientX) {
+    const sec = xToSec(clientX);
+    const minGap = 0.02;
+    if (dragging === 'start') trimStart = Math.max(0, Math.min(sec, trimEnd - minGap));
+    else trimEnd = Math.min(trimDuration, Math.max(sec, trimStart + minGap));
+    draw();
+    updateReadout();
+  }
+  canvas.addEventListener('pointerdown', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const w = rect.width;
+    const x0 = (trimStart / trimDuration) * w;
+    const x1 = (trimEnd / trimDuration) * w;
+    dragging = Math.abs(x - x0) <= Math.abs(x - x1) ? 'start' : 'end';
+    canvas.setPointerCapture(e.pointerId);
+    moveHandle(e.clientX);
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (dragging) moveHandle(e.clientX);
+  });
+  canvas.addEventListener('pointerup', () => {
+    dragging = null;
+  });
+
+  audition.addEventListener('click', () => Player.playRegion(trimStart, trimEnd, { loop: true }));
+  stop.addEventListener('click', () => Player.stopRegion());
+  reset.addEventListener('click', () => {
+    trimStart = 0;
+    trimEnd = trimDuration;
+    draw();
+    updateReadout();
+  });
+  exportBtn.addEventListener('click', async () => {
+    exportBtn.disabled = true;
+    exportBtn.textContent = 'Exporting…';
+    try {
+      const res = await window.api.trimProcess(trimFile.path, trimStart, trimEnd);
+      if (res && res.success) toast('Trimmed copy saved', res.output);
+      else toast('Trim failed', (res && res.error) || 'Unknown error', true);
+    } catch (err) {
+      toast('Trim failed', String((err && err.message) || err), true);
+    }
+    exportBtn.textContent = 'Export trimmed copy';
+    updateReadout();
+  });
+
+  // Draw after layout so clientWidth is settled.
+  requestAnimationFrame(draw);
+  updateReadout();
 }
 
 /* ----------------------------- silence ---------------------------- */

@@ -69,6 +69,20 @@ const Player = (() => {
   let impulseTimer = null;
   let reverbSettings = loadReverbSettings();
 
+  // Region audition (the trim editor). When regionEnd is set, playback stops or
+  // loops at that point. This is a SHARED singleton, so every normal transport
+  // path — play(), a scrub, a new load() — must clear it, or the next full-file
+  // play would truncate at a stale end. See clearRegion().
+  let regionStart = 0;
+  let regionEnd = null; // seconds, or null for normal whole-file playback
+  let regionLoop = false;
+
+  function clearRegion() {
+    regionStart = 0;
+    regionEnd = null;
+    regionLoop = false;
+  }
+
   audio.volume = Number(volumeEl.value);
 
   /* ------------------------- audition chain ---------------------- */
@@ -421,6 +435,7 @@ const Player = (() => {
 
   async function load(file, { autoplay = true } = {}) {
     const serial = ++loadSerial;
+    clearRegion(); // a new file starts as whole-file playback
     current = { path: file.path, name: file.name };
     titleEl.textContent = file.name;
     timeEl.textContent = 'Loading…';
@@ -608,10 +623,41 @@ const Player = (() => {
   /* -------------------------- transport -------------------------- */
 
   function play() {
+    // A plain play is always the whole file — drop any trim region first.
+    clearRegion();
     if (audioContext && audioContext.state === 'suspended') audioContext.resume();
     audio.play().catch(() => {
       /* a load was cancelled by another load — harmless */
     });
+  }
+
+  /**
+   * Audition just [startSec, endSec] — used by the trim editor. Runs through the
+   * same <audio> element (and its reverb/drone chain); the tick loop enforces
+   * the end. `loop` keeps the region playing so you can fine-tune the handles.
+   */
+  function playRegion(startSec, endSec, { loop = true } = {}) {
+    if (!current || duration() === 0) return;
+    regionStart = Math.max(0, startSec || 0);
+    regionEnd = Math.min(duration(), endSec == null ? duration() : endSec);
+    regionLoop = loop;
+    if (regionEnd - regionStart < 0.01) return; // nothing to hear
+    if (audioContext && audioContext.state === 'suspended') audioContext.resume();
+    audio.currentTime = regionStart;
+    audio.play().catch(() => {});
+  }
+
+  function stopRegion() {
+    audio.pause();
+    clearRegion();
+  }
+
+  function seek(seconds) {
+    if (!current || duration() === 0) return;
+    clearRegion();
+    audio.currentTime = Math.max(0, Math.min(duration(), seconds || 0));
+    draw();
+    broadcastState();
   }
 
   function toggle() {
@@ -650,6 +696,11 @@ const Player = (() => {
 
   function tick() {
     if (current && duration() > 0) {
+      // Enforce a trim region: loop back to the start, or stop and release it.
+      if (regionEnd !== null && !audio.paused && audio.currentTime >= regionEnd) {
+        if (regionLoop) audio.currentTime = regionStart;
+        else stopRegion();
+      }
       timeEl.textContent = `${clock(audio.currentTime)} / ${clock(duration())}`;
       draw();
       const now = Date.now();
@@ -663,6 +714,7 @@ const Player = (() => {
 
   canvas.addEventListener('click', (event) => {
     if (!current || duration() === 0) return;
+    clearRegion(); // scrubbing the main player leaves trim-region mode
     const rect = canvas.getBoundingClientRect();
     audio.currentTime = ((event.clientX - rect.left) / rect.width) * duration();
     draw();
@@ -736,6 +788,9 @@ const Player = (() => {
     isDroning: () => Boolean(droneOsc),
     getDecoded: () => decoded,
     getCurrent: () => current,
+    playRegion,
+    stopRegion,
+    seek,
     onChange: (fn) => listeners.push(fn)
   };
 })();

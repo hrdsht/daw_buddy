@@ -18,6 +18,7 @@ const { migrate } = require('./lib/migrate');
 const id3 = require('./lib/id3');
 const renamer = require('./lib/renamer');
 const silence = require('./lib/silence');
+const trim = require('./lib/trim');
 const vocalSplit = require('./lib/vocalSplit');
 const vocalRebuild = require('./lib/vocalRebuild');
 const finisher = require('./lib/finisher');
@@ -1262,6 +1263,30 @@ ipcMain.handle('silence:process', async (event, paths, options) => {
   }
 
   return { cancelled: false, results, outputRoot };
+});
+
+/* ------------------------- waveform trim --------------------------- */
+
+/** The WAV's shape (sample rate, frame count, duration) for the trim editor. */
+ipcMain.handle('trim:analyse', async (event, inputPath) => {
+  guardApproved(inputPath);
+  return trim.analyse(inputPath);
+});
+
+/**
+ * Write [startSec, endSec] of one WAV as a trimmed safe copy. One file at a
+ * time — a trim is a hand-chosen region, not a batch. Seconds -> frames happens
+ * inside trim.ts against the file's own sample rate.
+ */
+ipcMain.handle('trim:process', async (event, inputPath, startSec, endSec) => {
+  const outputRoot = await ensureOutputFolder();
+  if (!outputRoot) {
+    throw new Error('No output folder — add a project folder in Settings first.');
+  }
+
+  const sourceRoot = guardApproved(inputPath);
+  const result = await trim.trimWav(inputPath, startSec, endSec, outputRoot, { sourceRoot });
+  return { ...result, outputRoot };
 });
 
 /* ---------------------- vocal timeline round trip ------------------ */
