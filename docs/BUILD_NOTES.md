@@ -1,5 +1,36 @@
 # Build notes
 
+## BUILT 19 Aug — Shipping: PR CI, app icon, dual-arch mac (toward first release)
+
+The installer pipeline (0003) existed but had never fired — no tags, no
+release, and two gaps that would have shipped a broken or ugly first build.
+
+- **Continuous CI** (`.github/workflows/ci.yml`): typecheck + `npm test` on
+  every push to `main` and every PR. `release.yml` only ran on a published
+  Release, so PRs (e.g. #6) merged with no automated check. Ubuntu-only, no
+  Electron — fast feedback.
+- **App icon** (`build/icon.png`, 1024×1024 from `dawbuddy-logo-v2.png`).
+  `electron-builder.yml` already pointed `buildResources: build`, but the dir
+  didn't exist, so every installer carried the default Electron icon.
+  electron-builder derives `.ico`/`.icns` from this one PNG.
+- **macOS Intel + Apple Silicon.** `mac.target` was a bare `dmg`, which on the
+  arm64 `macos-latest` runner produces an arm64-only build — Intel Macs would
+  get nothing. Now `arch: [x64, arm64]`. Pure-JS packaging, so one runner
+  builds both.
+- **Caught: `lamejs` drift.** It's a declared prod dependency (built-in MP3
+  encoder) but had vanished from local `node_modules`; a `--dir` package run
+  warned `lamejs@undefined` and left it out of the app.asar. The lockfile still
+  pins `1.2.1`, so CI's `npm ci` restores it and the release is fine — but
+  verified locally: after reinstall, `lamejs/lame.all.js` is inside the asar
+  and `Mp3Encoder` resolves. Watch this if the built app ever reports "No MP3
+  encoder available".
+- **Verified**: `npm run build` clean; `npx electron-builder --linux --dir`
+  packages with the icon and lamejs, no warnings.
+- **Still deferred** (0003): code signing — Gatekeeper/SmartScreen warn on
+  first launch until paid certs are wired as CI secrets.
+- **Next**: tag `v0.2.0` on `main` and publish a Release to exercise the
+  three-runner build and produce the first downloadable installers.
+
 ## BUILT 19 Aug — Key detection rework & Scale/Camelot UI (proposal 0007)
 
 - **Key detection engine rework**:
