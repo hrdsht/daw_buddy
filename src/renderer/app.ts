@@ -49,7 +49,7 @@ import {
   ABLETON_PALETTE_GRID,
   getAbletonProjectColor
 } from './dom';
-import { startFeatureWalkthrough, startProjectWalkthrough } from './tour';
+import { startFeatureWalkthrough, startProjectWalkthrough, startToolWalkthrough } from './tour';
 
 // Initialize saved appearance (Default: Minimalist, Dark, Cyan)
 const savedStyle = localStorage.getItem('dawBuddyThemeStyle') || 'minimalist';
@@ -6618,7 +6618,7 @@ function renderScaleMidiTool() {
   breadcrumb.append(back, el('span', 'breadcrumb__sep', '/'), el('span', 'breadcrumb__current', 'Scale & Raaga Detector'));
   section.append(breadcrumb);
 
-  section.append(headRow('Scale & Raaga Detector', 'Drop any audio sample or MIDI file to instantly detect BPM, scale, concert tuning, and matching Indian Raagas.'));
+  section.append(headRow('Scale & Raaga Detector', 'Drop any audio sample or MIDI file to instantly detect BPM, scale, concert tuning, and matching Indian Raagas.', 'scale-tool'));
 
   // Dropzone card
   const dropZone = el('div', `scale-dropzone ${scaleToolState.analyzing ? 'scale-dropzone--analyzing' : ''}`);
@@ -6955,6 +6955,7 @@ function renderScaleMidiTool() {
   }
 
   viewEl.append(section);
+  setTimeout(() => startToolWalkthrough('scale-tool', false), 150);
 }
 
 /* ======================= Music Randomizer Tool ======================= */
@@ -7108,8 +7109,20 @@ function renderRandomizerTool(entry: any = null) {
 
   // Hero Card with Randomize Roll Action
   const hero = el('div', 'randomizer-hero');
-  hero.append(el('h3', 'randomizer-hero__title', '🎲 Musical Idea Randomizer'));
-  hero.append(el('p', 'randomizer-hero__desc', 'Instantly generate fresh musical starting points: key, scale, accompanying Indian Raagas with time-of-day moods, BPM, and suggested time signatures.'));
+  const heroHead = el('div', 'section__head');
+  const heroTitles = el('div', 'section__head-titles');
+  heroTitles.append(el('h3', 'randomizer-hero__title', '🎲 Producer Idea Randomizer & Genre Challenge'));
+  heroTitles.append(el('p', 'randomizer-hero__desc', 'Instantly generate fresh musical starting points: key, scale, accompanying Indian Raagas with time-of-day moods, BPM, suggested time signatures, and genre challenges.'));
+  heroHead.append(heroTitles);
+
+  const tutBtn = el('button', 'pill pill--sm tool-tour-btn', '❓ Tutorial');
+  tutBtn.title = 'Start interactive tutorial for Randomizer';
+  tutBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    startToolWalkthrough('randomizer', true);
+  });
+  heroHead.append(tutBtn);
+  hero.append(heroHead);
 
   const rollBtn = el('button', 'randomizer-roll-btn');
   rollBtn.append(svgIcon('dice', '', 20));
@@ -7574,28 +7587,22 @@ function renderRandomizerTool(entry: any = null) {
 
   section.append(resultBox);
   viewEl.append(section);
+  setTimeout(() => startToolWalkthrough('randomizer', false), 150);
 }
 
 function renderStandaloneTools() {
   viewEl.innerHTML = '';
 
   const section = el('div', 'section');
-  section.append(headRow('Tools'));
-  section.append(
-    el(
-      'div',
-      'callout',
-      'All the utility jobs live here, so the sidebar stays calm and the tools are easier to find when you actually need them.'
-    )
-  );
+  section.append(headRow('Tools', 'All the utility jobs live here, so the sidebar stays calm and the tools are easier to find when you actually need them.', 'tools'));
 
   const grid = el('div', 'tool-grid');
   [
     {
       view: 'randomizer',
       icon: 'dice',
-      title: 'Music Randomizer',
-      text: 'Generate random musical ideas: key, scale, matching Indian Raagas, BPM, and suggested time signatures.'
+      title: 'Producer Randomizer & Genre Challenge',
+      text: 'Generate random musical ideas: key, scale, matching Indian Raagas, BPM, Tala meter, and 48+ genre challenges.'
     },
     {
       view: 'scale-tool',
@@ -7889,10 +7896,24 @@ function svgIcon(name: string, cls = 'coll__icon', size = 16): any {
   return span;
 }
 
-function headRow(title, subtitle?) {
+function headRow(title, subtitle?, toolKey?: string) {
   const head = el('div', 'section__head');
-  head.append(el('h3', null, title));
-  if (subtitle) head.append(el('span', 'muted', subtitle));
+  const titles = el('div', 'section__head-titles');
+  titles.append(el('h3', null, title));
+  if (subtitle) titles.append(el('span', 'muted', subtitle));
+  head.append(titles);
+
+  if (toolKey) {
+    const tutBtn = el('button', 'pill pill--sm tool-tour-btn', '❓ Tutorial');
+    tutBtn.type = 'button';
+    tutBtn.title = 'Start interactive tutorial for this tool';
+    tutBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      startToolWalkthrough(toolKey, true);
+    });
+    head.append(tutBtn);
+  }
+
   return head;
 }
 

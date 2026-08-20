@@ -5213,5 +5213,38 @@ body.multi-select-mode .filerow__select-handle {
   transform: translateY(-1px);
 }
 
+/* Tool Tutorial Button */
+.section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.section__head-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tool-tour-btn {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tool-tour-btn:hover {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
 
 
