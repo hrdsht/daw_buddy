@@ -10,7 +10,7 @@
   - **Smart Renamer**: AI-assisted classification that categorizes cryptic bounce stems into mix-ready instrument groups (Kick, Snare, Bass, Leads, Vocals, FX) with customizable dictionary overrides and safe, reversible rollback manifests.
   - **Bulk Renamer**: Batch prefix/suffix removal, numbering, case conversion, and token pattern templates.
 - **❓ Interactive Tool Tutorials**: Non-intrusive step-by-step walkthrough tours for every studio tool in the suite. Triggers automatically on first open, and can be replayed anytime via the `[ ❓ Tutorial ]` button in each tool's header.
-- **💭 Comic Speech Bubble Theme Lab**: Right-click the `Light mode` / `Dark mode` button to open a comic speech bubble popup with instant preview of Dark, Light, AMOLED surfaces, Minimalist, Ableton Live, and Studio Classic styles, and 14+ accent colors.
+- **💭 Comic Speech Bubble Theme Lab**: Right-click the `Light mode` / `Dark mode` button to open a comic speech bubble popup with instant preview of Dark, Light, AMOLED surfaces, Minimalist, Ableton Like, and Studio Classic styles, and 14+ accent colors.
 - **🎛️ Lossless Audio Finisher & Silence Stripper**: Peak/RMS normalization, beat/bar boundary fitting, and threshold-based leading/trailing silence removal with safety transient padding.
 - **🎙️ Vocal Reconstruction**: Lossless silence-split for external tuning workflows and sample-accurate re-assembly.
 - **💾 Duplicate Sample Auditor & Disk Insights**: Safe hard-link deduplication and non-destructive project folder storage analytics.

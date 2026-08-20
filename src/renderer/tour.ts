@@ -54,7 +54,7 @@ export const TOUR_STEPS: TourStep[] = [
     target: '#themeToggle',
     title: 'Themes & Ableton Priority Matrix',
     description:
-      'Switch between Dark Minimalist, Ableton Live (with pure AMOLED), and Studio Classic. Assign 32-color Ableton clip priority tags to any project.',
+      'Switch between Dark Minimalist, Ableton Like (with pure AMOLED), and Studio Classic. Assign 32-color Ableton clip priority tags to any project.',
     position: 'bottom'
   }
 ];

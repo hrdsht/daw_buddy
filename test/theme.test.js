@@ -12,7 +12,7 @@ const {
 
 function testThemeDefaults() {
   assert.ok(THEME_STYLES.includes('minimalist'), 'Minimalist must be a supported theme style');
-  assert.ok(THEME_STYLES.includes('ableton'), 'Ableton Live must be a supported theme style');
+  assert.ok(THEME_STYLES.includes('ableton'), 'Ableton Like must be a supported theme style');
   assert.ok(THEME_STYLES.includes('classic'), 'Studio Classic must be a supported theme style');
   assert.equal(THEME_STYLES[0], 'minimalist', 'Minimalist should be the default theme style');
 

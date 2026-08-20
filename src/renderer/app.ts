@@ -156,7 +156,7 @@ function toggleThemeComicBubble() {
 
   const styles = [
     { key: 'minimalist', label: '🎛️ Minimal' },
-    { key: 'ableton', label: '🎹 Ableton' },
+    { key: 'ableton', label: '🎹 Ableton Like' },
     { key: 'classic', label: '🎚️ Classic' }
   ];
 
