@@ -29,6 +29,7 @@ const Player = (() => {
   const timeEl = document.getElementById('nowTime');
   const playBtn = document.getElementById('playPause');
   const volumeEl = document.getElementById('volume') as HTMLInputElement;
+  const metroBtn = document.getElementById('metroBtn');
   const verbBtn = document.getElementById('verbBtn');
   const reverbPanel = document.getElementById('reverbPanel');
   const reverbReset = document.getElementById('reverbReset');
@@ -68,6 +69,11 @@ const Player = (() => {
   let reverbEnabled = false;
   let impulseTimer = null;
   let reverbSettings = loadReverbSettings();
+
+  let metronomeEnabled = false;
+  let metronomeSig = '4/4';
+  let metronomeBpm: number | null = null;
+  let lastMetronomeTickIndex = -1;
 
   // Region audition (the trim editor). When regionEnd is set, playback stops or
   // loops at that point. This is a SHARED singleton, so every normal transport
@@ -431,6 +437,133 @@ const Player = (() => {
     droneOsc = null;
   }
 
+  function getPulseInterval(sig: string, bpm: number): number {
+    const safeBpm = bpm > 20 && bpm < 400 ? bpm : 120;
+    const quarterSec = 60 / safeBpm;
+
+    if (sig === '6/8') {
+      return quarterSec / 2; // 6 eighths
+    }
+    if (sig === '3/4') {
+      return quarterSec; // 3 quarters
+    }
+    if (sig === '7/8' || sig === '5/8' || sig === '12/8') {
+      return quarterSec / 2;
+    }
+    return quarterSec;
+  }
+
+  function getPulseAccent(sig: string, pulseIndex: number): { isDownbeat: boolean; isAccent: boolean } {
+    if (sig === '6/8') {
+      const beatInBar = pulseIndex % 6;
+      return { isDownbeat: beatInBar === 0, isAccent: beatInBar === 3 };
+    }
+    if (sig === '3/4') {
+      const beatInBar = pulseIndex % 3;
+      return { isDownbeat: beatInBar === 0, isAccent: false };
+    }
+    if (sig === '7/8') {
+      const beatInBar = pulseIndex % 7;
+      return { isDownbeat: beatInBar === 0, isAccent: beatInBar === 3 || beatInBar === 5 };
+    }
+    if (sig === '5/8') {
+      const beatInBar = pulseIndex % 5;
+      return { isDownbeat: beatInBar === 0, isAccent: beatInBar === 2 };
+    }
+    if (sig === '12/8') {
+      const beatInBar = pulseIndex % 12;
+      return { isDownbeat: beatInBar === 0, isAccent: beatInBar === 3 || beatInBar === 6 || beatInBar === 9 };
+    }
+    const beatInBar = pulseIndex % 4;
+    return { isDownbeat: beatInBar === 0, isAccent: beatInBar === 2 };
+  }
+
+  function playClick(isDownbeat = false, isAccent = false) {
+    if (!audioContext) audioContext = new AudioContext();
+    if (audioContext.state === 'suspended') audioContext.resume();
+    const now = audioContext.currentTime;
+
+    const osc = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+
+    const freq = isDownbeat ? 1400 : isAccent ? 1050 : 800;
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, now);
+    osc.frequency.exponentialRampToValueAtTime(80, now + 0.035);
+
+    const clickVol = isDownbeat ? 0.9 : isAccent ? 0.75 : 0.6;
+    gain.gain.setValueAtTime(clickVol, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.035);
+
+    osc.connect(gain);
+    gain.connect(audioContext.destination);
+
+    osc.start(now);
+    osc.stop(now + 0.04);
+  }
+
+  let standaloneTimer: any = null;
+  let standalonePulseIndex = 0;
+
+  function startStandaloneMetro() {
+    stopStandaloneMetro();
+    standalonePulseIndex = 0;
+    const bpm = metronomeBpm || 120;
+    const intervalSec = getPulseInterval(metronomeSig, bpm);
+    const { isDownbeat, isAccent } = getPulseAccent(metronomeSig, standalonePulseIndex);
+    playClick(isDownbeat, isAccent);
+    standalonePulseIndex += 1;
+
+    standaloneTimer = setInterval(() => {
+      if (!metronomeEnabled || !audio.paused) {
+        stopStandaloneMetro();
+        return;
+      }
+      const { isDownbeat: isDb, isAccent: isAc } = getPulseAccent(metronomeSig, standalonePulseIndex);
+      playClick(isDb, isAc);
+      standalonePulseIndex += 1;
+    }, intervalSec * 1000);
+  }
+
+  function stopStandaloneMetro() {
+    if (standaloneTimer) {
+      clearInterval(standaloneTimer);
+      standaloneTimer = null;
+    }
+  }
+
+  function setMetronome(enabled: boolean) {
+    metronomeEnabled = enabled;
+    lastMetronomeTickIndex = -1;
+    if (metroBtn) metroBtn.classList.toggle('is-on', metronomeEnabled);
+    if (metronomeEnabled && audio.paused) {
+      startStandaloneMetro();
+    } else {
+      stopStandaloneMetro();
+    }
+    emit();
+  }
+
+  function setMetronomeSignature(sig: string) {
+    metronomeSig = sig || '4/4';
+    lastMetronomeTickIndex = -1;
+    if (metronomeEnabled && audio.paused) startStandaloneMetro();
+    emit();
+  }
+
+  function setMetronomeBpm(bpm: number | null) {
+    metronomeBpm = bpm;
+    lastMetronomeTickIndex = -1;
+    if (metronomeEnabled && audio.paused) startStandaloneMetro();
+  }
+
+  if (metroBtn) {
+    metroBtn.addEventListener('click', () => {
+      buildChain();
+      setMetronome(!metronomeEnabled);
+    });
+  }
+
   /* --------------------------- loading --------------------------- */
 
   async function load(file, { autoplay = true } = {}) {
@@ -734,6 +867,16 @@ const Player = (() => {
         if (regionLoop) audio.currentTime = regionStart;
         else stopRegion();
       }
+      if (metronomeEnabled && !audio.paused) {
+        const bpm = metronomeBpm || (current && current.bpm) || 120;
+        const interval = getPulseInterval(metronomeSig, bpm);
+        const currentPulse = Math.floor(audio.currentTime / interval);
+        if (currentPulse !== lastMetronomeTickIndex && currentPulse >= 0) {
+          lastMetronomeTickIndex = currentPulse;
+          const { isDownbeat, isAccent } = getPulseAccent(metronomeSig, currentPulse);
+          playClick(isDownbeat, isAccent);
+        }
+      }
       timeEl.textContent = `${clock(audio.currentTime)} / ${clock(duration())}`;
       draw();
       const now = Date.now();
@@ -752,6 +895,7 @@ const Player = (() => {
   canvas.addEventListener('click', (event) => {
     if (!current || duration() === 0) return;
     clearRegion(); // scrubbing the main player leaves trim-region mode
+    lastMetronomeTickIndex = -1;
     const rect = canvas.getBoundingClientRect();
     audio.currentTime = ((event.clientX - rect.left) / rect.width) * duration();
     draw();
@@ -765,12 +909,14 @@ const Player = (() => {
   });
 
   audio.addEventListener('play', () => {
+    lastMetronomeTickIndex = -1;
     playBtn.innerHTML = '&#10074;&#10074;';
     startTick();
     emit();
     broadcastState();
   });
   audio.addEventListener('pause', () => {
+    lastMetronomeTickIndex = -1;
     playBtn.innerHTML = '&#9654;';
     stopTick();
     draw();
@@ -778,6 +924,7 @@ const Player = (() => {
     broadcastState();
   });
   audio.addEventListener('ended', () => {
+    lastMetronomeTickIndex = -1;
     playBtn.innerHTML = '&#9654;';
     stopTick();
     draw();
@@ -800,6 +947,7 @@ const Player = (() => {
         toggle();
       } else if (cmd === 'seek') {
         if (duration() > 0) {
+          lastMetronomeTickIndex = -1;
           audio.currentTime = Math.max(0, Math.min(duration(), (arg || 0) * duration()));
           draw();
           broadcastState();
@@ -827,6 +975,13 @@ const Player = (() => {
     stopDrone,
     broadcastState,
     isDroning: () => Boolean(droneOsc),
+    setMetronome,
+    isMetronome: () => metronomeEnabled,
+    setMetronomeSignature,
+    getMetronomeSignature: () => metronomeSig,
+    setMetronomeBpm,
+    getMetronomeBpm: () => metronomeBpm,
+    isPlaying: () => !audio.paused && Boolean(current),
     getDecoded: () => decoded,
     getCurrent: () => current,
     playRegion,

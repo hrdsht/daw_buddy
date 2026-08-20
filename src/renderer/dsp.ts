@@ -132,8 +132,157 @@ function spectra(samples: Float32Array | Float64Array, sampleRate: number, onPro
    3. Tempo — spectral flux & autocorrelation
    ================================================================== */
 
+export interface TalaSuggestion {
+  timeSignature: string;
+  name: string;
+  matras: number;
+  vibhag: string;
+  bols: string;
+  description: string;
+}
+
+export const TALA_MAP: Record<string, TalaSuggestion> = {
+  '4/4': {
+    timeSignature: '4/4',
+    name: 'Teental / Keherwa / Adi Tala',
+    matras: 16,
+    vibhag: '4+4+4+4 (or 4+4 Keherwa)',
+    bols: 'Dha Dhin Dhin Dha | Dha Dhin Dhin Dha | Dha Tin Tin Ta | Ta Dhin Dhin Dha',
+    description: 'Most versatile 4-beat cycle (Keherwa 8 matras, Teental 16 matras, Carnatic Adi Tala)'
+  },
+  '3/4': {
+    timeSignature: '3/4',
+    name: 'Dadra / Rupak (3-pulse)',
+    matras: 6,
+    vibhag: '3+3',
+    bols: 'Dha Dhi Na | Dha Tu Na',
+    description: '6 matras divided in 2 vibhags of 3, light classical, Ghazals and folk waltz rhythms'
+  },
+  '6/8': {
+    timeSignature: '6/8',
+    name: 'Dadra (Compound) / Khemta / Garba',
+    matras: 6,
+    vibhag: '3+3 (Dotted Duple)',
+    bols: 'Dha Ge Na | Dha Ti Na',
+    description: 'Compound 6-pulse, energetic folk dances (Garba, Lavani, Qawwali) and swinging Dadra'
+  },
+  '7/8': {
+    timeSignature: '7/8',
+    name: 'Rupak / Mishra Chapu',
+    matras: 7,
+    vibhag: '3+2+2 (or 3+4)',
+    bols: 'Tin Tin Na | Dhi Na | Dhi Na',
+    description: '7 matras beginning on Khali (Tin), Carnatic Mishra Chapu (3+4) and Hindustani Rupak'
+  },
+  '7/4': {
+    timeSignature: '7/4',
+    name: 'Teevra / Roopak Vilambit',
+    matras: 7,
+    vibhag: '3+2+2',
+    bols: 'Dha Din Ta | Tite Kata | Gadi Gana',
+    description: 'Classical 7-beat rhythm with open resonant pakhawaj/tabla strokes'
+  },
+  '5/8': {
+    timeSignature: '5/8',
+    name: 'Khanda Chapu / Half-Jhaptal',
+    matras: 5,
+    vibhag: '2+3',
+    bols: 'Ta Ka | Ta Ki Ta',
+    description: 'Fast 5-pulse syncopation popular in Carnatic fusion and modern Indian indie'
+  },
+  '5/4': {
+    timeSignature: '5/4',
+    name: 'Jhaptal',
+    matras: 10,
+    vibhag: '2+3+2+3',
+    bols: 'Dhi Na | Dhi Dhi Na | Ti Na | Dhi Dhi Na',
+    description: '10 matras in 4 divisions, meditative and majestic classical cadence'
+  },
+  '12/8': {
+    timeSignature: '12/8',
+    name: 'Ektaal / Chautaal',
+    matras: 12,
+    vibhag: '2+2+2+2+2+2',
+    bols: 'Dhin Dhin | DhaGe Tirakita | Tu Na | Kat Ta | DhaGe Tirakita | Dhi Na',
+    description: '12 matras, standard for classical Khayal and Dhrupad compositions'
+  }
+};
+
+export interface MeterResult {
+  timeSignature: string;
+  confidence: number;
+  tala: TalaSuggestion;
+}
+
+export function detectMeter(
+  envelope: Float32Array | null | undefined,
+  beatLag: number,
+  hopSeconds: number
+): MeterResult {
+  if (!envelope || envelope.length < 64 || beatLag <= 0) {
+    return {
+      timeSignature: '4/4',
+      confidence: 0,
+      tala: TALA_MAP['4/4']
+    };
+  }
+
+  function scoreLag(lag: number): number {
+    const iLag = Math.round(lag);
+    if (iLag <= 0 || iLag >= envelope!.length - 1) return 0;
+    let sum = 0;
+    let count = 0;
+    for (let i = 0; i + iLag < envelope!.length; i += 1) {
+      sum += envelope![i] * envelope![i + iLag];
+      count += 1;
+    }
+    return count > 0 ? sum / count : 0;
+  }
+
+  const s2 = scoreLag(beatLag * 2);
+  const s3 = scoreLag(beatLag * 3);
+  const s4 = scoreLag(beatLag * 4);
+  const s5 = scoreLag(beatLag * 2.5); // 5/8 or 5-pulse sub-beats
+  const s5_4 = scoreLag(beatLag * 5); // 5/4
+  const s6 = scoreLag(beatLag * 3);   // 6/8 dotted or 6-pulse
+  const s7 = scoreLag(beatLag * 3.5); // 7/8
+  const s7_4 = scoreLag(beatLag * 7); // 7/4
+  const s12 = scoreLag(beatLag * 6);  // 12/8
+
+  // Calculate comparative weights - prefer fundamental subdivisions
+  const meterScores: Array<{ sig: string; score: number }> = [
+    { sig: '4/4', score: s4 * 1.15 + s2 * 0.5 },
+    { sig: '3/4', score: s3 * 1.2 },
+    { sig: '6/8', score: s6 * 1.1 + scoreLag(beatLag * 1.5) * 0.6 },
+    { sig: '7/8', score: s7 * 1.4 + scoreLag(beatLag * 1.75) * 0.5 },
+    { sig: '7/4', score: s7_4 * 0.9 },
+    { sig: '5/8', score: s5 * 1.4 + scoreLag(beatLag * 1.25) * 0.5 },
+    { sig: '5/4', score: s5_4 * 0.9 },
+    { sig: '12/8', score: s12 * 1.1 }
+  ];
+
+  meterScores.sort((a, b) => b.score - a.score);
+
+  const best = meterScores[0];
+  const second = meterScores[1];
+
+  let confidence = 0.5;
+  if (best.score > 0) {
+    confidence = Math.min(1, Math.max(0.1, (best.score - (second ? second.score * 0.75 : 0)) / (best.score || 1)));
+  }
+
+  const chosenSig = best && best.score > 0 ? best.sig : '4/4';
+  const tala = TALA_MAP[chosenSig] || TALA_MAP['4/4'];
+
+  return {
+    timeSignature: chosenSig,
+    confidence: Math.round(confidence * 100) / 100,
+    tala
+  };
+}
+
 function detectTempo(frames: Float32Array[], hopSeconds: number) {
-  if (frames.length < 32) return { bpm: null, confidence: 0 };
+  if (frames.length < 32) return { bpm: null, confidence: 0, beatLag: 0, envelope: null };
 
   const flux = new Float32Array(frames.length);
   for (let f = 1; f < frames.length; f += 1) {
@@ -173,7 +322,7 @@ function detectTempo(frames: Float32Array[], hopSeconds: number) {
     if (score > best.score) best = { lag, score };
   }
 
-  if (!best.lag) return { bpm: null, confidence: 0 };
+  if (!best.lag) return { bpm: null, confidence: 0, beatLag: 0, envelope };
 
   // Parabolic interpolation around peak
   let exactLag = best.lag;
@@ -196,7 +345,12 @@ function detectTempo(frames: Float32Array[], hopSeconds: number) {
   const meanScore = scores.reduce((a, s) => a + s.score, 0) / scores.length;
   const confidence = meanScore > 0 ? Math.min(1, (best.score / meanScore - 1) / 3) : 0;
 
-  return { bpm: Math.round(bpm * 10) / 10, confidence };
+  return {
+    bpm: Math.round(bpm * 10) / 10,
+    confidence,
+    beatLag: exactLag,
+    envelope
+  };
 }
 
 function movingAverage(data: Float32Array, radius: number): Float32Array {
@@ -269,6 +423,8 @@ export interface RagaSuggestion {
   sargam: string;
   time?: string;
   mood?: string;
+  suggestedTimeSig?: string;
+  suggestedTaal?: string;
   score: number;
   matchPercent: number;
 }
@@ -284,6 +440,8 @@ export const RAGA_DEFINITIONS: Array<{
   sargam: string;
   time: string;
   mood: string;
+  suggestedTimeSig?: string;
+  suggestedTaal?: string;
 }> = [
   {
     name: 'Bhairav',
@@ -295,7 +453,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 11, 8, 7, 5, 4, 1, 0],
     sargam: 'S r G m P d N',
     time: 'Dawn / Early Morning',
-    mood: 'Devotional, Majestic & Serene'
+    mood: 'Devotional, Majestic & Serene',
+    suggestedTimeSig: '4/4',
+    suggestedTaal: 'Teental (16 matras) / Ektaal (12/8)'
   },
   {
     name: 'Ahir Bhairav',
@@ -307,7 +467,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 10, 9, 7, 5, 4, 1, 0],
     sargam: 'S r G m P D n',
     time: 'Morning (1st Prahar)',
-    mood: 'Peaceful, Divine & Uplifting'
+    mood: 'Peaceful, Divine & Uplifting',
+    suggestedTimeSig: '4/4',
+    suggestedTaal: 'Teental (4/4) / Roopak (7/8)'
   },
   {
     name: 'Bairagi',
@@ -319,7 +481,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 10, 7, 5, 1, 0],
     sargam: 'S r m P n',
     time: 'Early Morning',
-    mood: 'Meditative, Renunciant & Pure'
+    mood: 'Meditative, Renunciant & Pure',
+    suggestedTimeSig: '4/4',
+    suggestedTaal: 'Teental / Jhaptal (5/4)'
   },
   {
     name: 'Kalingada',
@@ -331,7 +495,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 11, 8, 7, 5, 4, 1, 0],
     sargam: 'S r G m P d N',
     time: 'Late Morning',
-    mood: 'Light, Melodic & Devotional'
+    mood: 'Light, Melodic & Devotional',
+    suggestedTimeSig: '6/8',
+    suggestedTaal: 'Dadra (6/8) / Keherwa (4/4)'
   },
   {
     name: 'Nat Bhairav',
@@ -343,7 +509,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 11, 8, 7, 5, 4, 2, 0],
     sargam: 'S R G m P d N',
     time: 'Morning',
-    mood: 'Soothing & Contemplative'
+    mood: 'Soothing & Contemplative',
+    suggestedTimeSig: '4/4',
+    suggestedTaal: 'Teental / Keherwa'
   },
   {
     name: 'Yaman / Kalyan',
@@ -355,7 +523,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 11, 9, 7, 6, 4, 2, 0],
     sargam: 'S R G M P D N',
     time: 'Evening (1st Prahar of Night)',
-    mood: 'Romantic, Graceful & Blissful'
+    mood: 'Romantic, Graceful & Blissful',
+    suggestedTimeSig: '4/4',
+    suggestedTaal: 'Teental (16 matras) / Roopak (7/8)'
   },
   {
     name: 'Bhoop / Bhupali',
@@ -367,7 +537,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 9, 7, 4, 2, 0],
     sargam: 'S R G P D',
     time: 'Early Evening',
-    mood: 'Grand, Peaceful & Soothing'
+    mood: 'Grand, Peaceful & Soothing',
+    suggestedTimeSig: '4/4',
+    suggestedTaal: 'Teental / Keherwa'
   },
   {
     name: 'Shuddha Kalyan',
@@ -379,7 +551,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 11, 9, 7, 6, 4, 2, 0],
     sargam: 'S R G P D N',
     time: 'Night (1st Prahar)',
-    mood: 'Serene & Stately'
+    mood: 'Serene & Stately',
+    suggestedTimeSig: '4/4',
+    suggestedTaal: 'Teental / Jhaptal (5/4)'
   },
   {
     name: 'Bihag',
@@ -391,7 +565,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 11, 9, 7, 6, 7, 4, 5, 4, 2, 0],
     sargam: 'S G m M P N',
     time: 'Late Night (2nd Prahar)',
-    mood: 'Romantic, Expressive & Longing'
+    mood: 'Romantic, Expressive & Longing',
+    suggestedTimeSig: '4/4',
+    suggestedTaal: 'Teental / Ektaal (12/8)'
   },
   {
     name: 'Hansadhwani',
@@ -403,7 +579,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 11, 7, 4, 2, 0],
     sargam: 'S R G P N',
     time: 'Evening',
-    mood: 'Auspicious, Radiant & Joyous'
+    mood: 'Auspicious, Radiant & Joyous',
+    suggestedTimeSig: '7/8',
+    suggestedTaal: 'Rupak / Mishra Chapu (7/8) / Keherwa'
   },
   {
     name: 'Bilawal / Alhaiya Bilawal',
@@ -415,7 +593,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 11, 9, 7, 9, 10, 9, 7, 5, 4, 2, 0],
     sargam: 'S R G m P D N',
     time: 'Late Morning',
-    mood: 'Cheerful, Fresh & Vibrant'
+    mood: 'Cheerful, Fresh & Vibrant',
+    suggestedTimeSig: '4/4',
+    suggestedTaal: 'Teental (4/4) / Ektaal (12/8)'
   },
   {
     name: 'Khamaj',
@@ -427,7 +607,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 10, 9, 7, 5, 4, 2, 0],
     sargam: 'S G m P D N n',
     time: 'Late Evening',
-    mood: 'Sensuous, Playful & Expressive'
+    mood: 'Sensuous, Playful & Expressive',
+    suggestedTimeSig: '6/8',
+    suggestedTaal: 'Dadra (6/8) / Keherwa (4/4)'
   },
   {
     name: 'Desh',
@@ -439,7 +621,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 10, 9, 7, 5, 4, 2, 0],
     sargam: 'S R m P N n',
     time: 'Second Prahar of Night (Monsoon)',
-    mood: 'Patriotic, Romantic & Sweet'
+    mood: 'Patriotic, Romantic & Sweet',
+    suggestedTimeSig: '6/8',
+    suggestedTaal: 'Dadra (6/8) / Rupak (7/8)'
   },
   {
     name: 'Rageshri',
@@ -451,7 +635,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 10, 9, 5, 4, 2, 0],
     sargam: 'S R G m D n',
     time: 'Night (2nd Prahar)',
-    mood: 'Romantic, Deep & Tender'
+    mood: 'Romantic, Deep & Tender',
+    suggestedTimeSig: '4/4',
+    suggestedTaal: 'Teental / Jhaptal (5/4)'
   },
   {
     name: 'Kafi',
@@ -463,7 +649,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 10, 9, 7, 5, 3, 2, 0],
     sargam: 'S R g m P D n',
     time: 'Midnight (Spring/Holi)',
-    mood: 'Joyful, Passionate & Folk-Rooted'
+    mood: 'Joyful, Passionate & Folk-Rooted',
+    suggestedTimeSig: '6/8',
+    suggestedTaal: 'Dadra (6/8) / Keherwa (4/4) / Dhamar'
   },
   {
     name: 'Bhimpalasi',
@@ -475,7 +663,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 10, 9, 7, 5, 3, 2, 0],
     sargam: 'S g m P n (R D in avroha)',
     time: 'Late Afternoon',
-    mood: 'Tender, Poignant & Longing'
+    mood: 'Tender, Poignant & Longing',
+    suggestedTimeSig: '5/4',
+    suggestedTaal: 'Jhaptal (10 matras, 5/4) / Teental'
   },
   {
     name: 'Bageshri',
@@ -487,7 +677,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 10, 9, 5, 3, 2, 0],
     sargam: 'S R g m D n',
     time: 'Midnight',
-    mood: 'Romantic, Introspective & Sweet'
+    mood: 'Romantic, Introspective & Sweet',
+    suggestedTimeSig: '5/4',
+    suggestedTaal: 'Jhaptal (5/4) / Teental (4/4)'
   },
   {
     name: 'Brindavani Sarang',
@@ -499,7 +691,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 10, 7, 5, 2, 0],
     sargam: 'S R m P N (n in avroha)',
     time: 'Afternoon',
-    mood: 'Refreshing, Sunny & Sparkling'
+    mood: 'Refreshing, Sunny & Sparkling',
+    suggestedTimeSig: '4/4',
+    suggestedTaal: 'Keherwa / Teental / Ektaal'
   },
   {
     name: 'Asavari',
@@ -511,7 +705,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 10, 8, 7, 5, 3, 2, 0],
     sargam: 'S R g m P d n',
     time: 'Morning (2nd Prahar)',
-    mood: 'Melancholic, Yearning & Tender'
+    mood: 'Melancholic, Yearning & Tender',
+    suggestedTimeSig: '4/4',
+    suggestedTaal: 'Teental / Roopak (7/8)'
   },
   {
     name: 'Darbari Kanada',
@@ -523,7 +719,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 8, 10, 7, 5, 7, 3, 5, 2, 0],
     sargam: 'S R g m P d n',
     time: 'Deep Midnight',
-    mood: 'Majestic, Royal, Profound & Slow'
+    mood: 'Majestic, Royal, Profound & Slow',
+    suggestedTimeSig: '12/8',
+    suggestedTaal: 'Ektaal (12 matras, 12/8) / Teental Vilambit'
   },
   {
     name: 'Jaunpuri',
@@ -535,7 +733,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 10, 8, 7, 5, 3, 2, 0],
     sargam: 'S R g m P d n',
     time: 'Late Morning',
-    mood: 'Plaintive, Expressive & Melodic'
+    mood: 'Plaintive, Expressive & Melodic',
+    suggestedTimeSig: '4/4',
+    suggestedTaal: 'Teental / Roopak (7/8)'
   },
   {
     name: 'Bhairavi',
@@ -547,7 +747,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 10, 8, 7, 5, 3, 1, 0],
     sargam: 'S r g m P d n',
     time: 'Morning (Concert Finale / Anytime)',
-    mood: 'Universal, Devotional & Cathartic'
+    mood: 'Universal, Devotional & Cathartic',
+    suggestedTimeSig: '6/8',
+    suggestedTaal: 'Dadra (6/8) / Keherwa (4/4) / Deepchandi (7/4)'
   },
   {
     name: 'Malkauns',
@@ -559,7 +761,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 10, 8, 5, 3, 0],
     sargam: 'S g m d n',
     time: 'Late Night (3rd Prahar)',
-    mood: 'Intense, Meditative & Hypnotic'
+    mood: 'Intense, Meditative & Hypnotic',
+    suggestedTimeSig: '5/4',
+    suggestedTaal: 'Jhaptal (10 matras, 5/4) / Teental'
   },
   {
     name: 'Miyan Ki Todi',
@@ -571,7 +775,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 11, 8, 7, 6, 3, 1, 0],
     sargam: 'S r g M P d N',
     time: 'Late Morning (2nd Prahar)',
-    mood: 'Pathos, Devotion & Deep Meditation'
+    mood: 'Pathos, Devotion & Deep Meditation',
+    suggestedTimeSig: '12/8',
+    suggestedTaal: 'Ektaal (12/8) / Jhaptal (5/4)'
   },
   {
     name: 'Gurjari Todi',
@@ -583,7 +789,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 11, 8, 6, 3, 1, 0],
     sargam: 'S r g M d N',
     time: 'Late Morning',
-    mood: 'Deeply Moving & Melancholic'
+    mood: 'Deeply Moving & Melancholic',
+    suggestedTimeSig: '12/8',
+    suggestedTaal: 'Ektaal (12/8) / Teental'
   },
   {
     name: 'Poorvi',
@@ -595,7 +803,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 11, 8, 7, 6, 4, 5, 4, 1, 0],
     sargam: 'S r G m M P d N',
     time: 'Sunset (Sandhiprakash)',
-    mood: 'Twilight, Mysterious & Mystical'
+    mood: 'Twilight, Mysterious & Mystical',
+    suggestedTimeSig: '4/4',
+    suggestedTaal: 'Teental / Roopak (7/8)'
   },
   {
     name: 'Puriya Dhanashree',
@@ -607,7 +817,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 11, 8, 7, 6, 4, 1, 0],
     sargam: 'S r G M P d N',
     time: 'Late Afternoon / Dusk',
-    mood: 'Romantic, Serious & Poignant'
+    mood: 'Romantic, Serious & Poignant',
+    suggestedTimeSig: '4/4',
+    suggestedTaal: 'Teental / Roopak (7/8)'
   },
   {
     name: 'Marwa',
@@ -619,7 +831,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 11, 9, 6, 4, 1, 0],
     sargam: 'S r G M D N',
     time: 'Sunset (Sandhiprakash)',
-    mood: 'Anxious, Haunting, Yearning & Unique'
+    mood: 'Anxious, Haunting, Yearning & Unique',
+    suggestedTimeSig: '5/4',
+    suggestedTaal: 'Jhaptal (5/4) / Teental'
   },
   {
     name: 'Charukesi',
@@ -631,7 +845,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 10, 8, 7, 5, 4, 2, 0],
     sargam: 'S R G m P d n',
     time: 'Anytime / Evening',
-    mood: 'Emotional, Melting, Sweet & Soulful'
+    mood: 'Emotional, Melting, Sweet & Soulful',
+    suggestedTimeSig: '7/8',
+    suggestedTaal: 'Mishra Chapu / Rupak (7/8) / Keherwa (4/4)'
   },
   {
     name: 'Shivaranjani',
@@ -643,7 +859,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 9, 7, 3, 2, 0],
     sargam: 'S R g P D',
     time: 'Midnight / Anytime',
-    mood: 'Tearful, Heartfelt, Romantic & Tragic'
+    mood: 'Tearful, Heartfelt, Romantic & Tragic',
+    suggestedTimeSig: '6/8',
+    suggestedTaal: 'Dadra (6/8) / Keherwa (4/4)'
   },
   {
     name: 'Kirwani',
@@ -655,7 +873,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 11, 8, 7, 5, 3, 2, 0],
     sargam: 'S R g m P d N',
     time: 'Night (1st Prahar)',
-    mood: 'Melancholic yet Elegant'
+    mood: 'Melancholic yet Elegant',
+    suggestedTimeSig: '4/4',
+    suggestedTaal: 'Keherwa (4/4) / Dadra (6/8) / Rupak (7/8)'
   },
   {
     name: 'Madhuvanti',
@@ -667,7 +887,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 11, 9, 7, 6, 3, 2, 0],
     sargam: 'S R g M P D N',
     time: 'Late Afternoon / Dusk',
-    mood: 'Sweet, Longing & Romantic'
+    mood: 'Sweet, Longing & Romantic',
+    suggestedTimeSig: '4/4',
+    suggestedTaal: 'Teental (4/4) / Jhaptal (5/4)'
   },
   {
     name: 'Jog',
@@ -679,7 +901,9 @@ export const RAGA_DEFINITIONS: Array<{
     avarohanaDegrees: [12, 10, 7, 5, 4, 5, 3, 0],
     sargam: 'S g G m P n',
     time: 'Late Night',
-    mood: 'Enchanting, Intoxicating & Soulful'
+    mood: 'Enchanting, Intoxicating & Soulful',
+    suggestedTimeSig: '5/4',
+    suggestedTaal: 'Jhaptal (5/4) / Teental (4/4)'
   }
 ];
 
@@ -1133,11 +1357,15 @@ function analyse(channelData: Float32Array | Float64Array, sampleRate: number, o
   const { frames, binHz, hopSeconds } = spectra(slice, sampleRate, onProgress);
 
   const tempo = detectTempo(frames, hopSeconds);
+  const meter = detectMeter(tempo.envelope, tempo.beatLag, hopSeconds);
   const key = detectKey(frames, binHz);
 
   return {
     bpm: tempo.bpm,
     bpmConfidence: tempo.confidence,
+    timeSignature: meter.timeSignature,
+    meterConfidence: meter.confidence,
+    tala: meter.tala,
     key: key.key,
     camelot: key.camelot,
     keyConfidence: key.confidence,
@@ -1155,10 +1383,108 @@ function analyse(channelData: Float32Array | Float64Array, sampleRate: number, o
   };
 }
 
+export interface GenreDefinition {
+  id: string;
+  name: string;
+  category: 'Botanica & Organic' | 'Bollywood & Indian' | 'Afro & Latin' | 'House' | 'Dubstep & Bass' | 'Drum & Bass' | 'Hip Hop & Urban' | 'Techno & Trance' | 'Electronic & Experimental';
+  typicalBpm: [number, number];
+  description: string;
+}
+
+export const GENRE_DATABASE: GenreDefinition[] = [
+  // Botanica & Organic
+  { id: 'botanica', name: 'Botanica', category: 'Botanica & Organic', typicalBpm: [116, 122], description: 'Lush organic house with forest foley, wooden percussion, soothing bamboo flutes, and deep earthly grooves.' },
+  { id: 'organic-house', name: 'Organic House / Downtempo', category: 'Botanica & Organic', typicalBpm: [112, 120], description: 'Warm analog pads, ethnic acoustic strings, gentle 4/4 shakers, and meditative melodic soundscapes.' },
+  { id: 'folktronica', name: 'Folktronica', category: 'Botanica & Organic', typicalBpm: [110, 124], description: 'Fusion of acoustic folk instrumentation (acoustic guitar, violin, kalimba) with electronic beats and micro-edits.' },
+  { id: 'ethno-deep-house', name: 'Ethno Deep House', category: 'Botanica & Organic', typicalBpm: [118, 123], description: 'Middle Eastern and South Asian microtonal vocal samples, framed drums, and deep atmospheric desert house grooves.' },
+  { id: 'trip-hop', name: 'Trip Hop / Downtempo', category: 'Botanica & Organic', typicalBpm: [75, 90], description: 'Heavy downtempo hip hop breakbeats, dark smoky jazz samples, and melancholic cinematic ambience.' },
+  { id: 'ambient-chill', name: 'Ambient & Chillout', category: 'Botanica & Organic', typicalBpm: [60, 90], description: 'Immersive soundscapes, textural drones, slow-evolving harmony, and zero rigid percussion.' },
+
+  // Bollywood & Indian
+  { id: 'bollywood-dance', name: 'Bollywood Dance / Item Song', category: 'Bollywood & Indian', typicalBpm: [128, 135], description: 'High-energy club beats with live dholak, tabla tarang, bright brass stabs, and catchy commercial vocal hooks.' },
+  { id: 'bollywood-romantic', name: 'Bollywood Romantic / Filmi Pop', category: 'Bollywood & Indian', typicalBpm: [75, 90], description: 'Emotive acoustic guitars, bansuri melodies, lush string sections, and heartfelt playback vocal style.' },
+  { id: 'desi-hiphop', name: 'Desi Hip Hop / Gully Rap', category: 'Bollywood & Indian', typicalBpm: [85, 140], description: 'Raw street beats, South Asian boom bap, hard-hitting 808s, and authentic Hindi/Urdu/Punjabi flows.' },
+  { id: 'punjabi-pop', name: 'Punjabi Pop / Bhangra', category: 'Bollywood & Indian', typicalBpm: [95, 105], description: 'Pounding Punjabi dhol, syncopated tumbi riffs, bright algoze, and infectious festive swing.' },
+  { id: 'bolly-trap', name: 'Bolly-Trap / Desi Bass', category: 'Bollywood & Indian', typicalBpm: [130, 150], description: 'Heavy modern 808 slides, shehnai/sitar leads, trap rolling hats, and massive festival drops.' },
+  { id: 'sufi-rock', name: 'Sufi Rock & Pop', category: 'Bollywood & Indian', typicalBpm: [90, 120], description: 'Passionate spiritual lyrics, roaring electric guitars, driving harmonium, and intense dholak accompaniment.' },
+  { id: 'qawwali-fusion', name: 'Qawwali Fusion', category: 'Bollywood & Indian', typicalBpm: [80, 130], description: 'Hypnotic harmonium ostinatos, hand-clapping choruses, tabla syncopation, and ecstatic vocal climaxes.' },
+  { id: 'south-kuthu', name: 'South Indian Kuthu / Dappankuthu', category: 'Bollywood & Indian', typicalBpm: [130, 145], description: 'Frenetic 6/8 or fast 4/4 dappu & thavil beats, roaring nadaswaram leads, and unstoppable street energy.' },
+  { id: 'classic-bollywood', name: 'Classic Bollywood / Retro Filmi', category: 'Bollywood & Indian', typicalBpm: [100, 125], description: '70s/80s analog warmth, RD Burman brass riffs, live orchestral strings, and vintage rhythm sections.' },
+  { id: 'bollywood-ghazal', name: 'Bollywood Ghazal & Semi-Classical', category: 'Bollywood & Indian', typicalBpm: [65, 85], description: 'Subtle sarangi/sitar nuances, classical alaap, slow keherwa or dadra tabla, and deep poetic longing.' },
+
+  // Afro & Latin
+  { id: 'afro-house', name: 'Afro House', category: 'Afro & Latin', typicalBpm: [120, 125], description: 'Hypnotic syncopated tribal percussion, deep basslines, and soulful vocal/synth layers.' },
+  { id: 'afrobeat', name: 'Afrobeat / Afrobeats', category: 'Afro & Latin', typicalBpm: [98, 108], description: 'West African rhythms, bouncy log drums or syncopated kicks, and interlocking guitar riffs.' },
+  { id: 'amapiano', name: 'Amapiano', category: 'Afro & Latin', typicalBpm: [112, 116], description: 'South African deep house with airy pads, wide log drum basslines, and lounge keys.' },
+  { id: 'afro-tech', name: 'Afro Tech', category: 'Afro & Latin', typicalBpm: [122, 126], description: 'Futuristic electronic synths layered with sharp tribal African percussion and dark rolling baselines.' },
+  { id: 'reggaeton', name: 'Reggaeton', category: 'Afro & Latin', typicalBpm: [88, 98], description: 'Iconic Dembow rhythm (boom-ch-boom-chick), punchy 808s, and Latin dance flow.' },
+  { id: 'reggae', name: 'Reggae', category: 'Afro & Latin', typicalBpm: [70, 85], description: 'Offbeat stabs (skank), deep warm basslines, and relaxed one-drop grooves.' },
+  { id: 'dancehall', name: 'Dancehall', category: 'Afro & Latin', typicalBpm: [95, 110], description: 'Fast-paced digital Caribbean riddims with sharp snares, syncopated claps, and energetic flow.' },
+  { id: 'baile-funk', name: 'Baile Funk', category: 'Afro & Latin', typicalBpm: [130, 135], description: 'Brazilian Rio favela beat with raw aggressive percussion and call-and-response vocal chops.' },
+  { id: 'moombahton', name: 'Moombahton', category: 'Afro & Latin', typicalBpm: [108, 112], description: 'Fusion of electro house build-ups and Dutch house synths over a swinging half-time reggaeton Dembow rhythm.' },
+
+  // House
+  { id: 'deep-house', name: 'Deep House', category: 'House', typicalBpm: [120, 125], description: 'Soulful minor 7th/9th chords, warm sub-bass, smooth 4/4 kicks, and lush atmosphere.' },
+  { id: 'tech-house', name: 'Tech House', category: 'House', typicalBpm: [124, 128], description: 'Driving groovy rolling basslines, punchy percussive claps, and minimal hypnotic hooks.' },
+  { id: 'progressive-house', name: 'Progressive House', category: 'House', typicalBpm: [124, 128], description: 'Evolving melodic structures, emotional atmospheric breakdowns, and driving festival energy.' },
+  { id: 'melodic-house', name: 'Melodic House / Techno', category: 'House', typicalBpm: [122, 126], description: 'Deep emotive synth arpeggios, hypnotic basslines, and melancholic chord progressions.' },
+  { id: 'bass-house', name: 'Bass House', category: 'House', typicalBpm: [126, 128], description: 'Heavy aggressive FM growls, wobbly metallic basslines, and four-on-the-floor energy.' },
+  { id: 'electro-house', name: 'Electro House', category: 'House', typicalBpm: [128, 130], description: 'Buzzing distorted synth leads, dirty prominent bass riffs, and high-octane drops.' },
+  { id: 'future-house', name: 'Future House', category: 'House', typicalBpm: [126, 128], description: 'Metallic muted brass/bass stabs, bouncy swing groove, and energetic club drops.' },
+  { id: 'french-house', name: 'French House / Nu-Disco', category: 'House', typicalBpm: [118, 124], description: 'Filtered funk/disco sample loops, phaser sweeps, and grooving slap basslines.' },
+  { id: 'acid-house', name: 'Acid House', category: 'House', typicalBpm: [124, 130], description: 'Squelchy resonant TB-303 basslines, sharp 909 hi-hats, and hypnotic repetition.' },
+  { id: 'uk-garage', name: 'UK Garage / 2-Step', category: 'House', typicalBpm: [130, 136], description: 'Skippy syncopated swing beats, chopped time-stretched vocal samples, and subby organ bass.' },
+  { id: 'speed-garage', name: 'Speed Garage / Bassline', category: 'House', typicalBpm: [136, 142], description: 'Warped heavy 4/4 bass drops, skippy 2-step percussion, and 90s time-stretched vocal chops.' },
+
+  // Dubstep & Bass
+  { id: 'dubstep', name: 'Dubstep', category: 'Dubstep & Bass', typicalBpm: [140, 150], description: 'Half-time 140 BPM groove with devastating sub bass, screeching wavetable growls, and heavy impact.' },
+  { id: 'riddim', name: 'Riddim', category: 'Dubstep & Bass', typicalBpm: [140, 150], description: 'Repetitive minimalist percussive synth chops, swinging triplet groove, and heavy sub pressure.' },
+  { id: 'colour-bass', name: 'Colour Bass / Future Riddim', category: 'Dubstep & Bass', typicalBpm: [140, 150], description: 'Harmonic vocoded bass leads, pitch-tracked resonant chords, and melodic, vibrant textures.' },
+  { id: 'melodic-dubstep', name: 'Melodic Dubstep', category: 'Dubstep & Bass', typicalBpm: [140, 150], description: 'Emotional supersaw chords, lush piano intros, vocal chops, and powerful anthemic drops.' },
+  { id: 'brostep', name: 'Brostep', category: 'Dubstep & Bass', typicalBpm: [140, 150], description: 'Aggressive screeching mid-range growls, metallic tearout synths, and relentless energetic flow.' },
+  { id: 'tearout', name: 'Tearout Dubstep', category: 'Dubstep & Bass', typicalBpm: [140, 150], description: 'Relentless distorted machine-gun synth shots, heavy sustained sub, and chaotic aggression.' },
+  { id: 'deep-dubstep', name: 'Deep Dubstep / 140', category: 'Dubstep & Bass', typicalBpm: [140, 142], description: 'Dark cavernous reverbs, chest-rattling 40Hz sub-bass, and organic space percussion.' },
+  { id: 'future-bass', name: 'Future Bass', category: 'Dubstep & Bass', typicalBpm: [130, 160], description: 'Detuned sidechained supersaw chords, cute vocal chops, pitch-bent 808s, and lush textures.' },
+  { id: 'midtempo', name: 'Midtempo Bass', category: 'Dubstep & Bass', typicalBpm: [100, 110], description: 'Dark cyberpunk mechanical crunch, 100 BPM half-time stomp, and distorted glitchy leads.' },
+  { id: 'glitch-hop', name: 'Glitch Hop / Neurohop', category: 'Dubstep & Bass', typicalBpm: [100, 110], description: 'Complex neurofunk-style morphing basslines, tight hip-hop drum grooves, and intricate micro-edits.' },
+
+  // Drum & Bass
+  { id: 'liquid-dnb', name: 'Liquid DnB', category: 'Drum & Bass', typicalBpm: [170, 175], description: 'Soulful electric piano, lush pad atmosphere, rolling breakbeats, and warm deep sub-bass.' },
+  { id: 'neurofunk', name: 'Neurofunk', category: 'Drum & Bass', typicalBpm: [172, 178], description: 'Complex reese bass sound design, techy mechanical percussion, and dark futuristic soundscapes.' },
+  { id: 'jump-up', name: 'Jump Up', category: 'Drum & Bass', typicalBpm: [174, 178], description: 'Simple energetic squelchy synth stabs, high-pitched screechy bass riffs, and rave hype.' },
+  { id: 'jungle', name: 'Jungle', category: 'Drum & Bass', typicalBpm: [160, 170], description: 'Chopped Amen breaks, pitch-shifted reggae/dub vocal samples, and roaring 808 subs.' },
+  { id: 'dancefloor-dnb', name: 'Dancefloor DnB', category: 'Drum & Bass', typicalBpm: [174, 176], description: 'Huge catchy anthemic supersaw leads, massive vocal top-lines, and energetic festival drops.' },
+  { id: 'halftime-dnb', name: 'Halftime / Drumstep', category: 'Drum & Bass', typicalBpm: [85, 88], description: 'Half-speed 85/170 BPM groove with hip-hop cadence, aggressive bass sound design, and sharp snares.' },
+
+  // Hip Hop & Urban
+  { id: 'boom-bap', name: 'Boom Bap / Golden Era', category: 'Hip Hop & Urban', typicalBpm: [85, 95], description: 'Dusty vinyl drum breaks, punchy kick-snare patterns, sliced jazz/soul samples, and laid-back swing.' },
+  { id: 'trap', name: 'Trap', category: 'Hip Hop & Urban', typicalBpm: [130, 160], description: 'Fast rolling triplet hi-hats, booming pitched 808 sub-bass, snappy brass stabs, and dark minor melodies.' },
+  { id: 'drill', name: 'Drill (UK / NY Drill)', category: 'Hip Hop & Urban', typicalBpm: [140, 145], description: 'Sliding distorted 808 glides, offbeat syncopated counter-snares, and eerie acoustic/vocal loops.' },
+  { id: 'jersey-club', name: 'Jersey Club', category: 'Hip Hop & Urban', typicalBpm: [130, 140], description: 'Trippy 5-beat bounce rhythm, iconic bed squeak samples, chopped vocal stabs, and heavy sub kicks.' },
+  { id: 'lofi-hiphop', name: 'Lo-Fi Hip Hop', category: 'Hip Hop & Urban', typicalBpm: [75, 88], description: 'Detuned tape-warbled Rhodes keys, vinyl crackle, relaxed unquantized drum swing, and chill vibes.' },
+  { id: 'phonk', name: 'Phonk / Drift Phonk', category: 'Hip Hop & Urban', typicalBpm: [130, 160], description: 'Distorted cowbell melodies, Memphis rap vocal chops, aggressive dirty 808s, and dark energy.' },
+
+  // Techno & Trance
+  { id: 'peak-time-techno', name: 'Peak Time / Driving Techno', category: 'Techno & Trance', typicalBpm: [130, 136], description: 'Industrial rumble kicks, relentless 16th-note bass drives, hypnotic synth hooks, and dark energy.' },
+  { id: 'hard-groove-techno', name: 'Hard Groove Techno', category: 'Techno & Trance', typicalBpm: [136, 144], description: 'Old-school tribal techno energy, 909 percussive rolls, funky vocal loops, and relentless dancefloor drive.' },
+  { id: 'hard-techno', name: 'Hard Techno / Schranz', category: 'Techno & Trance', typicalBpm: [145, 160], description: 'Distorted overdriven kick drums, screeches, fast industrial loops, and relentless rave speed.' },
+  { id: 'psytrance', name: 'Psytrance', category: 'Techno & Trance', typicalBpm: [138, 145], description: 'Rolling triplet K-B-B-B basslines, psychedelic squelches, galactic delays, and spiritual chanting.' },
+  { id: 'uplifting-trance', name: 'Uplifting Trance', category: 'Techno & Trance', typicalBpm: [136, 140], description: 'Emotional piano breakdowns, soaring euphoric supersaws, and energetic driving rolling sub.' },
+
+  // Electronic & Experimental
+  { id: 'synthwave', name: 'Synthwave / Retrowave', category: 'Electronic & Experimental', typicalBpm: [105, 120], description: '80s analog synthesizers, gated reverb snare drums, arpeggiated basslines, and neon nostalgia.' },
+  { id: 'wave-hardwave', name: 'Wave / Hardwave', category: 'Electronic & Experimental', typicalBpm: [130, 145], description: 'Emotional detuned reese basses, trap drums, cinematic cyberpunk pads, and soaring pitch-bent leads.' },
+  { id: 'hyperpop', name: 'Hyperpop', category: 'Electronic & Experimental', typicalBpm: [135, 170], description: 'Extreme pitched vocal glitches, abrasive bubblegum synths, distorted 808s, and frantic energy.' },
+  { id: 'indie-dance', name: 'Indie Dance / Dark Disco', category: 'Electronic & Experimental', typicalBpm: [118, 124], description: 'Post-punk basslines, retro drum machines, dry vocal hooks, and atmospheric synth pads.' },
+  { id: 'shoegaze', name: 'Shoegaze / Dream Pop', category: 'Electronic & Experimental', typicalBpm: [90, 125], description: 'Walls of fuzz and reverb-drenched guitars, ethereal breathy vocals, and hazy emotional textures.' },
+  { id: 'chiptune', name: 'Chiptune / 8-Bit', category: 'Electronic & Experimental', typicalBpm: [125, 160], description: 'Vintage game-console synth waveforms (square, triangle, noise), rapid arpeggios, and retro nostalgia.' }
+];
+
 export const DSP = {
   analyse,
   detectKey,
   detectTempo,
+  detectMeter,
   detectTuning,
   detectDroneAndBass,
   fftMagnitudes,
@@ -1171,6 +1497,8 @@ export const DSP = {
   NOTES,
   SCALES,
   THAAT_MAP,
+  TALA_MAP,
   RAGA_DEFINITIONS,
+  GENRE_DATABASE,
   RECOMMENDED_FFT
 };

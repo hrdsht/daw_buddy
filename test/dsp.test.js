@@ -105,11 +105,108 @@ function detunedIndianClassicalAudioIdentifiesTuningAndTonic() {
   assert.equal(result.tuningA4, 431);
 }
 
+function meterAndTalaDetectionTests() {
+  assert.ok(DSP.TALA_MAP['7/8'], 'TALA_MAP should contain 7/8');
+  assert.equal(DSP.TALA_MAP['7/8'].name, 'Rupak / Mishra Chapu');
+  assert.equal(DSP.TALA_MAP['7/8'].matras, 7);
+
+  assert.ok(DSP.TALA_MAP['6/8'], 'TALA_MAP should contain 6/8');
+  assert.ok(DSP.TALA_MAP['5/8'], 'TALA_MAP should contain 5/8');
+  assert.ok(DSP.TALA_MAP['4/4'], 'TALA_MAP should contain 4/4');
+
+  // Synthetic envelope with strong 7-pulse periodicity (Rupak 7/8 cycle)
+  const beatLag = 20;
+  const env = new Float32Array(500);
+  for (let i = 0; i < env.length; i += Math.round(beatLag * 3.5)) {
+    env[i] = 1.0;
+  }
+  const meter = DSP.detectMeter(env, beatLag, 0.01);
+  assert.equal(meter.timeSignature, '7/8');
+  assert.equal(meter.tala.name, 'Rupak / Mishra Chapu');
+}
+
+function ragaSuggestedTimeSignatureTests() {
+  const bhairavi = DSP.RAGA_DEFINITIONS.find((r) => r.name === 'Bhairavi');
+  assert.ok(bhairavi, 'Bhairavi should exist in RAGA_DEFINITIONS');
+  assert.equal(bhairavi.suggestedTimeSig, '6/8');
+  assert.ok(bhairavi.suggestedTaal.includes('Dadra'));
+
+  const bhimpalasi = DSP.RAGA_DEFINITIONS.find((r) => r.name === 'Bhimpalasi');
+  assert.ok(bhimpalasi, 'Bhimpalasi should exist in RAGA_DEFINITIONS');
+  assert.equal(bhimpalasi.suggestedTimeSig, '5/4');
+  assert.ok(bhimpalasi.suggestedTaal.includes('Jhaptal'));
+
+  const hansadhwani = DSP.RAGA_DEFINITIONS.find((r) => r.name === 'Hansadhwani');
+  assert.ok(hansadhwani, 'Hansadhwani should exist in RAGA_DEFINITIONS');
+  assert.equal(hansadhwani.suggestedTimeSig, '7/8');
+  assert.ok(hansadhwani.suggestedTaal.includes('Rupak'));
+
+  // Test findMatchingRagas propagation
+  const chroma = new Float64Array(12);
+  bhairavi.degrees.forEach((d) => { chroma[d] = 1.0; });
+  const matches = DSP.findMatchingRagas(chroma, 0, 5);
+  const matchedBhairavi = matches.find((m) => m.name === 'Bhairavi');
+  assert.ok(matchedBhairavi, 'findMatchingRagas should return Bhairavi');
+  assert.equal(matchedBhairavi.suggestedTimeSig, '6/8');
+}
+
+function genreDatabaseTests() {
+  assert.ok(DSP.GENRE_DATABASE && DSP.GENRE_DATABASE.length >= 40, 'GENRE_DATABASE should have rich genre coverage');
+  
+  const botanica = DSP.GENRE_DATABASE.find((g) => g.id === 'botanica');
+  assert.ok(botanica, 'Botanica should exist');
+  assert.equal(botanica.category, 'Botanica & Organic');
+
+  const bollyDance = DSP.GENRE_DATABASE.find((g) => g.id === 'bollywood-dance');
+  assert.ok(bollyDance, 'Bollywood Dance should exist');
+  assert.equal(bollyDance.category, 'Bollywood & Indian');
+
+  const bollyTrap = DSP.GENRE_DATABASE.find((g) => g.id === 'bolly-trap');
+  assert.ok(bollyTrap, 'Bolly-Trap should exist');
+  assert.equal(bollyTrap.category, 'Bollywood & Indian');
+
+  const punjabiPop = DSP.GENRE_DATABASE.find((g) => g.id === 'punjabi-pop');
+  assert.ok(punjabiPop, 'Punjabi Pop should exist');
+
+  const kuthu = DSP.GENRE_DATABASE.find((g) => g.id === 'south-kuthu');
+  assert.ok(kuthu, 'South Indian Kuthu should exist');
+
+  const afroHouse = DSP.GENRE_DATABASE.find((g) => g.id === 'afro-house');
+  assert.ok(afroHouse, 'Afro House should exist');
+  assert.equal(afroHouse.category, 'Afro & Latin');
+
+  const riddim = DSP.GENRE_DATABASE.find((g) => g.id === 'riddim');
+  assert.ok(riddim, 'Riddim should exist');
+  assert.equal(riddim.category, 'Dubstep & Bass');
+
+  const colourBass = DSP.GENRE_DATABASE.find((g) => g.id === 'colour-bass');
+  assert.ok(colourBass, 'Colour Bass should exist');
+  assert.equal(colourBass.category, 'Dubstep & Bass');
+
+  const liquidDnb = DSP.GENRE_DATABASE.find((g) => g.id === 'liquid-dnb');
+  assert.ok(liquidDnb, 'Liquid DnB should exist');
+  assert.equal(liquidDnb.category, 'Drum & Bass');
+
+  const reggaeton = DSP.GENRE_DATABASE.find((g) => g.id === 'reggaeton');
+  assert.ok(reggaeton, 'Reggaeton should exist');
+
+  const phonk = DSP.GENRE_DATABASE.find((g) => g.id === 'phonk');
+  assert.ok(phonk, 'Phonk should exist');
+}
+
 automaticPlayAnalysisReturnsTempoAndKey();
 console.log('ok - automaticPlayAnalysisReturnsTempoAndKey');
 ragaPerformanceIdentifiesTonicAndModalScale();
 console.log('ok - ragaPerformanceIdentifiesTonicAndModalScale');
 detunedIndianClassicalAudioIdentifiesTuningAndTonic();
 console.log('ok - detunedIndianClassicalAudioIdentifiesTuningAndTonic');
+meterAndTalaDetectionTests();
+console.log('ok - meterAndTalaDetectionTests');
+ragaSuggestedTimeSignatureTests();
+console.log('ok - ragaSuggestedTimeSignatureTests');
+genreDatabaseTests();
+console.log('ok - genreDatabaseTests');
+
+
 
 

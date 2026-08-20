@@ -908,6 +908,14 @@ ipcMain.handle('shell:open', async (event, target) => {
   return error || null;
 });
 
+ipcMain.handle('shell:openExternal', async (event, rawUrl) => {
+  if (typeof rawUrl !== 'string') return;
+  if (!/^https?:\/\//i.test(rawUrl)) {
+    throw new Error('Invalid URL protocol');
+  }
+  return shell.openExternal(rawUrl);
+});
+
 ipcMain.handle('daws:running', () => procs.runningDaws());
 
 /* ------------------------------ tools ----------------------------- */

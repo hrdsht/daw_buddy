@@ -56,6 +56,11 @@ export function formatBpm(bpm: number | null | undefined): string {
   return Number.isInteger(bpm) ? String(bpm) : bpm.toFixed(1);
 }
 
+export function formatTimeSignature(sig: string | null | undefined): string {
+  if (!sig) return '—';
+  return sig;
+}
+
 export function formatBytes(bytes: number | null | undefined): string {
   if (!bytes) return '0 B';
   if (bytes < 1024) return `${bytes} B`;

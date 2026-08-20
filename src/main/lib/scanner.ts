@@ -354,6 +354,7 @@ async function buildEntry({ sessionPath, folder, root, isPackage }, options, fol
     isPackage: Boolean(isPackage),
     bpm: null,
     bpmError: null,
+    timeSignature: null as string | null,
     backupCount: 0,
     health: 0,
     packaged: false,
@@ -373,7 +374,7 @@ async function buildEntry({ sessionPath, folder, root, isPackage }, options, fol
     entry.modified = 0;
   }
 
-  /* ---- tempo, from cache when the file hasn't changed ---- */
+  /* ---- tempo & time signature, from cache when the file hasn't changed ---- */
   const version = daw.parserVersion(sessionPath);
   const cached =
     options.cache &&
@@ -381,15 +382,18 @@ async function buildEntry({ sessionPath, folder, root, isPackage }, options, fol
 
   if (cached) {
     entry.bpm = cached.bpm;
+    entry.timeSignature = cached.timeSignature || null;
     entry.bpmError = cached.bpmError || null;
     entry.fromCache = true;
   } else if (format) {
     const result = await format.readTempo(sessionPath);
     entry.bpm = result.bpm;
+    entry.timeSignature = result.timeSignature || null;
     entry.bpmError = result.error || null;
     if (options.cache) {
       options.cache.set(sessionPath, entry.modified, entry.size, version, {
         bpm: entry.bpm,
+        timeSignature: entry.timeSignature,
         bpmError: entry.bpmError
       });
     }

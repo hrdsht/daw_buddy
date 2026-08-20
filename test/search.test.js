@@ -65,6 +65,51 @@ function combinedFieldsAndText() {
   assert.equal(matchesQuery(reel, reelRec, q), false);
 }
 
+function timeSignatureAndTalaFilters() {
+  const indianTrack = {
+    name: 'Yaman Fusion',
+    location: 'Ragas',
+    daw: 'Ableton',
+    bpm: 85,
+    timeSignature: '7/8'
+  };
+  const indianRec = { key: 'E Lydian', camelot: '9B', note: 'sitar solo', tala: 'Rupak / Mishra Chapu' };
+
+  assert.equal(matchesQuery(indianTrack, indianRec, parseQuery('sig:7/8')), true);
+  assert.equal(matchesQuery(indianTrack, indianRec, parseQuery('timesig:7/8')), true);
+  assert.equal(matchesQuery(indianTrack, indianRec, parseQuery('sig:4/4')), false);
+  assert.equal(matchesQuery(indianTrack, indianRec, parseQuery('tala:rupak')), true);
+  assert.equal(matchesQuery(indianTrack, indianRec, parseQuery('tala:dadra')), false);
+}
+
+function genreFilters() {
+  const afroTrack = {
+    name: 'Sunset Safari',
+    location: 'Afro Sessions',
+    daw: 'Ableton',
+    bpm: 122
+  };
+  const afroRec = { key: 'A Minor', camelot: '8A', genre: 'Afro House' };
+
+  const riddimTrack = {
+    name: 'Monster Trench',
+    location: 'Bass Vault',
+    daw: 'FL Studio',
+    bpm: 140
+  };
+  const riddimRec = { key: 'F Minor', camelot: '4A', genre: 'Riddim' };
+
+  // Explicit genre: filter
+  assert.equal(matchesQuery(afroTrack, afroRec, parseQuery('genre:afro')), true);
+  assert.equal(matchesQuery(afroTrack, afroRec, parseQuery('genre:"afro house"')), true);
+  assert.equal(matchesQuery(riddimTrack, riddimRec, parseQuery('genre:afro')), false);
+  assert.equal(matchesQuery(riddimTrack, riddimRec, parseQuery('genre:riddim')), true);
+
+  // Free text search matching genre
+  assert.equal(matchesQuery(afroTrack, afroRec, parseQuery('afro')), true);
+  assert.equal(matchesQuery(riddimTrack, riddimRec, parseQuery('riddim')), true);
+}
+
 function emptyQueryIsInactive() {
   assert.equal(hasQuery(parseQuery('   ')), false);
 }
@@ -76,6 +121,8 @@ async function run() {
     bareYearRangeStaysText,
     keyMatchesNameOrCamelot,
     dawAndNoteFilters,
+    timeSignatureAndTalaFilters,
+    genreFilters,
     freeTextIsAndMatched,
     combinedFieldsAndText,
     emptyQueryIsInactive

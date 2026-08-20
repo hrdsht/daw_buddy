@@ -35,16 +35,34 @@ async function readAbletonTempo(filePath) {
         ? (await gunzip(raw)).toString('utf8')
         : raw.toString('utf8');
   } catch (err) {
-    return { bpm: null, error: `Could not read set: ${err.message}` };
+    return { bpm: null, timeSignature: null, error: `Could not read set: ${err.message}` };
   }
 
+  let bpm = null;
   const modern = xml.match(/<Tempo>[\s\S]{0,400}?<Manual Value="([\d.]+)"/);
-  if (modern) return { bpm: round2(parseFloat(modern[1])) };
+  if (modern) {
+    bpm = round2(parseFloat(modern[1]));
+  } else {
+    const legacy = xml.match(/<CurrentTempo[^>]*Value="([\d.]+)"/);
+    if (legacy) bpm = round2(parseFloat(legacy[1]));
+  }
 
-  const legacy = xml.match(/<CurrentTempo[^>]*Value="([\d.]+)"/);
-  if (legacy) return { bpm: round2(parseFloat(legacy[1])) };
+  let timeSignature = null;
+  const numMatch =
+    xml.match(/<TimeSignature>[\s\S]{0,300}?<Numerator\s+Value="(\d+)"/i) ||
+    xml.match(/<RemoteableTimeSignature>[\s\S]{0,300}?<Numerator\s+Value="(\d+)"/i) ||
+    xml.match(/<SongMasterTimeSignature>[\s\S]{0,300}?<Numerator\s+Value="(\d+)"/i);
+  const denomMatch =
+    xml.match(/<TimeSignature>[\s\S]{0,300}?<Denominator\s+Value="(\d+)"/i) ||
+    xml.match(/<RemoteableTimeSignature>[\s\S]{0,300}?<Denominator\s+Value="(\d+)"/i) ||
+    xml.match(/<SongMasterTimeSignature>[\s\S]{0,300}?<Denominator\s+Value="(\d+)"/i);
 
-  return { bpm: null, error: 'No tempo tag found' };
+  if (numMatch && denomMatch) {
+    timeSignature = `${numMatch[1]}/${denomMatch[1]}`;
+  }
+
+  if (bpm !== null) return { bpm, timeSignature };
+  return { bpm: null, timeSignature, error: 'No tempo tag found' };
 }
 
 async function countAbletonBackups(projectPath) {
@@ -55,6 +73,9 @@ async function countAbletonBackups(projectPath) {
 /* FL Studio — .flp, binary event stream                              */
 /* ================================================================== */
 
+const EVT_TIME_SIG_NUM = 17; // 1 byte
+const EVT_TIME_SIG_DENOM = 18; // 1 byte
+const EVT_BAR_NUM = 22; // 1 byte
 const EVT_TEMPO_OLD = 66; // 2 byte, whole BPM
 const EVT_TEMPO_FINE = 156; // 4 byte, BPM * 1000
 
@@ -63,28 +84,37 @@ async function readFlpTempo(filePath) {
   try {
     buf = await fs.readFile(filePath);
   } catch (err) {
-    return { bpm: null, error: `Could not read project: ${err.message}` };
+    return { bpm: null, timeSignature: null, error: `Could not read project: ${err.message}` };
   }
 
   if (buf.length < 16 || buf.toString('ascii', 0, 4) !== 'FLhd') {
-    return { bpm: null, error: 'Not a recognisable FL project' };
+    return { bpm: null, timeSignature: null, error: 'Not a recognisable FL project' };
   }
 
   let pos = 8 + buf.readUInt32LE(4);
   if (buf.toString('ascii', pos, pos + 4) !== 'FLdt') {
-    return { bpm: null, error: 'FL data chunk missing' };
+    return { bpm: null, timeSignature: null, error: 'FL data chunk missing' };
   }
 
   const end = Math.min(pos + 8 + buf.readUInt32LE(pos + 4), buf.length);
   pos += 8;
 
   let fallback = null;
+  let timeSigNum = null;
+  let timeSigDenom = null;
 
   while (pos < end) {
     const id = buf[pos];
     pos += 1;
 
     if (id < 64) {
+      if (pos + 1 > end) break;
+      const byteVal = buf[pos];
+      if (id === EVT_TIME_SIG_NUM || id === EVT_BAR_NUM) {
+        if (byteVal > 0 && byteVal <= 32) timeSigNum = byteVal;
+      } else if (id === EVT_TIME_SIG_DENOM) {
+        if (byteVal > 0 && byteVal <= 32) timeSigDenom = byteVal;
+      }
       pos += 1;
     } else if (id < 128) {
       if (pos + 2 > end) break;
@@ -95,13 +125,16 @@ async function readFlpTempo(filePath) {
       if (pos + 4 > end) break;
       const value = buf.readUInt32LE(pos);
       pos += 4;
-      if (id === EVT_TEMPO_FINE) return { bpm: round2(value / 1000) };
+      if (id === EVT_TEMPO_FINE) {
+        const timeSignature = timeSigNum ? `${timeSigNum}/${timeSigDenom || 4}` : null;
+        return { bpm: round2(value / 1000), timeSignature };
+      }
     } else {
       let length = 0;
       let shift = 0;
       let byte;
       do {
-        if (pos >= end) return finishFlp(fallback, buf);
+        if (pos >= end) return finishFlp(fallback, buf, timeSigNum, timeSigDenom);
         byte = buf[pos];
         pos += 1;
         length |= (byte & 0x7f) << shift;
@@ -111,17 +144,18 @@ async function readFlpTempo(filePath) {
     }
   }
 
-  return finishFlp(fallback, buf);
+  return finishFlp(fallback, buf, timeSigNum, timeSigDenom);
 }
 
-function finishFlp(fallback, buf) {
-  if (fallback !== null) return { bpm: fallback };
+function finishFlp(fallback, buf, timeSigNum = null, timeSigDenom = null) {
+  const timeSignature = timeSigNum ? `${timeSigNum}/${timeSigDenom || 4}` : null;
+  if (fallback !== null) return { bpm: fallback, timeSignature };
 
   // The sequential walk found nothing. On FL 26 that's expected — see below.
   const scanned = scanFlpTempo(buf);
-  if (scanned !== null) return { bpm: scanned };
+  if (scanned !== null) return { bpm: scanned, timeSignature };
 
-  return { bpm: null, error: 'No tempo event found' };
+  return { bpm: null, timeSignature, error: 'No tempo event found' };
 }
 
 /**
@@ -227,11 +261,15 @@ async function readReaperTempo(filePath) {
     await handle.close();
 
     const head = buffer.toString('utf8', 0, bytesRead);
-    const match = head.match(/^\s*TEMPO\s+([\d.]+)/m);
-    if (match) return { bpm: round2(parseFloat(match[1])) };
-    return { bpm: null, error: 'No TEMPO line found' };
+    const match = head.match(/^\s*TEMPO\s+([\d.]+)(?:\s+(\d+)\s+(\d+))?/m);
+    if (match) {
+      const bpm = round2(parseFloat(match[1]));
+      const timeSignature = match[2] && match[3] ? `${match[2]}/${match[3]}` : null;
+      return { bpm, timeSignature };
+    }
+    return { bpm: null, timeSignature: null, error: 'No TEMPO line found' };
   } catch (err) {
-    return { bpm: null, error: `Could not read project: ${err.message}` };
+    return { bpm: null, timeSignature: null, error: `Could not read project: ${err.message}` };
   }
 }
 
@@ -268,9 +306,9 @@ async function readBitwigTempo(filePath) {
   try {
     const handle = await fs.open(filePath, 'r');
     await handle.close();
-    return { bpm: null, error: 'Bitwig tempo not readable yet' };
+    return { bpm: null, timeSignature: null, error: 'Bitwig tempo not readable yet' };
   } catch (err) {
-    return { bpm: null, error: `Could not read project: ${err.message}` };
+    return { bpm: null, timeSignature: null, error: `Could not read project: ${err.message}` };
   }
 }
 
@@ -313,9 +351,9 @@ async function readProToolsTempo(filePath) {
   try {
     const handle = await fs.open(filePath, 'r');
     await handle.close();
-    return { bpm: null, error: 'Pro Tools tempo not readable yet' };
+    return { bpm: null, timeSignature: null, error: 'Pro Tools tempo not readable yet' };
   } catch (err) {
-    return { bpm: null, error: `Could not read session: ${err.message}` };
+    return { bpm: null, timeSignature: null, error: `Could not read session: ${err.message}` };
   }
 }
 
@@ -353,39 +391,62 @@ async function readStudioOneTempo(filePath) {
   try {
     buf = await fs.readFile(filePath);
   } catch (err) {
-    return { bpm: null, error: `Could not read song: ${err.message}` };
+    return { bpm: null, timeSignature: null, error: `Could not read song: ${err.message}` };
   }
 
   const entries = zip.listEntries(buf);
-  if (!entries) return { bpm: null, error: 'Not a readable .song container' };
+  if (!entries) return { bpm: null, timeSignature: null, error: 'Not a readable .song container' };
 
   const candidates = entries
     .filter((entry) => entry.size > 0 && entry.size < 4 * 1024 * 1024)
     .filter((entry) => !/\.(wav|aiff|flac|mp3|png|jpg)$/i.test(entry.name))
     .slice(0, 40);
 
+  let bpm = null;
+  let timeSignature = null;
+
   for (const entry of candidates) {
     const data = zip.readEntry(buf, entry);
     if (!data) continue;
     const text = data.toString('utf8');
 
-    const patterns = [
-      /["']?[Tt]empo["']?\s*[=:]\s*["']?([\d.]+)/,
-      /<Tempo[^>]*[Vv]alue\s*=\s*"([\d.]+)"/,
-      /name\s*=\s*"[Tt]empo"[^>]*value\s*=\s*"([\d.]+)"/
-    ];
+    if (bpm === null) {
+      const patterns = [
+        /["']?[Tt]empo["']?\s*[=:]\s*["']?([\d.]+)/,
+        /<Tempo[^>]*[Vv]alue\s*=\s*"([\d.]+)"/,
+        /name\s*=\s*"[Tt]empo"[^>]*value\s*=\s*"([\d.]+)"/
+      ];
 
-    for (const pattern of patterns) {
-      const match = text.match(pattern);
-      if (!match) continue;
-      const bpm = parseFloat(match[1]);
-      // Sanity check: a real tempo, not some unrelated number that
-      // happened to sit next to the word "tempo".
-      if (bpm >= 20 && bpm <= 400) return { bpm: round2(bpm) };
+      for (const pattern of patterns) {
+        const match = text.match(pattern);
+        if (!match) continue;
+        const val = parseFloat(match[1]);
+        if (val >= 20 && val <= 400) {
+          bpm = round2(val);
+          break;
+        }
+      }
     }
+
+    if (timeSignature === null) {
+      const sigPatterns = [
+        /<TimeSignature[^>]*[Nn]umerator\s*=\s*"(\d+)"[^>]*[Dd]enominator\s*=\s*"(\d+)"/,
+        /["']?[Tt]ime[Ss]ignature["']?\s*[=:]\s*["']?(\d+)\/(\d+)["']?/
+      ];
+      for (const pattern of sigPatterns) {
+        const match = text.match(pattern);
+        if (match) {
+          timeSignature = `${match[1]}/${match[2]}`;
+          break;
+        }
+      }
+    }
+
+    if (bpm !== null && timeSignature !== null) break;
   }
 
-  return { bpm: null, error: 'Tempo not found in this .song' };
+  if (bpm !== null) return { bpm, timeSignature };
+  return { bpm: null, timeSignature, error: 'Tempo not found in this .song' };
 }
 
 /* ================================================================== */
@@ -407,9 +468,9 @@ async function readCubaseTempo(filePath) {
     await handle.read(buffer, 0, 64, 0);
     await handle.close();
     // Just confirm it looks like a Cubase file so the row can say so.
-    return { bpm: null, error: 'Cubase tempo not readable yet' };
+    return { bpm: null, timeSignature: null, error: 'Cubase tempo not readable yet' };
   } catch (err) {
-    return { bpm: null, error: `Could not read project: ${err.message}` };
+    return { bpm: null, timeSignature: null, error: `Could not read project: ${err.message}` };
   }
 }
 
@@ -444,9 +505,9 @@ async function countCubaseBackups(projectPath) {
 async function readLogicTempo(packagePath) {
   try {
     await fs.access(path.join(packagePath, 'Alternatives'));
-    return { bpm: null, error: 'Logic tempo not readable yet' };
+    return { bpm: null, timeSignature: null, error: 'Logic tempo not readable yet' };
   } catch {
-    return { bpm: null, error: 'Logic package looks incomplete' };
+    return { bpm: null, timeSignature: null, error: 'Logic package looks incomplete' };
   }
 }
 
@@ -480,12 +541,12 @@ async function countLogicBackups(packagePath) {
  * forever and it would look like the fix had failed.
  */
 const PARSER_VERSIONS = {
-  '.als': 2,
-  '.flp': 3, // 3 = bounded-scan fallback for FL 26
-  '.rpp': 1,
+  '.als': 3,
+  '.flp': 4, // 4 = time signature support
+  '.rpp': 2, // 2 = time signature support
   '.bwproject': 1,
   '.ptx': 1,
-  '.song': 1,
+  '.song': 2,
   '.cpr': 1,
   '.logicx': 1,
   '.logic': 1

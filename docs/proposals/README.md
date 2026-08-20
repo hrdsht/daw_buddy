@@ -1,9 +1,7 @@
 # Proposals
 
 Each feature or design change gets a short numbered proposal here, so decisions
-are tracked one at a time instead of buried in a single lab notebook. This
-replaces the old `HANDOVER.md` (its orientation now lives in `../../CLAUDE.md`;
-the historical version is in git).
+are tracked one at a time instead of buried in a single lab notebook.
 
 ## How to use it
 
@@ -17,9 +15,8 @@ the historical version is in git).
 
 | # | Title | Status |
 |---|---|---|
-| [0001](0001-restructure-and-typescript.md) | Repo restructure + TypeScript migration | Implemented |
-| [0002](0002-renderer-module-split.md) | Split the renderer into modules | Proposed |
-| [0003](0003-packaging-and-release.md) | Installers + release CI | Implemented |
-| [0004](0004-feature-roadmap.md) | Feature roadmap (4 tiers) | Accepted |
-| [0005](0005-vocal-timeline-round-trip.md) | Vocal timeline round trip | Accepted |
-| [0006](0006-android-remote-companion.md) | Android remote companion | Proposed |
+| [0001](0001-renderer-module-split.md) | Split the renderer into modules | Proposed |
+| [0002](0002-linux-support.md) | Linux cross-platform support | Proposed |
+| [0003](0003-android-remote-companion.md) | Android remote companion (E2EE) | Proposed |
+| [0004](0004-code-signing.md) | Code signing & notarization | Planned |
+| [0005](0005-scale-change-detector.md) | Musical scale change & key modulation detector | Proposed |

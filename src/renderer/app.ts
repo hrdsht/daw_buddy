@@ -267,6 +267,7 @@ function render() {
 
   if (view === 'thisweek') return renderThisWeek();
   if (view === 'tools') return renderStandaloneTools();
+  if (view === 'randomizer') return renderRandomizerTool();
   if (view === 'scale-tool') return renderScaleMidiTool();
   if (view === 'dedupe') return renderDedupe();
   if (view === 'disk') return renderDiskInsights();
@@ -283,6 +284,7 @@ function render() {
 // or the name of the page/tool everywhere else.
 const TOOL_TITLES: Record<string, string> = {
   tools: 'Tools',
+  randomizer: 'Music Randomizer',
   'scale-tool': 'Scale & Raaga Detector',
   dedupe: 'Sample cleanup',
   disk: 'Disk insights',
@@ -769,6 +771,11 @@ function buildRow(entry) {
     line.append(dawBadge);
   }
   if (rec.favourite) line.append(el('span', 'badge badge--fav', 'Fav'));
+  if (rec.genre) {
+    const genreBadge = el('span', 'badge badge--genre', rec.genre);
+    genreBadge.title = `Genre: ${rec.genre}`;
+    line.append(genreBadge);
+  }
   if (entry.packaged) {
     const badge = el('span', 'badge badge--packaged', 'Packaged');
     badge.title = 'A zip of the same name sits alongside — exported as a loop package';
@@ -796,14 +803,27 @@ function buildRow(entry) {
   main.append(el('div', 'row__sub', entry.location || basename(entry.root)));
   row.append(main);
 
-  /* bpm */
+  /* bpm & time signature */
   const rowBpm = bpmFor(entry);
-  const bpm = el(
-    'div',
-    'cell cell--bpm',
-    rowBpm !== null ? formatBpm(rowBpm) : activePlayAnalysis.has(entry.path) ? '…' : '—'
-  );
-  if (rowBpm === null) bpm.classList.add('cell--empty');
+  const rowSig = timeSignatureFor(entry);
+  const bpm = el('div', 'cell cell--bpm');
+  if (rowBpm !== null) {
+    bpm.append(el('span', null, formatBpm(rowBpm)));
+    if (rowSig) {
+      const sigBadge = el('span', 'cell--sig-badge', rowSig);
+      const talaInfo = DSP.TALA_MAP[rowSig] || (rec.tala ? { name: rec.tala } : null);
+      if (talaInfo) sigBadge.title = talaInfo.name;
+      bpm.append(sigBadge);
+    }
+  } else if (rowSig) {
+    const sigBadge = el('span', 'cell--sig-badge', rowSig);
+    const talaInfo = DSP.TALA_MAP[rowSig] || (rec.tala ? { name: rec.tala } : null);
+    if (talaInfo) sigBadge.title = talaInfo.name;
+    bpm.append(sigBadge);
+  } else {
+    bpm.textContent = activePlayAnalysis.has(entry.path) ? '…' : '—';
+    bpm.classList.add('cell--empty');
+  }
   row.append(bpm);
 
   /* key */
@@ -1957,6 +1977,8 @@ function renderProjectPage() {
 
   const stickyMeta = el('div', 'sticky-bar__meta');
   if (projectBpm !== null) stickyMeta.append(el('span', 'sticky-bar__chip', `${formatBpm(projectBpm)} BPM`));
+  const projectSig = timeSignatureFor(entry);
+  if (projectSig) stickyMeta.append(el('span', 'sticky-bar__chip', projectSig));
   if (rec.key) {
     stickyMeta.append(el('span', 'sticky-bar__chip', `${rec.key}${rec.camelot ? ` (${rec.camelot})` : ''}`));
   }
@@ -2041,10 +2063,25 @@ function renderProjectPage() {
   const facts = el('div', 'page__facts');
   if (projectBpm !== null) facts.append(fact('BPM', formatBpm(projectBpm)));
   else if (entry.bpmError) facts.append(fact('BPM', 'not readable'));
+  if (projectSig) {
+    const talaInfo = DSP.TALA_MAP[projectSig] || (rec.tala ? { name: rec.tala } : null);
+    const sigChip = fact('Time Sig', `${projectSig}${talaInfo ? ` (${talaInfo.name.split('/')[0].trim()})` : ''}`);
+    sigChip.style.cursor = 'pointer';
+    sigChip.title = 'Click to change time signature / Indian Tala';
+    sigChip.addEventListener('click', () => openTimeSignaturePicker(entry, rec));
+    facts.append(sigChip);
+  }
   if (rec.key) {
     facts.append(fact('Key', `${rec.key}${rec.camelot ? ` (${rec.camelot})` : ''}`));
   } else if (rec.tonic && rec.scale) {
     facts.append(fact('Scale', `Tonic ${rec.tonic} · ${rec.scale}`));
+  }
+  if (rec.genre) {
+    const genreChip = fact('Genre', rec.genre);
+    genreChip.style.cursor = 'pointer';
+    genreChip.title = 'Click to change project genre';
+    genreChip.addEventListener('click', () => openGenrePicker(entry, rec));
+    facts.append(genreChip);
   }
   facts.append(fact('Saves', String(entry.backupCount)));
   facts.append(fact('Audio', String(entry.audioCount)));
@@ -2082,6 +2119,18 @@ function renderProjectPage() {
   });
   actions.append(fav);
 
+  const genreBtn = el('button', 'pill', rec.genre ? `🏷 ${rec.genre}` : '+ Genre');
+  if (rec.genre) genreBtn.classList.add('is-on');
+  genreBtn.title = 'Specify / change project genre';
+  genreBtn.addEventListener('click', () => openGenrePicker(entry, rec));
+  actions.append(genreBtn);
+
+  const sigBtn = el('button', 'pill', projectSig ? `Meter: ${projectSig}` : 'Meter: 4/4');
+  if (rec.timeSignature) sigBtn.classList.add('is-on');
+  sigBtn.title = 'Change project time signature and Indian Tala';
+  sigBtn.addEventListener('click', () => openTimeSignaturePicker(entry, rec));
+  actions.append(sigBtn);
+
   const colorBtn = el('button', 'pill color-picker-trigger');
   const swatchIcon = el('span', 'color-picker-trigger__dot');
   swatchIcon.style.backgroundColor = projColor.hex;
@@ -2094,6 +2143,77 @@ function renderProjectPage() {
     openProjectColorPicker(entry, rec);
   });
   actions.append(colorBtn);
+
+  /* Audio-synced Metronome widget */
+  const metroGroup = el('div', 'project-metro-group');
+  const metroBtn = el('button', 'pill pill--metro', '⏱ Metronome');
+  metroBtn.title = 'Audio-synced metronome click (active during audio playback)';
+
+  const metroSigWrap = el('div', 'project-metro-sigs');
+
+  const updateMetroUI = () => {
+    const isPlaying = Player.isPlaying();
+    const isMetroOn = Player.isMetronome();
+    const activeSig = Player.getMetronomeSignature() || projectSig || '4/4';
+
+    metroBtn.classList.toggle('is-on', isMetroOn);
+    if (!isPlaying) {
+      metroBtn.classList.add('is-disabled-audio');
+      metroBtn.title = 'Metronome active when audio plays (press ▶ on any render or audio file to sync)';
+    } else {
+      metroBtn.classList.remove('is-disabled-audio');
+      metroBtn.title = 'Toggle audio-synced metronome click';
+    }
+
+    metroSigWrap.innerHTML = '';
+    if (isMetroOn) {
+      metroSigWrap.style.display = 'inline-flex';
+      let sigOptions: string[];
+      if (projectSig === '6/8' || projectSig === '3/4' || activeSig === '6/8' || activeSig === '3/4') {
+        sigOptions = ['6/8', '3/4'];
+      } else if (projectSig === '7/8' || projectSig === '7/4' || activeSig === '7/8' || activeSig === '7/4') {
+        sigOptions = ['7/8', '7/4'];
+      } else if (projectSig === '5/8' || projectSig === '5/4' || activeSig === '5/8' || activeSig === '5/4') {
+        sigOptions = ['5/8', '5/4'];
+      } else if (projectSig) {
+        sigOptions = [projectSig, '4/4'];
+      } else {
+        sigOptions = ['4/4', '3/4'];
+      }
+
+      sigOptions.forEach((sig) => {
+        const btn = el('button', `pill pill--sm metro-sig-pill ${activeSig === sig ? 'is-on pill--solid' : ''}`, sig);
+        btn.title = `Switch metronome to ${sig}`;
+        btn.addEventListener('click', (e: MouseEvent) => {
+          e.stopPropagation();
+          Player.setMetronomeSignature(sig);
+          updateMetroUI();
+        });
+        metroSigWrap.append(btn);
+      });
+    } else {
+      metroSigWrap.style.display = 'none';
+    }
+  };
+
+  metroBtn.addEventListener('click', () => {
+    if (projectBpm !== null) {
+      Player.setMetronomeBpm(projectBpm);
+    }
+    if (projectSig) {
+      Player.setMetronomeSignature(projectSig);
+    }
+    Player.setMetronome(!Player.isMetronome());
+    updateMetroUI();
+  });
+
+  metroGroup.append(metroBtn, metroSigWrap);
+  actions.append(metroGroup);
+  updateMetroUI();
+
+  Player.onChange(() => {
+    updateMetroUI();
+  });
 
   viewEl.append(actions);
 
@@ -2226,6 +2346,7 @@ function renderProjectToolsTab(entry) {
     backBar.append(back);
     viewEl.append(backBar);
 
+    if (projectTool === 'randomizer') return renderRandomizerTool(entry);
     if (projectTool === 'rename' || projectTool === 'batch-rename') return renderRenameTab(entry);
     if (projectTool === 'smart-rename') return renderSmartRenameTab(entry);
     if (projectTool === 'silence') return renderSilenceTab(entry);
@@ -2245,6 +2366,12 @@ function renderProjectToolsTab(entry) {
 
   const grid = el('div', 'tool-grid');
   [
+    {
+      key: 'randomizer',
+      icon: 'dice',
+      title: 'Music Randomizer',
+      text: 'Generate random musical ideas: key, scale, matching Indian Raagas, BPM, and suggested time signatures.'
+    },
     {
       key: 'smart-rename',
       icon: 'sparkles',
@@ -2849,6 +2976,12 @@ function analyseAudioFile(file, decoded) {
 }
 
 async function storeAnalysis(entry, file, result) {
+  if (result.timeSignature) {
+    Player.setMetronomeSignature(result.timeSignature);
+  }
+  if (result.bpm && !bpmFor(entry)) {
+    Player.setMetronomeBpm(result.bpm);
+  }
   await saveRecord(entry.path, {
     key: result.key,
     camelot: result.camelot,
@@ -2860,6 +2993,8 @@ async function storeAnalysis(entry, file, result) {
     scaleConfidence: result.scaleConfidence,
     modal: result.modal,
     detectedBpm: result.bpm,
+    detectedTimeSignature: result.timeSignature || null,
+    detectedTala: result.tala ? result.tala.name : null,
     analysedFrom: file.name
   });
 }
@@ -2874,10 +3009,18 @@ function showAnalysisResult(entry, result) {
     keyDescription = 'Key not detected';
   }
 
+  const talaText = result.tala
+    ? `${result.timeSignature} (${result.tala.name.split('/')[0].trim()})`
+    : result.timeSignature || '';
+
   const detected = [
     keyDescription,
-    result.bpm ? `${result.bpm} BPM` : 'BPM not detected'
-  ].join(' · ');
+    result.bpm ? `${result.bpm} BPM` : 'BPM not detected',
+    talaText
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
   const drift = entry.bpm && result.bpm ? Math.abs(entry.bpm - result.bpm) : null;
 
   toast(
@@ -5850,6 +5993,251 @@ function bpmFor(entry) {
   return Number.isFinite(detected) && detected > 0 ? detected : null;
 }
 
+/** Prefer manual/saved time signature, then project metadata, then detected meter. */
+function timeSignatureFor(entry) {
+  if (!entry) return null;
+  const rec = record(entry.path);
+  if (rec && rec.timeSignature) return rec.timeSignature;
+  if (entry && entry.timeSignature) return entry.timeSignature;
+  if (rec && rec.detectedTimeSignature) return rec.detectedTimeSignature;
+  return null;
+}
+
+function openTimeSignaturePicker(entry: any, rec: any) {
+  document.querySelectorAll('.sig-picker-overlay').forEach((node) => node.remove());
+
+  const overlay = el('div', 'modal-overlay sig-picker-overlay');
+  const dialog = el('div', 'color-picker-modal');
+  dialog.style.maxWidth = '680px';
+
+  const header = el('div', 'color-picker-modal__header');
+  const titleGroup = el('div', 'color-picker-modal__titles');
+  titleGroup.append(el('h3', 'color-picker-modal__title', 'Select Time Signature & Indian Tala'));
+  titleGroup.append(
+    el(
+      'p',
+      'color-picker-modal__subtitle',
+      'Assign musical meter and Indian Tala rhythm cycle for this project'
+    )
+  );
+  header.append(titleGroup);
+
+  const closeBtn = el('button', 'round color-picker-modal__close', '✕');
+  closeBtn.title = 'Close (Esc)';
+  closeBtn.addEventListener('click', () => overlay.remove());
+  header.append(closeBtn);
+  dialog.append(header);
+
+  const body = el('div', 'color-picker-modal__body');
+  const currentSig = timeSignatureFor(entry);
+
+  const grid = el('div', 'sig-picker-grid');
+
+  Object.entries(DSP.TALA_MAP).forEach(([sig, tala]: [string, any]) => {
+    const card = el('div', `sig-picker-card${currentSig === sig ? ' is-active' : ''}`);
+    const cardHead = el('div', 'sig-picker-card__head');
+    cardHead.append(el('span', 'sig-picker-card__sig', sig));
+    cardHead.append(el('span', 'sig-picker-card__name', tala.name.split('/')[0].trim()));
+    card.append(cardHead);
+
+    card.append(el('div', 'sig-picker-card__vibhag', `Matras: ${tala.matras} (${tala.vibhag})`));
+    card.append(el('div', 'sig-picker-card__desc', tala.description));
+
+    card.addEventListener('click', async () => {
+      await saveRecord(entry.path, {
+        timeSignature: sig,
+        tala: tala.name
+      });
+      overlay.remove();
+      render();
+    });
+    grid.append(card);
+  });
+
+  body.append(grid);
+
+  const footer = el('div', 'color-picker-modal__footer');
+  const resetBtn = el('button', 'pill pill--sm', 'Reset to project default');
+  resetBtn.addEventListener('click', async () => {
+    await saveRecord(entry.path, { timeSignature: null, tala: null });
+    overlay.remove();
+    render();
+  });
+  footer.append(resetBtn);
+  body.append(footer);
+
+  dialog.append(body);
+  overlay.append(dialog);
+
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      overlay.remove();
+      window.removeEventListener('keydown', onKey);
+    }
+  };
+  window.addEventListener('keydown', onKey);
+
+  document.body.append(overlay);
+}
+
+function openGenrePicker(entry: any, rec: any) {
+  document.querySelectorAll('.genre-picker-overlay').forEach((node) => node.remove());
+
+  const overlay = el('div', 'modal-overlay genre-picker-overlay');
+  const dialog = el('div', 'genre-picker-modal');
+
+  const header = el('div', 'genre-picker-modal__header');
+  const titleGroup = el('div');
+  titleGroup.append(el('h3', 'genre-picker-modal__title', 'Assign Project Genre'));
+  titleGroup.append(
+    el(
+      'p',
+      'genre-picker-modal__subtitle',
+      'Categorise your track by genre for fast searching & filtering (e.g. Afro House, Riddim, Colour Bass, Liquid DnB)'
+    )
+  );
+  header.append(titleGroup);
+
+  const closeBtn = el('button', 'round color-picker-modal__close', '✕');
+  closeBtn.title = 'Close (Esc)';
+  closeBtn.addEventListener('click', () => overlay.remove());
+  header.append(closeBtn);
+  dialog.append(header);
+
+  // Search input
+  const searchBar = el('div', 'genre-picker-search-bar');
+  const searchInput = document.createElement('input');
+  searchInput.type = 'text';
+  searchInput.className = 'genre-search-input';
+  searchInput.placeholder = 'Search genres (e.g. Afro, Dubstep, Riddim, Colour Bass, House, DnB)...';
+  searchBar.append(searchInput);
+  dialog.append(searchBar);
+
+  // Category tabs
+  const categories = [
+    'All',
+    'Botanica & Organic',
+    'Bollywood & Indian',
+    'Afro & Latin',
+    'House',
+    'Dubstep & Bass',
+    'Drum & Bass',
+    'Hip Hop & Urban',
+    'Techno & Trance',
+    'Electronic & Experimental'
+  ];
+  let activeCategory = 'All';
+  let searchQuery = '';
+
+  const catTabs = el('div', 'genre-cat-tabs');
+  categories.forEach((cat) => {
+    const tab = el('button', `genre-cat-tab ${cat === activeCategory ? 'is-active' : ''}`, cat);
+    tab.addEventListener('click', () => {
+      activeCategory = cat;
+      catTabs.querySelectorAll('.genre-cat-tab').forEach((t) => t.classList.remove('is-active'));
+      tab.classList.add('is-active');
+      renderGenreList();
+    });
+    catTabs.append(tab);
+  });
+  dialog.append(catTabs);
+
+  // Body / Grid
+  const body = el('div', 'genre-picker-modal__body');
+  dialog.append(body);
+
+  function renderGenreList() {
+    body.innerHTML = '';
+    const q = searchQuery.toLowerCase().trim();
+    const filtered = DSP.GENRE_DATABASE.filter((g: any) => {
+      const matchCat = activeCategory === 'All' || g.category === activeCategory;
+      const matchQ = !q || g.name.toLowerCase().includes(q) || g.description.toLowerCase().includes(q) || g.category.toLowerCase().includes(q);
+      return matchCat && matchQ;
+    });
+
+    if (filtered.length === 0) {
+      body.append(el('div', 'muted', `No predefined genres match "${searchQuery}". You can type any custom genre below.`));
+      return;
+    }
+
+    const grid = el('div', 'genre-grid');
+    filtered.forEach((genre: any) => {
+      const isSelected = rec.genre && (rec.genre.toLowerCase() === genre.name.toLowerCase() || rec.genre.toLowerCase() === genre.id.toLowerCase());
+      const card = el('div', `genre-card ${isSelected ? 'is-selected' : ''}`);
+      card.append(el('div', 'genre-card__name', genre.name));
+      card.append(el('div', 'genre-card__bpm', `${genre.typicalBpm[0]}–${genre.typicalBpm[1]} BPM · ${genre.category}`));
+      card.append(el('div', 'genre-card__desc', genre.description));
+
+      card.addEventListener('click', async () => {
+        await saveRecord(entry.path, { genre: genre.name });
+        overlay.remove();
+        render();
+        toast('Genre Assigned', `${genre.name} assigned to ${entry.name}`);
+      });
+      grid.append(card);
+    });
+    body.append(grid);
+  }
+
+  searchInput.addEventListener('input', () => {
+    searchQuery = searchInput.value;
+    renderGenreList();
+  });
+
+  renderGenreList();
+
+  // Custom genre row & Clear action
+  const customRow = el('div', 'genre-custom-row');
+  const customInput = document.createElement('input');
+  customInput.type = 'text';
+  customInput.className = 'genre-custom-input';
+  customInput.placeholder = 'Or enter a custom genre (e.g. Cyber-Phonk, Melodic Riddim)...';
+  if (rec.genre) customInput.value = rec.genre;
+  customRow.append(customInput);
+
+  const applyCustomBtn = el('button', 'pill pill--solid', 'Apply');
+  applyCustomBtn.addEventListener('click', async () => {
+    const val = customInput.value.trim();
+    if (val) {
+      await saveRecord(entry.path, { genre: val });
+      overlay.remove();
+      render();
+      toast('Custom Genre Set', `${val} assigned to ${entry.name}`);
+    }
+  });
+  customRow.append(applyCustomBtn);
+
+  if (rec.genre) {
+    const clearBtn = el('button', 'pill pill--sm', 'Clear');
+    clearBtn.title = 'Remove genre tag';
+    clearBtn.addEventListener('click', async () => {
+      await saveRecord(entry.path, { genre: null });
+      overlay.remove();
+      render();
+      toast('Genre Cleared', `Genre tag removed from ${entry.name}`);
+    });
+    customRow.append(clearBtn);
+  }
+
+  dialog.append(customRow);
+  overlay.append(dialog);
+
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      overlay.remove();
+      window.removeEventListener('keydown', onKey);
+    }
+  };
+  window.addEventListener('keydown', onKey);
+
+  document.body.append(overlay);
+  requestAnimationFrame(() => searchInput.focus());
+}
+
 async function saveRecord(key, patch) {
   const updated = await window.api.setRecord(key, patch);
   records[key] = updated;
@@ -6009,6 +6397,10 @@ function openStandaloneTool(nextView) {
 
   if (nextView === 'scale-tool') {
     scaleToolState.error = null;
+  }
+
+  if (nextView === 'randomizer') {
+    if (!randomizerState) rollRandomIdea('all');
   }
 
   viewEl.scrollTop = 0;
@@ -6565,6 +6957,625 @@ function renderScaleMidiTool() {
   viewEl.append(section);
 }
 
+/* ======================= Music Randomizer Tool ======================= */
+
+interface RandomizerState {
+  tonic: string;
+  tonicPc: number;
+  scaleName: string;
+  degrees: number[];
+  bpm: number;
+  timeSignature: string;
+  tala: any | null;
+  raga: any | null;
+  ragas: any[];
+  camelot: string;
+  tuningA4: number;
+  thaat: string | null;
+  genre: any;
+}
+
+let randomizerState: RandomizerState | null = null;
+
+const COMMON_MUSICAL_BPMS = [
+  68, 72, 74, 76, 80, 84, 88, 90, 92, 96, 100, 104, 108, 110, 115, 120, 124, 128, 132, 136, 140, 144, 150, 156, 160
+];
+
+const TIME_SIGNATURE_POOL = ['4/4', '3/4', '6/8', '7/8', '5/8', '5/4', '12/8'];
+
+function rollRandomIdea(target: 'all' | 'key' | 'bpm' | 'meter' | 'genre' = 'all') {
+  let nextTonic = randomizerState?.tonic || 'C';
+  let nextTonicPc = randomizerState?.tonicPc ?? 0;
+  let nextScaleName = randomizerState?.scaleName || 'major';
+  let nextDegrees = randomizerState?.degrees || DSP.SCALES.major;
+  let nextThaat = randomizerState?.thaat || null;
+  let nextBpm = randomizerState?.bpm ?? 120;
+  let nextTimeSig = randomizerState?.timeSignature ?? '4/4';
+  let nextGenre = randomizerState?.genre || DSP.GENRE_DATABASE[0];
+
+  if (target === 'all' || target === 'genre' || !randomizerState) {
+    const randomGenreIdx = Math.floor(Math.random() * DSP.GENRE_DATABASE.length);
+    nextGenre = DSP.GENRE_DATABASE[randomGenreIdx];
+  }
+
+  if (target === 'all' || target === 'key' || !randomizerState) {
+    nextTonicPc = Math.floor(Math.random() * 12);
+    nextTonic = DSP.NOTES[nextTonicPc];
+
+    // Combine western scales and Indian Classical Raagas for rich variety
+    const ragaNames = DSP.RAGA_DEFINITIONS.map((r) => r.name);
+    const scaleKeys = Object.keys(DSP.SCALES);
+    const combinedPool = [...scaleKeys, ...ragaNames];
+    const pickedKey = combinedPool[Math.floor(Math.random() * combinedPool.length)];
+
+    const foundRagaDef = DSP.RAGA_DEFINITIONS.find((r) => r.name.toLowerCase() === pickedKey.toLowerCase() || r.name === pickedKey);
+    if (foundRagaDef) {
+      nextScaleName = foundRagaDef.name;
+      nextDegrees = foundRagaDef.degrees;
+      nextThaat = foundRagaDef.thaat;
+      if (target === 'all' && foundRagaDef.suggestedTimeSig) {
+        nextTimeSig = foundRagaDef.suggestedTimeSig;
+      }
+    } else {
+      nextScaleName = pickedKey;
+      nextDegrees = DSP.SCALES[pickedKey] || DSP.SCALES.major;
+      nextThaat = DSP.THAAT_MAP[pickedKey] || null;
+    }
+  }
+
+  if (target === 'all' || target === 'bpm' || !randomizerState) {
+    if (target === 'all' && nextGenre && nextGenre.typicalBpm) {
+      const [lo, hi] = nextGenre.typicalBpm;
+      const candidates = COMMON_MUSICAL_BPMS.filter((b) => b >= lo - 4 && b <= hi + 4);
+      nextBpm = candidates.length > 0
+        ? candidates[Math.floor(Math.random() * candidates.length)]
+        : Math.floor(lo + Math.random() * (hi - lo + 1));
+    } else {
+      nextBpm = COMMON_MUSICAL_BPMS[Math.floor(Math.random() * COMMON_MUSICAL_BPMS.length)];
+    }
+  }
+
+  if (target === 'meter') {
+    const remainingSigs = TIME_SIGNATURE_POOL.filter((s) => s !== nextTimeSig);
+    nextTimeSig = remainingSigs[Math.floor(Math.random() * remainingSigs.length)] || '4/4';
+  }
+
+  // Calculate Camelot
+  const isMajor = nextScaleName === 'major' || nextScaleName === 'lydian' || nextScaleName === 'mixolydian' || (DSP.SCALES[nextScaleName] && DSP.SCALES[nextScaleName][2] === 4);
+  const camelot = isMajor
+    ? { C: '8B', G: '9B', D: '10B', A: '11B', E: '12B', B: '1B', 'F#': '2B', 'C#': '3B', 'G#': '4B', 'D#': '5B', 'A#': '6B', F: '7B' }[nextTonic] || '8B'
+    : { A: '8A', E: '9A', B: '10A', 'F#': '11A', 'C#': '12A', 'G#': '1A', 'D#': '2A', 'A#': '3A', F: '4A', C: '5A', G: '6A', D: '7A' }[nextTonic] || '8A';
+
+  // Compute Chroma and matching ragas
+  const ragaChroma = new Float64Array(12);
+  nextDegrees.forEach((d) => {
+    ragaChroma[(nextTonicPc + d) % 12] = 1.0;
+  });
+  const matchingRagas = DSP.findMatchingRagas(ragaChroma, nextTonicPc, 6);
+  const activeRaga = matchingRagas.find((r) => r.name.toLowerCase() === nextScaleName.toLowerCase()) || matchingRagas[0] || null;
+
+  // Tala Info
+  const talaInfo = DSP.TALA_MAP[nextTimeSig] || null;
+
+  randomizerState = {
+    tonic: nextTonic,
+    tonicPc: nextTonicPc,
+    scaleName: nextScaleName,
+    degrees: nextDegrees,
+    bpm: nextBpm,
+    timeSignature: nextTimeSig,
+    tala: talaInfo,
+    raga: activeRaga,
+    ragas: matchingRagas,
+    camelot,
+    tuningA4: 440,
+    thaat: nextThaat,
+    genre: nextGenre
+  };
+
+  // Sync metronome settings
+  Player.setMetronomeBpm(nextBpm);
+  Player.setMetronomeSignature(nextTimeSig);
+}
+
+function renderRandomizerTool(entry: any = null) {
+  if (!randomizerState) {
+    rollRandomIdea('all');
+  }
+
+  viewEl.innerHTML = '';
+  const section = el('div', 'section randomizer-page');
+
+  // Breadcrumbs
+  const breadcrumb = el('div', 'breadcrumb');
+  if (entry) {
+    const backProj = el('button', 'breadcrumb__item', entry.name);
+    backProj.addEventListener('click', () => {
+      projectTool = null;
+      render();
+    });
+    breadcrumb.append(backProj, el('span', 'breadcrumb__sep', '/'), el('span', 'breadcrumb__current', 'Music Randomizer'));
+  } else {
+    const back = el('button', 'breadcrumb__item', 'Tools');
+    back.addEventListener('click', () => {
+      navigationHistory.visit(captureLocation());
+      view = 'tools';
+      render();
+    });
+    breadcrumb.append(back, el('span', 'breadcrumb__sep', '/'), el('span', 'breadcrumb__current', 'Music Randomizer'));
+  }
+  section.append(breadcrumb);
+
+  // Hero Card with Randomize Roll Action
+  const hero = el('div', 'randomizer-hero');
+  hero.append(el('h3', 'randomizer-hero__title', '🎲 Musical Idea Randomizer'));
+  hero.append(el('p', 'randomizer-hero__desc', 'Instantly generate fresh musical starting points: key, scale, accompanying Indian Raagas with time-of-day moods, BPM, and suggested time signatures.'));
+
+  const rollBtn = el('button', 'randomizer-roll-btn');
+  rollBtn.append(svgIcon('dice', '', 20));
+  rollBtn.append(document.createTextNode('Randomize Idea (Roll)'));
+  rollBtn.addEventListener('click', () => {
+    rollRandomIdea('all');
+    renderRandomizerTool(entry);
+    playSynthNote(randomizerState!.tonicPc, 4, 440, 0.4);
+  });
+  hero.append(rollBtn);
+
+  // Quick Reroll Pill Group
+  const rerollGroup = el('div', 'randomizer-reroll-group');
+  
+  const rerollGenreBtn = el('button', 'pill pill--sm', '🎧 Reroll Genre');
+  rerollGenreBtn.addEventListener('click', () => {
+    rollRandomIdea('genre');
+    renderRandomizerTool(entry);
+  });
+  rerollGroup.append(rerollGenreBtn);
+
+  const rerollKeyBtn = el('button', 'pill pill--sm', '🎵 Reroll Key & Scale');
+  rerollKeyBtn.addEventListener('click', () => {
+    rollRandomIdea('key');
+    renderRandomizerTool(entry);
+    playSynthNote(randomizerState!.tonicPc, 4, 440, 0.4);
+  });
+  rerollGroup.append(rerollKeyBtn);
+
+  const rerollBpmBtn = el('button', 'pill pill--sm', '⏱ Reroll BPM');
+  rerollBpmBtn.addEventListener('click', () => {
+    rollRandomIdea('bpm');
+    renderRandomizerTool(entry);
+  });
+  rerollGroup.append(rerollBpmBtn);
+
+  const rerollMeterBtn = el('button', 'pill pill--sm', '🪘 Reroll Time Signature');
+  rerollMeterBtn.addEventListener('click', () => {
+    rollRandomIdea('meter');
+    renderRandomizerTool(entry);
+  });
+  rerollGroup.append(rerollMeterBtn);
+
+  hero.append(rerollGroup);
+  section.append(hero);
+
+  const state = randomizerState!;
+  const resultBox = el('div', 'scale-results-box');
+
+  // Primary Metrics Grid
+  const metricsGrid = el('div', 'scale-metrics-grid');
+
+  // 1. Genre Challenge Card
+  const genreCard = el('div', 'scale-metric-card randomizer-genre-card');
+  genreCard.append(el('div', 'scale-metric__label', 'Genre Challenge'));
+  if (state.genre) {
+    genreCard.append(el('span', 'randomizer-genre-badge', state.genre.category));
+    genreCard.append(el('div', 'scale-metric__val', state.genre.name));
+    genreCard.append(el('div', 'scale-metric__sub', `Typical: ${state.genre.typicalBpm[0]}–${state.genre.typicalBpm[1]} BPM`));
+    genreCard.append(el('div', 'genre-card__desc', state.genre.description));
+  } else {
+    genreCard.append(el('div', 'scale-metric__val', 'Open Inspiration'));
+  }
+  metricsGrid.append(genreCard);
+
+  // 2. BPM Card
+  const bpmCard = el('div', 'scale-metric-card');
+  bpmCard.append(el('div', 'scale-metric__label', 'Tempo (BPM)'));
+  bpmCard.append(el('div', 'scale-metric__val scale-metric__val--bpm', `${state.bpm} BPM`));
+  const isMetroOn = Player.isMetronome();
+  const metroToggleBtn = el('button', `pill pill--sm ${isMetroOn ? 'pill--solid pill--metro is-on' : ''}`, isMetroOn ? '⏹ Stop Metronome' : '⏱ Start Metronome');
+  metroToggleBtn.style.marginTop = '8px';
+  metroToggleBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    Player.setMetronomeBpm(state.bpm);
+    Player.setMetronomeSignature(state.timeSignature);
+    Player.setMetronome(!Player.isMetronome());
+    renderRandomizerTool(entry);
+  });
+  bpmCard.append(metroToggleBtn);
+  metricsGrid.append(bpmCard);
+
+  // 3. Key & Camelot Card
+  const keyCard = el('div', 'scale-metric-card');
+  keyCard.append(el('div', 'scale-metric__label', 'Key & Scale'));
+  const camelotTag = `<span class="scale-camelot-badge">${state.camelot}</span> `;
+  const keyHtml = el('div', 'scale-metric__val');
+  keyHtml.innerHTML = `${camelotTag}${state.tonic} ${state.scaleName}`;
+  keyCard.append(keyHtml);
+  keyCard.append(el('div', 'scale-metric__sub', state.thaat ? `${state.thaat} Thaat` : 'Western Scale'));
+  metricsGrid.append(keyCard);
+
+  // 4. Time Signature & Tala Card
+  const meterCard = el('div', 'scale-metric-card');
+  meterCard.append(el('div', 'scale-metric__label', 'Time Signature & Tala'));
+  meterCard.append(el('div', 'scale-metric__val', state.timeSignature));
+  if (state.tala) {
+    const talaDiv = el('div', 'randomizer-tala-detail');
+    talaDiv.append(el('div', null, `🪘 ${state.tala.name} (${state.tala.matras} Matras · ${state.tala.vibhag})`));
+    if (state.tala.bols) {
+      talaDiv.append(el('div', 'randomizer-tala-bols', state.tala.bols));
+    }
+    meterCard.append(talaDiv);
+  } else {
+    meterCard.append(el('div', 'scale-metric__sub', 'Standard Meter'));
+  }
+  metricsGrid.append(meterCard);
+
+  // 4. Raaga Time & Mood Card
+  const moodCard = el('div', 'scale-metric-card');
+  moodCard.append(el('div', 'scale-metric__label', 'Mood & Prahar (Time)'));
+  if (state.raga && (state.raga.time || state.raga.mood)) {
+    if (state.raga.time) moodCard.append(el('div', 'scale-metric__sub', `🕒 ${state.raga.time}`));
+    if (state.raga.mood) moodCard.append(el('div', 'scale-metric__val', `✨ ${state.raga.mood}`));
+  } else {
+    moodCard.append(el('div', 'scale-metric__val', 'Expressive & Inspiring'));
+    moodCard.append(el('div', 'scale-metric__sub', 'Universal / Anytime'));
+  }
+  metricsGrid.append(moodCard);
+
+  resultBox.append(metricsGrid);
+
+  // Interactive Scale Keyboard & Audition Section
+  const kbSection = el('div', 'scale-kb-section');
+  kbSection.append(el('h4', 'scale-notes__title', `Interactive Scale Keyboard: ${state.tonic} ${state.scaleName}`));
+
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const kbW = 420;
+  const kbH = 100;
+  const svgKb = document.createElementNS(svgNS, 'svg');
+  svgKb.setAttribute('class', 'scale-svg-kb');
+  svgKb.setAttribute('viewBox', `0 0 ${kbW} ${kbH}`);
+
+  const whiteNotes = [0, 2, 4, 5, 7, 9, 11];
+  const blackNotes = [1, 3, 6, 8, 10];
+  const whiteW = kbW / 7;
+  const whiteH = kbH;
+  const blackW = whiteW * 0.65;
+  const blackH = kbH * 0.62;
+  const blackOffsets: Record<number, number> = {
+    1: whiteW * 0.7,
+    3: whiteW * 1.7,
+    6: whiteW * 3.7,
+    8: whiteW * 4.7,
+    10: whiteW * 5.7
+  };
+
+  const inScalePcs = new Set(state.degrees.map((d: number) => (state.tonicPc + d) % 12));
+
+  // White keys
+  whiteNotes.forEach((pc, idx) => {
+    const isRoot = pc === state.tonicPc;
+    const isInScale = inScalePcs.has(pc);
+    const rect = document.createElementNS(svgNS, 'rect');
+    rect.setAttribute('x', String(idx * whiteW + 1));
+    rect.setAttribute('y', '0');
+    rect.setAttribute('width', String(whiteW - 2));
+    rect.setAttribute('height', String(whiteH - 2));
+    rect.setAttribute('rx', '4');
+    rect.setAttribute('class', `mini-kb-key mini-kb-key--white ${isInScale ? (isRoot ? 'mini-kb-key--root' : 'mini-kb-key--scale') : ''}`);
+    rect.addEventListener('click', () => playSynthNote(pc, 4, state.tuningA4));
+    svgKb.append(rect);
+
+    const label = document.createElementNS(svgNS, 'text');
+    label.setAttribute('x', String(idx * whiteW + whiteW / 2));
+    label.setAttribute('y', String(whiteH - 8));
+    label.setAttribute('text-anchor', 'middle');
+    label.setAttribute('class', 'mini-kb-label');
+    label.textContent = DSP.NOTES[pc];
+    svgKb.append(label);
+  });
+
+  // Black keys
+  blackNotes.forEach((pc) => {
+    const isRoot = pc === state.tonicPc;
+    const isInScale = inScalePcs.has(pc);
+    const x = blackOffsets[pc];
+    const rect = document.createElementNS(svgNS, 'rect');
+    rect.setAttribute('x', String(x));
+    rect.setAttribute('y', '0');
+    rect.setAttribute('width', String(blackW));
+    rect.setAttribute('height', String(blackH));
+    rect.setAttribute('rx', '3');
+    rect.setAttribute('class', `mini-kb-key mini-kb-key--black ${isInScale ? (isRoot ? 'mini-kb-key--root' : 'mini-kb-key--scale') : ''}`);
+    rect.addEventListener('click', () => playSynthNote(pc, 4, state.tuningA4));
+    svgKb.append(rect);
+  });
+
+  kbSection.append(svgKb);
+
+  // Scale Action buttons
+  const scaleActions = el('div', 'scale-modal-actions');
+  
+  const playScaleBtn = el('button', 'pill pill--solid scale-action-btn', '▶ Play Scale');
+  playScaleBtn.addEventListener('click', () => playFullScale(state.tonicPc, state.degrees, state.tuningA4));
+  scaleActions.append(playScaleBtn);
+
+  const droneBtn = el('button', 'pill scale-action-btn', `🔊 Root Drone (${state.tonic})`);
+  droneBtn.addEventListener('click', () => playSynthNote(state.tonicPc, 3, state.tuningA4, 2.5));
+  scaleActions.append(droneBtn);
+
+  const scaleMidiBtn = el('button', 'pill scale-midi-btn scale-action-btn', '⤓ Drag Scale MIDI to DAW');
+  const sMidiNotes = notesFor(state.tonicPc, state.degrees, 3);
+  const sMidiBytes = scaleMidi(sMidiNotes, { bpm: state.bpm, bars: 4 });
+  const sMidiFileName = `Random_${state.tonic}_${state.scaleName.replace(/[^a-zA-Z0-9_-]/g, '_')}_${state.bpm}BPM.mid`;
+  scaleMidiBtn.draggable = true;
+  scaleMidiBtn.addEventListener('dragstart', async (e: DragEvent) => {
+    if (e.dataTransfer) {
+      e.dataTransfer.setData('text/plain', sMidiFileName);
+      e.dataTransfer.effectAllowed = 'copy';
+      const canvas = document.createElement('canvas');
+      canvas.width = 1;
+      canvas.height = 1;
+      e.dataTransfer.setDragImage(canvas, 0, 0);
+    }
+    if (window.api.dragMidi) await window.api.dragMidi(sMidiFileName, Array.from(sMidiBytes));
+  });
+  scaleMidiBtn.addEventListener('click', async () => {
+    if (window.api.saveMidi) {
+      const saved = await window.api.saveMidi(sMidiFileName, Array.from(sMidiBytes));
+      if (saved) toast('Scale MIDI exported', saved);
+    } else {
+      const blob = new Blob([sMidiBytes.buffer as ArrayBuffer], { type: 'audio/midi' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = sMidiFileName;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast('Scale MIDI exported', sMidiFileName);
+    }
+  });
+  scaleActions.append(scaleMidiBtn);
+
+  kbSection.append(scaleActions);
+  resultBox.append(kbSection);
+
+  // Matching Indian Classical Raagas Section (with Suggested Time Signature tags)
+  const suggestedRagas = state.ragas || [];
+  if (suggestedRagas.length > 0) {
+    const ragasSection = el('div', 'scale-ragas-section');
+    ragasSection.append(el('h4', 'scale-notes__title', 'Matching Indian Classical Raagas (with Suggested Time Signatures)'));
+
+    const ragasGrid = el('div', 'scale-ragas-grid');
+    suggestedRagas.forEach((raga: any) => {
+      const isCurrentRaga = state.scaleName.toLowerCase() === raga.name.toLowerCase();
+      const card = el('div', `raga-card ${isCurrentRaga ? 'raga-card--active' : ''}`);
+
+      const top = el('div', 'raga-card__header');
+      top.append(el('span', 'raga-card__name', raga.name));
+      top.append(el('span', 'raga-card__pct', `${raga.matchPercent}% Match`));
+      card.append(top);
+
+      const sub = el('div', 'raga-card__thaat', `${raga.thaat} Thaat`);
+      card.append(sub);
+
+      if (raga.aarohana) {
+        const aarohRow = el('div', 'raga-card__phrase raga-card__phrase--aaroh');
+        aarohRow.append(el('span', 'raga-phrase__tag', '▲ Aaroh:'));
+        aarohRow.append(el('span', 'raga-phrase__notes', raga.aarohana));
+        card.append(aarohRow);
+      }
+      if (raga.avarohana) {
+        const avarohRow = el('div', 'raga-card__phrase raga-card__phrase--avaroh');
+        avarohRow.append(el('span', 'raga-phrase__tag', '▼ Avaroh:'));
+        avarohRow.append(el('span', 'raga-phrase__notes', raga.avarohana));
+        card.append(avarohRow);
+      }
+
+      if (raga.time || raga.mood) {
+        const metaRow = el('div', 'raga-card__meta');
+        if (raga.time) metaRow.append(el('span', 'raga-card__time', `🕒 ${raga.time}`));
+        if (raga.mood) metaRow.append(el('span', 'raga-card__mood', `✨ ${raga.mood}`));
+        card.append(metaRow);
+      }
+
+      // Suggested Time Signature Pill for this Raaga!
+      if (raga.suggestedTimeSig) {
+        const suggPill = el('button', 'randomizer-raga-sugg-pill');
+        suggPill.append(document.createTextNode(`⏱ Suggested: ${raga.suggestedTimeSig} ${raga.suggestedTaal ? `(${raga.suggestedTaal})` : ''}`));
+        suggPill.title = `Click to set time signature to ${raga.suggestedTimeSig} and sync metronome`;
+        suggPill.addEventListener('click', (e) => {
+          e.stopPropagation();
+          state.timeSignature = raga.suggestedTimeSig;
+          state.tala = DSP.TALA_MAP[raga.suggestedTimeSig] || null;
+          Player.setMetronomeSignature(raga.suggestedTimeSig);
+          renderRandomizerTool(entry);
+          toast('Meter Updated', `Set to ${raga.suggestedTimeSig} (${raga.suggestedTaal || ''})`);
+        });
+        card.append(suggPill);
+      }
+
+      const ragaActions = el('div', 'raga-card__actions');
+
+      const previewBtn = el('button', 'pill pill--sm raga-btn--preview', '▶ Audition');
+      previewBtn.title = 'Audition Aarohana (ascending) & Avarohana (descending)';
+      previewBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const aaroh = raga.aarohanaDegrees || raga.degrees;
+        const avaroh = raga.avarohanaDegrees || [...aaroh].reverse();
+        playRagaSequence(state.tonicPc, aaroh, avaroh, state.tuningA4);
+      });
+      ragaActions.append(previewBtn);
+
+      const ragaMidiBtn = el('button', 'pill pill--sm pill--solid raga-btn--midi', '⤓ Drag to DAW');
+      ragaMidiBtn.title = 'Drag onto any DAW track or click to export MIDI containing Aarohana & Avarohana phrases';
+      const aaroh = raga.aarohanaDegrees || raga.degrees;
+      const avaroh = raga.avarohanaDegrees || [...aaroh].reverse();
+      const rMidiBytes = ragaMidi(state.tonicPc, aaroh, avaroh, { bpm: state.bpm });
+      const cleanRagaName = raga.name.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const rMidiFileName = `Random_Raga_${cleanRagaName}_${state.tonic}_${state.bpm}BPM.mid`;
+
+      ragaMidiBtn.draggable = true;
+      ragaMidiBtn.addEventListener('dragstart', async (e: DragEvent) => {
+        if (e.dataTransfer) {
+          e.dataTransfer.setData('text/plain', rMidiFileName);
+          e.dataTransfer.effectAllowed = 'copy';
+          const canvas = document.createElement('canvas');
+          canvas.width = 1;
+          canvas.height = 1;
+          e.dataTransfer.setDragImage(canvas, 0, 0);
+        }
+        if (window.api.dragMidi) await window.api.dragMidi(rMidiFileName, Array.from(rMidiBytes));
+      });
+      ragaMidiBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (window.api.saveMidi) {
+          const saved = await window.api.saveMidi(rMidiFileName, Array.from(rMidiBytes));
+          if (saved) toast('Raga MIDI exported', saved);
+        } else {
+          const blob = new Blob([rMidiBytes.buffer as ArrayBuffer], { type: 'audio/midi' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = rMidiFileName;
+          a.click();
+          URL.revokeObjectURL(url);
+          toast('Raga MIDI exported', rMidiFileName);
+        }
+      });
+      ragaActions.append(ragaMidiBtn);
+      card.append(ragaActions);
+
+      card.title = `Click to load Raaga ${raga.name}`;
+      card.addEventListener('click', () => {
+        state.scaleName = raga.name;
+        state.degrees = raga.degrees;
+        state.thaat = raga.thaat;
+        state.raga = raga;
+        if (raga.suggestedTimeSig) {
+          state.timeSignature = raga.suggestedTimeSig;
+          state.tala = DSP.TALA_MAP[raga.suggestedTimeSig] || null;
+          Player.setMetronomeSignature(raga.suggestedTimeSig);
+        }
+        renderRandomizerTool(entry);
+        const aarohDegrees = raga.aarohanaDegrees || raga.degrees;
+        const avarohDegrees = raga.avarohanaDegrees || [...aarohDegrees].reverse();
+        playRagaSequence(state.tonicPc, aarohDegrees, avarohDegrees, state.tuningA4);
+      });
+
+      ragasGrid.append(card);
+    });
+
+    ragasSection.append(ragasGrid);
+    resultBox.append(ragasSection);
+  }
+
+  // YouTube Challenge & Reference Explorer (Opens predefined queries directly in default web browser)
+  const ytSection = el('div', 'randomizer-yt-section');
+  
+  const ytHead = el('div', 'randomizer-yt-head');
+  const ytTitleRow = el('div', 'randomizer-yt-title-row');
+  ytTitleRow.append(svgIcon('youtube', 'randomizer-yt-icon', 22));
+  ytTitleRow.append(el('h4', 'randomizer-yt-title', 'YouTube Inspiration & Reference Explorer'));
+  ytHead.append(ytTitleRow);
+  ytHead.append(
+    el(
+      'p',
+      'randomizer-yt-desc',
+      'Instant search queries pre-crafted for your default web browser to explore reference tracks, live DJ sets, and fusion challenges in this genre. (Zero internet traffic inside DAW Buddy).'
+    )
+  );
+  ytSection.append(ytHead);
+
+  const genreName = state.genre ? state.genre.name : 'Electronic';
+  const ragaOrScale = state.raga ? state.raga.name : state.scaleName;
+
+  const ytCardsGrid = el('div', 'randomizer-yt-grid');
+
+  const openInBrowser = async (query: string) => {
+    const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+    if (window.api && window.api.openExternal) {
+      await window.api.openExternal(url);
+    } else {
+      window.open(url, '_blank');
+    }
+  };
+
+  // 1. Reference Tracks
+  const q1 = `${genreName} music playlist top tracks`;
+  const ytCard1 = el('div', 'randomizer-yt-card');
+  ytCard1.append(el('div', 'randomizer-yt-card__tag', '🎧 Reference Tracks'));
+  ytCard1.append(el('div', 'randomizer-yt-card__query', `"${genreName}" Top Playlists`));
+  ytCard1.append(el('div', 'randomizer-yt-card__desc', 'Audition top releases, arrangement structure, and mix references.'));
+  const btn1 = el('button', 'pill pill--sm pill--yt', 'Open in Browser ↗');
+  btn1.addEventListener('click', () => openInBrowser(q1));
+  ytCard1.append(btn1);
+  ytCardsGrid.append(ytCard1);
+
+  // 2. Live Sets & Boiler Room
+  const q2 = `${genreName} live set boiler room mix`;
+  const ytCard2 = el('div', 'randomizer-yt-card');
+  ytCard2.append(el('div', 'randomizer-yt-card__tag', '🔥 Live Vibe & DJ Sets'));
+  ytCard2.append(el('div', 'randomizer-yt-card__query', `"${genreName}" Live Sets`));
+  ytCard2.append(el('div', 'randomizer-yt-card__desc', 'Experience club sound systems, crowd pacing, and transition energy.'));
+  const btn2 = el('button', 'pill pill--sm pill--yt', 'Open in Browser ↗');
+  btn2.addEventListener('click', () => openInBrowser(q2));
+  ytCard2.append(btn2);
+  ytCardsGrid.append(ytCard2);
+
+  // 3. Fusion Challenge
+  const q3 = `${genreName} ${ragaOrScale} fusion beat`;
+  const ytCard3 = el('div', 'randomizer-yt-card');
+  ytCard3.append(el('div', 'randomizer-yt-card__tag', '🪘 Fusion Challenge'));
+  ytCard3.append(el('div', 'randomizer-yt-card__query', `"${genreName}" + ${ragaOrScale}`));
+  ytCard3.append(el('div', 'randomizer-yt-card__desc', 'See how producers blend this scale/melody with modern beats.'));
+  const btn3 = el('button', 'pill pill--sm pill--yt', 'Open in Browser ↗');
+  btn3.addEventListener('click', () => openInBrowser(q3));
+  ytCard3.append(btn3);
+  ytCardsGrid.append(ytCard3);
+
+  // 4. Production Masterclass
+  const q4 = `how to make ${genreName} in FL Studio Ableton ${state.bpm} bpm tutorial`;
+  const ytCard4 = el('div', 'randomizer-yt-card');
+  ytCard4.append(el('div', 'randomizer-yt-card__tag', '🎹 Production Masterclass'));
+  ytCard4.append(el('div', 'randomizer-yt-card__query', `How to Produce ${genreName} (${state.bpm} BPM)`));
+  ytCard4.append(el('div', 'randomizer-yt-card__desc', 'Explore sound design, drum patterns, and mixing techniques.'));
+  const btn4 = el('button', 'pill pill--sm pill--yt', 'Open in Browser ↗');
+  btn4.addEventListener('click', () => openInBrowser(q4));
+  ytCard4.append(btn4);
+  ytCardsGrid.append(ytCard4);
+
+  ytSection.append(ytCardsGrid);
+
+  // Custom Search Query Bar
+  const customSearchRow = el('div', 'randomizer-yt-custom-row');
+  const customInput = document.createElement('input');
+  customInput.type = 'text';
+  customInput.className = 'randomizer-yt-input';
+  customInput.value = `${genreName} ${state.tonic} ${ragaOrScale} ${state.bpm} bpm`;
+  customSearchRow.append(customInput);
+
+  const customSearchBtn = el('button', 'pill pill--solid pill--yt-main', '🔍 Search YouTube in Browser');
+  customSearchBtn.addEventListener('click', () => {
+    const term = customInput.value.trim();
+    if (term) openInBrowser(term);
+  });
+  customSearchRow.append(customSearchBtn);
+  ytSection.append(customSearchRow);
+
+  resultBox.append(ytSection);
+
+  section.append(resultBox);
+  viewEl.append(section);
+}
+
 function renderStandaloneTools() {
   viewEl.innerHTML = '';
 
@@ -6580,6 +7591,12 @@ function renderStandaloneTools() {
 
   const grid = el('div', 'tool-grid');
   [
+    {
+      view: 'randomizer',
+      icon: 'dice',
+      title: 'Music Randomizer',
+      text: 'Generate random musical ideas: key, scale, matching Indian Raagas, BPM, and suggested time signatures.'
+    },
     {
       view: 'scale-tool',
       icon: 'music',
@@ -6859,7 +7876,10 @@ const ICONS: Record<string, string> = {
   activity: '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
   mic: '<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>',
   music: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+  dice: '<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><circle cx="15.5" cy="8.5" r="1.5"/><circle cx="8.5" cy="15.5" r="1.5"/><circle cx="15.5" cy="15.5" r="1.5"/><circle cx="12" cy="12" r="1.5"/>',
+  shuffle: '<polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/>',
   compass: '<circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>',
+  youtube: '<path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"/><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"/>',
   settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 13.5a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-2.87 1.2V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 6 19.4l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 3.4 13.5H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.6 6l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 10.5 3.4V3a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 2.87 1.2l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.88z"/>'
 };
 

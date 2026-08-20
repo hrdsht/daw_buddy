@@ -51,6 +51,7 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('shell:openProject', target, name),
   reveal: (target) => ipcRenderer.invoke('shell:reveal', target),
   open: (target) => ipcRenderer.invoke('shell:open', target),
+  openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
   runningDaws: () => ipcRenderer.invoke('daws:running'),
 
   id3Inspect: (folder) => ipcRenderer.invoke('tools:id3Inspect', folder),

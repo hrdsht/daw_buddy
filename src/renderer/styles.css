@@ -4417,4 +4417,801 @@ body.multi-select-mode .filerow__select-handle {
   overflow: visible;
 }
 
+/* Time signature and Indian Tala styles */
+.cell--sig-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--amber) 25%, transparent);
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.tala-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--sage);
+  background: color-mix(in srgb, var(--sage) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sage) 25%, transparent);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.sig-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.sig-picker-card {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+}
+
+.sig-picker-card:hover {
+  background: var(--active);
+  border-color: var(--amber);
+  transform: translateY(-1px);
+}
+
+.sig-picker-card.is-active {
+  border-color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 10%, var(--raised));
+}
+
+.sig-picker-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sig-picker-card__sig {
+  font-size: 15px;
+  font-weight: 700;
+  font-family: var(--mono);
+  color: var(--text);
+}
+
+.scale-dropzone__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.scale-dropzone__subtitle {
+  font-size: 13px;
+  color: var(--dim);
+  margin: 0 0 8px 0;
+}
+
+.scale-dropzone__spinner {
+  margin-top: 8px;
+}
+
+.scale-results-box {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.scale-file-header {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.scale-file-header__title {
+  font-weight: 600;
+  font-size: 14.5px;
+  color: var(--text);
+}
+
+.scale-file-header__meta {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--dim);
+}
+
+.scale-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.scale-metric-card {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.scale-metric__label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--dim);
+  letter-spacing: 0.04em;
+}
+
+.scale-metric__val {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.scale-metric__val--bpm {
+  color: var(--amber);
+  font-family: var(--mono);
+}
+
+.scale-metric__val--detuned {
+  color: #f43f5e;
+}
+
+.scale-camelot-badge {
+  display: inline-block;
+  font-size: 12.5px;
+  font-family: var(--mono);
+  font-weight: 700;
+  color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 15%, transparent);
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-right: 4px;
+}
+
+.scale-metric__sub {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: var(--mono);
+}
+
+.scale-kb-section {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.scale-svg-kb {
+  width: 100%;
+  max-width: 520px;
+  height: auto;
+  border-radius: var(--r);
+  overflow: visible;
+}
+
+/* Time signature and Indian Tala styles */
+.cell--sig-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--amber) 25%, transparent);
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.tala-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--sage);
+  background: color-mix(in srgb, var(--sage) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sage) 25%, transparent);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.sig-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.sig-picker-card {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+}
+
+.sig-picker-card:hover {
+  background: var(--active);
+  border-color: var(--amber);
+  transform: translateY(-1px);
+}
+
+.sig-picker-card.is-active {
+  border-color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 10%, var(--raised));
+}
+
+.sig-picker-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sig-picker-card__sig {
+  font-size: 15px;
+  font-weight: 700;
+  font-family: var(--mono);
+  color: var(--text);
+}
+
+.sig-picker-card__name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--amber);
+}
+
+.sig-picker-card__vibhag {
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--dim);
+}
+
+.sig-picker-card__desc {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.35;
+  margin-top: 2px;
+}
+
+/* =================== Project Audio Metronome Widget =================== */
+.project-metro-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: color-mix(in srgb, var(--raised) 70%, transparent);
+  border: 1px solid var(--line);
+  padding: 2px 4px 2px 2px;
+  border-radius: 999px;
+  transition: all 0.2s ease;
+}
+
+.pill--metro {
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pill--metro.is-on {
+  background: var(--amber);
+  color: var(--amber-ink);
+  border-color: var(--amber);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--amber) 40%, transparent);
+}
+
+.pill--metro.is-disabled-audio {
+  opacity: 0.75;
+}
+
+.project-metro-sigs {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.metro-sig-pill {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 3px 8px;
+  min-width: 38px;
+  text-align: center;
+  transition: all 0.12s ease;
+}
+
+.metro-sig-pill.is-on {
+  background: var(--teal, #00f0ff);
+  color: #000;
+  border-color: var(--teal, #00f0ff);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--teal, #00f0ff) 40%, transparent);
+}
+
+/* =================== Randomizer Tool Styles =================== */
+.randomizer-page {
+  padding-bottom: 60px;
+}
+
+.randomizer-hero {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--raised) 90%, var(--amber) 10%), var(--raised));
+  border: 1px solid color-mix(in srgb, var(--line) 80%, var(--amber) 20%);
+  border-radius: var(--r);
+  padding: 24px;
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.randomizer-hero__title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+
+.randomizer-hero__desc {
+  font-size: 13px;
+  color: var(--dim);
+  max-width: 540px;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.randomizer-roll-btn {
+  font-size: 16px;
+  font-weight: 700;
+  padding: 12px 28px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--amber), #ff9900);
+  color: #000;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 4px 18px color-mix(in srgb, var(--amber) 50%, transparent);
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.randomizer-roll-btn:hover {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 6px 24px color-mix(in srgb, var(--amber) 75%, transparent);
+}
+
+.randomizer-roll-btn:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+.randomizer-reroll-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.randomizer-raga-sugg-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--amber) 30%, transparent);
+  padding: 3px 8px;
+  border-radius: 6px;
+  margin-top: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.randomizer-raga-sugg-pill:hover {
+  background: color-mix(in srgb, var(--amber) 25%, transparent);
+  border-color: var(--amber);
+  transform: translateY(-1px);
+}
+
+.randomizer-tala-detail {
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: var(--dim);
+  line-height: 1.4;
+  background: rgba(0, 0, 0, 0.15);
+  padding: 6px 10px;
+  border-radius: 6px;
+  border-left: 2px solid var(--amber);
+}
+
+.randomizer-tala-bols {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--sage);
+  margin-top: 3px;
+}
+
+/* =================== Project Genre & Genre Picker Styles =================== */
+.badge--genre {
+  color: #c084fc;
+  border-color: rgba(192, 132, 252, 0.4);
+  background: rgba(192, 132, 252, 0.1);
+  font-weight: 600;
+}
+
+.genre-picker-overlay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 10000;
+}
+
+.genre-picker-modal {
+  background: var(--surface, #1e1e24);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  width: 90%;
+  max-width: 680px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+  animation: fadeIn 0.15s ease-out;
+  overflow: hidden;
+}
+
+.genre-picker-modal__header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--raised);
+}
+
+.genre-picker-modal__title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+
+.genre-picker-modal__subtitle {
+  font-size: 12px;
+  color: var(--dim);
+  margin: 2px 0 0 0;
+}
+
+.genre-picker-search-bar {
+  padding: 12px 20px 8px 20px;
+  display: flex;
+  gap: 10px;
+  background: var(--surface, #1e1e24);
+}
+
+.genre-search-input {
+  flex: 1;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.genre-search-input:focus {
+  outline: none;
+  border-color: var(--amber);
+  background: var(--active);
+}
+
+.genre-cat-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 4px 20px 10px 20px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.genre-cat-tab {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  color: var(--dim);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.12s ease;
+}
+
+.genre-cat-tab:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.genre-cat-tab.is-active {
+  background: var(--amber);
+  color: var(--amber-ink, #000);
+  border-color: var(--amber);
+}
+
+.genre-picker-modal__body {
+  padding: 10px 20px 20px 20px;
+  overflow-y: auto;
+  max-height: calc(85vh - 220px);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.genre-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.genre-card {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 10px 12px;
+  cursor: pointer;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  transition: all 0.12s ease;
+}
+
+.genre-card:hover {
+  background: var(--active);
+  border-color: #c084fc;
+  transform: translateY(-1px);
+}
+
+.genre-card.is-selected {
+  background: color-mix(in srgb, #c084fc 15%, var(--raised));
+  border-color: #c084fc;
+  box-shadow: 0 0 10px color-mix(in srgb, #c084fc 30%, transparent);
+}
+
+.genre-card__name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.genre-card__bpm {
+  font-size: 10.5px;
+  font-family: var(--mono);
+  color: var(--sage);
+}
+
+.genre-card__desc {
+  font-size: 10.5px;
+  color: var(--dim);
+  line-height: 1.3;
+}
+
+.genre-custom-row {
+  display: flex;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--line);
+  background: var(--raised);
+}
+
+.genre-custom-input {
+  flex: 1;
+  background: var(--surface, #1e1e24);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 7px 12px;
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.genre-custom-input:focus {
+  outline: none;
+  border-color: var(--amber);
+}
+
+.randomizer-genre-card {
+  border-color: color-mix(in srgb, #c084fc 40%, var(--line));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--raised) 90%, #c084fc 10%), var(--raised));
+}
+
+.randomizer-genre-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #c084fc;
+  background: rgba(192, 132, 252, 0.12);
+  border: 1px solid rgba(192, 132, 252, 0.3);
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-bottom: 4px;
+}
+
+/* =================== YouTube Explorer Hub =================== */
+.randomizer-yt-section {
+  margin-top: 24px;
+  padding: 18px 20px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--surface) 92%, #ef4444 8%), var(--raised));
+  border: 1px solid color-mix(in srgb, #ef4444 35%, var(--line));
+  border-radius: var(--r);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.randomizer-yt-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.randomizer-yt-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.randomizer-yt-icon {
+  color: #ef4444;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.randomizer-yt-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+
+.randomizer-yt-desc {
+  font-size: 12px;
+  color: var(--dim);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.randomizer-yt-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.randomizer-yt-card {
+  background: var(--surface, #1e1e24);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.randomizer-yt-card:hover {
+  border-color: #ef4444;
+  background: var(--active);
+  transform: translateY(-1px);
+}
+
+.randomizer-yt-card__tag {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #ef4444;
+}
+
+.randomizer-yt-card__query {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.randomizer-yt-card__desc {
+  font-size: 11px;
+  color: var(--dim);
+  line-height: 1.35;
+  margin-bottom: 4px;
+}
+
+.pill--yt {
+  align-self: flex-start;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text);
+  border-color: color-mix(in srgb, #ef4444 40%, var(--line));
+}
+
+.pill--yt:hover {
+  background: #ef4444;
+  color: #fff;
+  border-color: #ef4444;
+}
+
+.randomizer-yt-custom-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.randomizer-yt-input {
+  flex: 1;
+  background: var(--surface, #1e1e24);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 8px 12px;
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.randomizer-yt-input:focus {
+  outline: none;
+  border-color: #ef4444;
+}
+
+.pill--yt-main {
+  background: #ef4444;
+  color: #ffffff;
+  border: none;
+  font-weight: 600;
+}
+
+.pill--yt-main:hover {
+  background: #dc2626;
+  transform: translateY(-1px);
+}
+
+
 
