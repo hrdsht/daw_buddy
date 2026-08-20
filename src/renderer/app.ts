@@ -155,6 +155,8 @@ const navigationHistory = new NavigationHistory();
 /* ============================= startup ============================= */
 
 async function boot() {
+  decorateAction('openTools', 'sliders', 'Tools');
+  decorateAction('openSettings', 'settings', 'Settings');
   settings = await window.api.getSettings();
   records = await window.api.getRecords();
   applySettings();
@@ -227,6 +229,7 @@ function applyProjectResult(result, { background = false } = {}) {
 
 function render() {
   backBtn.hidden = view === 'list' && !browsing;
+  setPageTitle();
 
   if (view === 'project') return renderProjectPage();
   if (view === 'thisweek') return renderThisWeek();
@@ -240,6 +243,36 @@ function render() {
   if (view === 'silence') return renderStandaloneSilence();
   if (view === 'vocal') return renderStandaloneVocal();
   return renderList();
+}
+
+// The topbar heading reflects where you are — the active collection on the list,
+// or the name of the page/tool everywhere else.
+const TOOL_TITLES: Record<string, string> = {
+  tools: 'Tools',
+  dedupe: 'Sample cleanup',
+  disk: 'Disk insights',
+  id3: 'ID3 editor',
+  rename: 'Bulk renamer',
+  'batch-rename': 'Bulk renamer',
+  'smart-rename': 'Smart renamer',
+  finish: 'Audio finishing',
+  silence: 'Strip silence',
+  vocal: 'Vocal reconstruction',
+  thisweek: 'This week'
+};
+
+function setPageTitle() {
+  const titleEl = document.getElementById('pageTitle');
+  if (!titleEl) return;
+  let title: string;
+  if (view === 'project' && openProject) title = openProject.name;
+  else if (TOOL_TITLES[view]) title = TOOL_TITLES[view];
+  else if (favOnly) title = 'Favourites';
+  else if (filterRoot) title = basename(filterRoot);
+  else if (filterDaw) title = filterDaw;
+  else if (browsing) title = basename(browsing);
+  else title = 'All projects';
+  titleEl.textContent = title;
 }
 
 function captureLocation() {
@@ -346,7 +379,7 @@ function renderCollections() {
   collectionsEl.innerHTML = '';
 
   const shown = groupVersionsOn && groupedRows.length ? groupedRows.length : entries.length;
-  const all = collButton('All projects', shown);
+  const all = collButton('All projects', shown, 'grid');
   if (!filterRoot && !favOnly && view !== 'thisweek') all.classList.add('is-on');
   all.addEventListener('click', () => {
     filterRoot = null;
@@ -357,7 +390,7 @@ function renderCollections() {
 
   // What you have opened or bounced in the last seven days, at a glance. Always
   // reflects the whole catalogue, so it drops any active browse/filter state.
-  const week = collButton('This week', entries.filter((e) => e.modified >= weekCutoff()).length);
+  const week = collButton('This week', entries.filter((e) => e.modified >= weekCutoff()).length, 'calendar');
   if (view === 'thisweek') week.classList.add('is-on');
   week.addEventListener('click', () => {
     navigationHistory.visit(captureLocation());
@@ -378,7 +411,7 @@ function renderCollections() {
   collectionsEl.append(week);
 
   const favCount = entries.filter((e) => record(e.path).favourite).length;
-  const favs = collButton('Favourites', favCount);
+  const favs = collButton('Favourites', favCount, 'star');
   if (favOnly) favs.classList.add('is-on');
   favs.addEventListener('click', () => {
     favOnly = !favOnly;
@@ -393,8 +426,9 @@ function renderCollections() {
   // changed to "Every file" when grouping was off, which made the grouping
   // feature look as though it had disappeared.
   const grouped = collButton(
-    'Grouping versions',
-    groupedRows.length || entries.length
+    'Grouped',
+    groupedRows.length || entries.length,
+    'layers'
   );
   grouped.title = 'Combine numbered, bounced and autosaved versions into one project row';
   if (groupVersionsOn) grouped.classList.add('is-on');
@@ -407,7 +441,7 @@ function renderCollections() {
   });
   collectionsEl.append(grouped);
 
-  const everyFile = collButton('Every file', `${entries.length} files`);
+  const everyFile = collButton('Every file', `${entries.length} files`, 'files');
   everyFile.title = 'Show every individual DAW project file';
   if (!groupVersionsOn) everyFile.classList.add('is-on');
   everyFile.addEventListener('click', () => {
@@ -423,7 +457,7 @@ function renderCollections() {
     collectionsEl.append(el('div', 'coll__label', 'Folders'));
     settings.roots.forEach((root) => {
       const count = entries.filter((e) => e.root === root).length;
-      const item = collButton(basename(root), count);
+      const item = collButton(basename(root), count, 'folder');
       if (filterRoot === root) item.classList.add('is-on');
       item.addEventListener('click', () => {
         filterRoot = filterRoot === root ? null : root;
@@ -447,7 +481,7 @@ function renderCollections() {
     [...daws.entries()]
       .sort((a, b) => b[1] - a[1])
       .forEach(([daw, count]) => {
-        const item = collButton(daw, count);
+        const item = collButton(daw, count, 'disc');
         if (filterDaw === daw) item.classList.add('is-on');
         item.addEventListener('click', () => {
           filterDaw = filterDaw === daw ? null : daw;
@@ -460,8 +494,9 @@ function renderCollections() {
   }
 }
 
-function collButton(name, count) {
+function collButton(name, count, iconName?) {
   const node = el('button', 'coll');
+  if (iconName) node.append(svgIcon(iconName));
   node.append(el('span', 'coll__name', name));
   node.append(el('span', 'coll__count', String(count)));
   return node;
@@ -585,6 +620,7 @@ function buildRow(entry) {
   line.append(createSelectHandle(item));
   line.append(el('span', 'row__name', entry.name));
 
+  if (entry.daw) line.append(el('span', 'badge badge--daw', entry.daw));
   if (rec.favourite) line.append(el('span', 'badge badge--fav', 'Fav'));
   if (entry.packaged) {
     const badge = el('span', 'badge badge--packaged', 'Packaged');
@@ -610,13 +646,7 @@ function buildRow(entry) {
     line.append(el('span', 'badge', `${entry.siblingCount} in folder`));
   }
   main.append(line);
-  main.append(
-    el(
-      'div',
-      'row__sub',
-      [entry.location, entry.daw].filter(Boolean).join('  ·  ') || basename(entry.root)
-    )
-  );
+  main.append(el('div', 'row__sub', entry.location || basename(entry.root)));
   row.append(main);
 
   /* bpm */
@@ -1448,9 +1478,10 @@ function renderProjectPage() {
 
   /* header */
   const head = el('div', 'page__head');
+  const headMain = el('div', 'page__headmain');
   const projectBpm = bpmFor(entry);
   const art = el('div', 'page__art', projectBpm !== null ? formatBpm(projectBpm) : '♪');
-  head.append(art);
+  headMain.append(art);
 
   const titles = el('div', 'page__titles');
   titles.append(el('div', 'page__kicker', entry.daw || 'Project'));
@@ -1469,7 +1500,8 @@ function renderProjectPage() {
   facts.append(fact('Modified', timeAgo(entry.modified)));
   if (entry.packaged) facts.append(fact('Exported', timeAgo(entry.packagedAt)));
   titles.append(facts);
-  head.append(titles);
+  headMain.append(titles);
+  head.append(headMain);
 
   const harmony = renderProjectHarmony(entry, rec, projectBpm);
   if (harmony) head.append(harmony);
@@ -1640,38 +1672,38 @@ function renderProjectToolsTab(entry) {
   [
     {
       key: 'smart-rename',
-      icon: '🏷',
+      icon: 'sparkles',
       title: 'Smart renamer',
       text: 'Classify and rename cryptic stem exports into mix-ready instrument categories.'
     },
     {
       key: 'rename',
-      icon: 'Aa',
+      icon: 'type',
       title: 'Batch renamer',
       text: 'Clean up prefixes/suffixes or apply token templates across audio files.'
     },
     {
       key: 'silence',
-      icon: '✂',
+      icon: 'scissors',
       title: 'Strip silence',
       text: 'Find trailing silence in WAV files and make trimmed copies without touching the originals.'
     },
     {
       key: 'trim',
-      icon: '⇥',
+      icon: 'crop',
       title: 'Trim audio',
       text: 'Drag handles on the waveform to crop a WAV to a chosen region, audition it, and save a copy.'
     },
     {
       key: 'qc',
-      icon: '✓',
+      icon: 'check',
       title: 'Check audio',
       text: 'Flag quiet files, silent files and loops that may drift or click when repeated.'
     }
   ].forEach((tool) => {
     const card = el('button', 'tool-card');
     card.type = 'button';
-    card.append(el('span', 'tool-card__icon', tool.icon));
+    card.append(svgIcon(tool.icon, 'tool-card__icon', 20));
     const copy = el('span', 'tool-card__copy');
     copy.append(el('b', 'tool-card__title', tool.title));
     copy.append(el('span', 'tool-card__text', tool.text));
@@ -1749,9 +1781,9 @@ function renderVideosTab(entry) {
 }
 
 function fact(label, value) {
-  const node = el('span');
-  node.append(document.createTextNode(`${label} `));
-  node.append(el('b', null, value));
+  const node = el('div', 'statchip');
+  node.append(el('span', 'statchip__label', label));
+  node.append(el('span', 'statchip__value', value));
   return node;
 }
 
@@ -5227,6 +5259,17 @@ $('pollWatching').addEventListener('change', async () => {
   settings = await window.api.updateSettings({ pollWatching: $('pollWatching').checked });
 });
 
+// Give the footer actions the same icon + label treatment as the nav items.
+// Called from boot() — not at module load — because it reads the ICONS const,
+// which is in its temporal dead zone until its declaration runs further down.
+function decorateAction(id: string, iconName: string, label: string) {
+  const btn = $(id);
+  if (!btn) return;
+  btn.textContent = '';
+  btn.append(svgIcon(iconName, 'side-action__icon'));
+  btn.append(el('span', 'side-action__label', label));
+}
+
 $('openDataDir').addEventListener('click', () => window.api.reveal(settings.dataDir));
 $('openSettings').addEventListener('click', openSheet);
 $('closeSettings').addEventListener('click', closeSheet);
@@ -5287,50 +5330,50 @@ function renderStandaloneTools() {
   [
     {
       view: 'dedupe',
-      icon: '≋',
+      icon: 'copy',
       title: 'Sample cleanup',
       text: 'Find duplicate imported samples and safely replace extra copies with links.'
     },
     {
       view: 'disk',
-      icon: 'GB',
+      icon: 'harddrive',
       title: 'Disk insights',
       text: 'See which project folders use the most storage without changing or deleting anything.'
     },
     {
       view: 'id3',
-      icon: 'ID3',
+      icon: 'tag',
       title: 'ID3 editor',
       text: 'Add, replace or remove metadata across many MP3 files at once.'
     },
     {
       view: 'rename',
-      icon: 'Aa',
+      icon: 'type',
       title: 'Bulk renamer',
       text: 'Clean up or standardise many filenames with a preview before anything changes.'
     },
     {
       view: 'finish',
-      icon: '↗',
+      icon: 'activity',
       title: 'Audio finishing',
       text: 'Normalise WAV files and optionally fit long audio to an exact beat or bar length.'
     },
     {
       view: 'silence',
-      icon: '✂',
+      icon: 'scissors',
       title: 'Strip silence',
       text: 'Detect leading or trailing silence and create trimmed copies while preserving originals.'
     },
     {
       view: 'vocal',
-      icon: 'VOX',
+      icon: 'mic',
       title: 'Vocal reconstruction',
       text: 'Split long vocals for external processing, then rebuild them at their exact original timing.'
     }
   ].forEach((tool) => {
     const card = el('button', 'tool-card');
     card.type = 'button';
-    card.append(el('span', 'tool-card__icon', tool.icon));
+    card.append(svgIcon(tool.icon, 'tool-card__icon', 20));
     const copy = el('span', 'tool-card__copy');
     copy.append(el('b', 'tool-card__title', tool.title));
     copy.append(el('span', 'tool-card__text', tool.text));
@@ -5529,6 +5572,37 @@ function el(tag: string, className?: string | null, text?: any): any {
   if (className) node.className = className;
   if (text !== undefined && text !== null) node.textContent = text;
   return node;
+}
+
+// Minimal inline line-icons (Lucide-style), drawn in currentColor so they track
+// the theme accent. Used to give the sidebar and actions a modern, legible feel.
+const ICONS: Record<string, string> = {
+  grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',
+  calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+  star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+  layers: '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
+  files: '<path d="M4 4a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><polyline points="13 2 13 7 18 7"/>',
+  folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  disc: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/>',
+  sliders: '<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>',
+  // tool-card icons
+  sparkles: '<path d="M12 3l1.9 4.8L18 9.7l-4.1 1.9L12 16l-1.9-4.4L6 9.7l4.1-1.9z"/><path d="M19 14l.8 1.9L22 16.6l-2.2.9L19 20l-.8-2.5L16 16.6l2.2-.7z"/>',
+  type: '<polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>',
+  scissors: '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/>',
+  crop: '<path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/>',
+  check: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+  copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  harddrive: '<line x1="22" y1="12" x2="2" y2="12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" y1="16" x2="6.01" y2="16"/><line x1="10" y1="16" x2="10.01" y2="16"/>',
+  tag: '<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
+  activity: '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
+  mic: '<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 13.5a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-2.87 1.2V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 6 19.4l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 3.4 13.5H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.6 6l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 10.5 3.4V3a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 2.87 1.2l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.88z"/>'
+};
+
+function svgIcon(name: string, cls = 'coll__icon', size = 16): any {
+  const span = el('span', cls);
+  span.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" width="${size}" height="${size}" aria-hidden="true">${ICONS[name] || ''}</svg>`;
+  return span;
 }
 
 function headRow(title, subtitle?) {
