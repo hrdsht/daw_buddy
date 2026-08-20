@@ -24,3 +24,6 @@ Thumbs.db
 # Local knowledge graph / tools
 graphify-out/
 
+# Standalone product showcase website
+website/
+
