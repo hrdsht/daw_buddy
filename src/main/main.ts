@@ -19,6 +19,7 @@ const id3 = require('./lib/id3');
 const renamer = require('./lib/renamer');
 const silence = require('./lib/silence');
 const trim = require('./lib/trim');
+const samples = require('./lib/samples');
 const vocalSplit = require('./lib/vocalSplit');
 const vocalRebuild = require('./lib/vocalRebuild');
 const finisher = require('./lib/finisher');
@@ -1280,6 +1281,14 @@ ipcMain.handle('silence:process', async (event, paths, options) => {
   }
 
   return { cancelled: false, results, outputRoot };
+});
+
+/* ---------------------- missing-media audit ------------------------ */
+
+/** Which samples an Ableton set references that no longer exist on disk. */
+ipcMain.handle('audit:samples', async (event, sessionPath) => {
+  guardApproved(sessionPath);
+  return samples.auditSamples(sessionPath);
 });
 
 /* ------------------------- waveform trim --------------------------- */

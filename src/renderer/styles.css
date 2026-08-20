@@ -1796,6 +1796,50 @@ body.is-mac .topbar {
   color: var(--text);
 }
 
+/* Missing-samples warning: an alert-tinted stat chip + a detail list. */
+.statchip--alert {
+  border-color: color-mix(in srgb, var(--alert) 45%, transparent);
+  background: color-mix(in srgb, var(--alert) 12%, transparent);
+}
+
+.statchip--alert .statchip__value {
+  color: var(--alert);
+}
+
+.sample-audit {
+  padding: 0 4px;
+}
+
+.sample-audit__list {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sample-audit__item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 4px 0;
+  border-top: 1px solid var(--line);
+}
+
+.sample-audit__name {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.sample-audit__path {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .page__actions {
   display: flex;
   flex-wrap: wrap;

@@ -100,6 +100,8 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('silence:process', paths, options),
   onSilenceProgress: (callback) => subscribe('silence:progress', callback),
 
+  auditSamples: (sessionPath) => ipcRenderer.invoke('audit:samples', sessionPath),
+
   trimAnalyse: (inputPath) => ipcRenderer.invoke('trim:analyse', inputPath),
   trimProcess: (inputPath, startSec, endSec) =>
     ipcRenderer.invoke('trim:process', inputPath, startSec, endSec),
