@@ -1,31 +1,20 @@
 # DAW Buddy
 
-**Version 0.2.0** — a local desktop app that lists your music-production project
-folders, reads the BPM straight out of the session file, shows how many backups
-each project has, keeps per-project mix notes, auditions your renders and stems,
-and tells you when a new bounce lands on disk.
+**Version 0.4.1-beta.1** — a fast, private desktop app that organizes your music-production session folders, reads BPM and musical keys straight out of session files, tracks project versions and backup health, auditions renders and multitrack stems, and offers a comprehensive suite of lossless audio tools.
 
-Numbered and bounced session files in the same folder are treated as versions of
-one song, so opening version 4 can still find a render made from version 3. An
-animated splash plays while the first scan runs, project utilities live on a
-focused Tools page, and standalone sidebar tools handle sample cleanup, ID3
-editing, bulk renaming, disk-space insights, audio finishing, and silence
-removal. Disk insights is read-only. Audio finishing and Strip silence always
-create new copies and leave the original audio untouched.
+### 🌟 Key Features in v0.4.1-beta.1
 
-While auditioning a render or stem, click **Verb** for a quick reverb bypass or
-right-click it to shape decay time, room size, pre-delay, low cut, high cut, and
-wet/dry mix. Those reverb choices are remembered for the next session.
-
-You tell it which folders to look at, in Settings. It never scans your whole
-computer — the only folders ever opened are the ones on your list. Nothing
-leaves your machine: no server, no account, no internet call except the two font
-files the window loads.
-
-The first launch builds a complete project catalogue. Later launches show that
-catalogue immediately and verify changes quietly in the background. The Windows
-launcher also reuses the compiled app unless code or assets have changed, so a
-normal launch does not rebuild everything.
+- **🎲 Producer Randomizer & Genre Challenge**: Instantly generate fresh musical starting points — random key, scale, matching Indian Raagas with time-of-day/mood, BPM, Tala meters, and 48+ curated genre challenges across 9 categories (Afro House, Botanica & Organic, Bollywood & Indian Fusion, Dubstep/Riddim, Drum & Bass, etc.) with integrated YouTube reference search.
+- **🎹 Scale & Raaga Detector**: Drop any raw audio sample or MIDI file to detect BPM, musical key, tuning deviation in cents, parent Thaat, and modal Indian Raagas. Features interactive Sargam swaras, full Aarohana / Avarohana phrase auditioning, and direct Drag-to-DAW MIDI export.
+- **🏷️ Renamer (Smart Stem Classifier & Bulk Renamer)**:
+  - **Smart Renamer**: AI-assisted classification that categorizes cryptic bounce stems into mix-ready instrument groups (Kick, Snare, Bass, Leads, Vocals, FX) with customizable dictionary overrides and safe, reversible rollback manifests.
+  - **Bulk Renamer**: Batch prefix/suffix removal, numbering, case conversion, and token pattern templates.
+- **❓ Interactive Tool Tutorials**: Non-intrusive step-by-step walkthrough tours for every studio tool in the suite. Triggers automatically on first open, and can be replayed anytime via the `[ ❓ Tutorial ]` button in each tool's header.
+- **💭 Comic Speech Bubble Theme Lab**: Right-click the `Light mode` / `Dark mode` button to open a comic speech bubble popup with instant preview of Dark, Light, AMOLED surfaces, Minimalist, Ableton Live, and Studio Classic styles, and 14+ accent colors.
+- **🎛️ Lossless Audio Finisher & Silence Stripper**: Peak/RMS normalization, beat/bar boundary fitting, and threshold-based leading/trailing silence removal with safety transient padding.
+- **🎙️ Vocal Reconstruction**: Lossless silence-split for external tuning workflows and sample-accurate re-assembly.
+- **💾 Duplicate Sample Auditor & Disk Insights**: Safe hard-link deduplication and non-destructive project folder storage analytics.
+- **⚡ Zero-Friction Export**: Drag `[ WAV ]`, `[ MP3 ]`, and `[ FLAC ]` pills directly from the session browser straight into Discord, Telegram, or your DAW tracks.
 
 ---
 
