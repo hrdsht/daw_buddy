@@ -49,6 +49,7 @@ import {
   ABLETON_PALETTE_GRID,
   getAbletonProjectColor
 } from './dom';
+import { startFeatureWalkthrough } from './tour';
 
 // Initialize saved appearance (Default: Minimalist, Dark, Cyan)
 const savedStyle = localStorage.getItem('dawBuddyThemeStyle') || 'minimalist';
@@ -160,6 +161,7 @@ const navigationHistory = new NavigationHistory();
 /* ============================= startup ============================= */
 
 async function boot() {
+  if ($('openTour')) decorateAction('openTour', 'compass', 'Tour');
   decorateAction('openTools', 'sliders', 'Tools');
   decorateAction('openSettings', 'settings', 'Settings');
   buildSortMenu();
@@ -167,6 +169,11 @@ async function boot() {
   records = await window.api.getRecords();
   applySettings();
   await refresh();
+
+  // Auto-launch walkthrough on first start or after version updates
+  setTimeout(() => {
+    startFeatureWalkthrough(false);
+  }, 750);
 }
 
 function applySettings() {
@@ -5672,6 +5679,17 @@ $('openSettings').addEventListener('click', openSheet);
 $('closeSettings').addEventListener('click', closeSheet);
 scrimEl.addEventListener('click', closeSheet);
 
+if ($('openTour')) {
+  $('openTour').addEventListener('click', () => startFeatureWalkthrough(true));
+}
+
+if ($('startTourBtn')) {
+  $('startTourBtn').addEventListener('click', () => {
+    closeSheet();
+    startFeatureWalkthrough(true);
+  });
+}
+
 $('openTools').addEventListener('click', () => {
   navigationHistory.visit(captureLocation());
   view = 'tools';
@@ -5993,6 +6011,7 @@ const ICONS: Record<string, string> = {
   tag: '<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
   activity: '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
   mic: '<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>',
+  compass: '<circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>',
   settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 13.5a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-2.87 1.2V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 6 19.4l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 3.4 13.5H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.6 6l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 10.5 3.4V3a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 2.87 1.2l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.88z"/>'
 };
 
