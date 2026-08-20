@@ -550,6 +550,10 @@ ipcMain.handle('settings:update', (event, patch: any) => {
   if (Array.isArray(patch.ignore)) {
     allowed.ignore = patch.ignore.filter((name) => typeof name === 'string');
   }
+  if (patch.listSort && typeof patch.listSort === 'object') {
+    const by = String(patch.listSort.by || 'modified');
+    allowed.listSort = { by, dir: patch.listSort.dir === 1 ? 1 : -1 };
+  }
 
   const before = settings.get();
   const after = settings.update(allowed);
