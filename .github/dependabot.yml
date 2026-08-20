@@ -1,0 +1,22 @@
+# Dependabot keeps dependencies and Actions current.
+#
+# Note on the open `extract-zip` alert: it arrives transitively via `electron`
+# (a devDependency) and is therefore **build-time only** — it is not part of the
+# shipped installer, which bundles just dist/** plus the production deps
+# (chokidar, lamejs). There is no patched release of extract-zip; it clears when
+# a future Electron pulls a fixed transitive, which these updates will surface.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      dev-dependencies:
+        dependency-type: development
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly

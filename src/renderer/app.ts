@@ -157,6 +157,7 @@ const navigationHistory = new NavigationHistory();
 async function boot() {
   decorateAction('openTools', 'sliders', 'Tools');
   decorateAction('openSettings', 'settings', 'Settings');
+  buildSortMenu();
   settings = await window.api.getSettings();
   records = await window.api.getRecords();
   applySettings();
@@ -164,6 +165,10 @@ async function boot() {
 }
 
 function applySettings() {
+  if (settings.listSort && settings.listSort.by) {
+    sortBy = settings.listSort.by;
+    sortDir = settings.listSort.dir === 1 ? 1 : -1;
+  }
   $('alwaysOnTop').checked = settings.alwaysOnTop;
   $('pollWatching').checked = settings.pollWatching;
   if ($('followLinks')) $('followLinks').checked = Boolean(settings.followLinks);
@@ -273,6 +278,11 @@ function setPageTitle() {
   else if (browsing) title = basename(browsing);
   else title = 'All projects';
   titleEl.textContent = title;
+
+  // The sort control only applies to the project list.
+  const sortMount = document.getElementById('sortMount');
+  if (sortMount) sortMount.style.display = view === 'list' ? '' : 'none';
+  updateSortLabel();
 }
 
 function captureLocation() {
@@ -504,6 +514,87 @@ function collButton(name, count, iconName?) {
 
 /* ============================== the list =========================== */
 
+/* ------------------------------ sorting ---------------------------- */
+
+const SORT_OPTIONS = [
+  { key: 'modified', label: 'Modified', dir: -1 },
+  { key: 'name', label: 'Name', dir: 1 },
+  { key: 'bpm', label: 'BPM', dir: -1 },
+  { key: 'key', label: 'Key', dir: 1 },
+  { key: 'saves', label: 'Saves', dir: -1 },
+  { key: 'audio', label: 'Audio', dir: -1 },
+  { key: 'favourite', label: 'Favourites first', dir: -1 },
+  { key: 'notes', label: 'Has notes', dir: -1 }
+];
+
+// Apply a sort. Re-selecting the active column flips direction; a new column
+// uses its natural default. The choice is persisted so it survives a restart.
+function setSort(by, dir?) {
+  if (dir === undefined) {
+    dir = by === sortBy ? -sortDir : SORT_OPTIONS.find((o) => o.key === by)?.dir ?? -1;
+  }
+  sortBy = by;
+  sortDir = dir;
+  if (window.api && window.api.updateSettings) {
+    window.api
+      .updateSettings({ listSort: { by: sortBy, dir: sortDir } })
+      .then((s) => {
+        settings = s;
+      });
+  }
+  render();
+}
+
+function buildSortMenu() {
+  const mount = $('sortMount');
+  if (!mount) return;
+  mount.innerHTML = '';
+  const btn = el('button', 'pill sortmenu__btn');
+  btn.append(svgIcon('sliders', 'sortmenu__icon', 14));
+  btn.append(el('span', 'sortmenu__label'));
+  btn.append(el('span', 'sortmenu__caret', '▾'));
+
+  const pop = el('div', 'sortmenu__pop');
+  pop.hidden = true;
+  SORT_OPTIONS.forEach((opt) => {
+    const item = el('button', 'sortmenu__item');
+    item.dataset.key = opt.key;
+    item.append(el('span', 'sortmenu__itemlabel', opt.label));
+    item.append(el('span', 'sortmenu__dir'));
+    item.addEventListener('click', (event) => {
+      event.stopPropagation();
+      pop.hidden = true;
+      setSort(opt.key);
+    });
+    pop.append(item);
+  });
+
+  btn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    pop.hidden = !pop.hidden;
+  });
+  document.addEventListener('click', () => {
+    pop.hidden = true;
+  });
+
+  mount.append(btn, pop);
+  updateSortLabel();
+}
+
+function updateSortLabel() {
+  const mount = $('sortMount');
+  if (!mount) return;
+  const opt = SORT_OPTIONS.find((o) => o.key === sortBy);
+  const label = mount.querySelector('.sortmenu__label');
+  if (label) label.textContent = opt ? opt.label : 'Modified';
+  mount.querySelectorAll('.sortmenu__item').forEach((item: any) => {
+    const active = item.dataset.key === sortBy;
+    item.classList.toggle('is-on', active);
+    const dir = item.querySelector('.sortmenu__dir');
+    if (dir) dir.textContent = active ? (sortDir === 1 ? '↑' : '↓') : '';
+  });
+}
+
 function visible() {
   const q = parseQuery(searchEl.value);
   const active = hasQuery(q);
@@ -518,14 +609,28 @@ function visible() {
   });
 
   return list.slice().sort((a, b) => {
+    const ra = record(a.path);
+    const rb = record(b.path);
     if (sortBy === 'name') return a.name.localeCompare(b.name) * sortDir;
     if (sortBy === 'key') {
       return (
-        (record(a.path).camelot || '~').localeCompare(record(b.path).camelot || '~') *
-        sortDir
+        (ra.camelot || '~').localeCompare(rb.camelot || '~') * sortDir
       );
     }
     if (sortBy === 'bpm') return ((bpmFor(a) || 0) - (bpmFor(b) || 0)) * sortDir;
+    if (sortBy === 'saves') return ((a.backupCount || 0) - (b.backupCount || 0)) * sortDir;
+    if (sortBy === 'audio') return ((a.audioCount || 0) - (b.audioCount || 0)) * sortDir;
+    if (sortBy === 'favourite') {
+      const diff = (ra.favourite ? 1 : 0) - (rb.favourite ? 1 : 0);
+      // Tie-break flagged/unflagged groups by newest first, so a "favourites
+      // first" list still reads chronologically within each group.
+      return diff !== 0 ? diff * sortDir : (a.modified - b.modified) * -1;
+    }
+    if (sortBy === 'notes') {
+      const hasA = ra.note && ra.note.trim() ? 1 : 0;
+      const hasB = rb.note && rb.note.trim() ? 1 : 0;
+      return hasA !== hasB ? (hasA - hasB) * sortDir : (a.modified - b.modified) * -1;
+    }
     return (a.modified - b.modified) * sortDir;
   });
 }
@@ -561,14 +666,7 @@ function renderList() {
     if (key) {
       th.dataset.sort = key;
       if (sortBy === key) th.classList.add('is-sorted');
-      th.addEventListener('click', () => {
-        if (sortBy === key) sortDir *= -1;
-        else {
-          sortBy = key;
-          sortDir = key === 'name' ? 1 : -1;
-        }
-        render();
-      });
+      th.addEventListener('click', () => setSort(key));
     }
     head.append(th);
   });

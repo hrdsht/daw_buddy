@@ -15,6 +15,10 @@ const DEFAULTS = {
   roots: [],
   alwaysOnTop: false,
 
+  // How the project list is ordered, remembered between sessions.
+  // `by` is one of: modified, name, bpm, key, saves, audio, favourite, notes.
+  listSort: { by: 'modified', dir: -1 },
+
   // A Discord/Slack/Zapier webhook URL. When set, a new bounce POSTs a
   // notification to it. Empty means no webhook — nothing leaves the machine.
   webhookUrl: '',
