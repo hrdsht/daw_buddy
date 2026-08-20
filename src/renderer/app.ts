@@ -5943,14 +5943,22 @@ $('openSettings').addEventListener('click', openSheet);
 $('closeSettings').addEventListener('click', closeSheet);
 scrimEl.addEventListener('click', closeSheet);
 
+function startCurrentViewTour(force = true) {
+  if (view === 'project' && openProject) {
+    startProjectWalkthrough(force);
+  } else {
+    startFeatureWalkthrough(force);
+  }
+}
+
 if ($('openTour')) {
-  $('openTour').addEventListener('click', () => startFeatureWalkthrough(true));
+  $('openTour').addEventListener('click', () => startCurrentViewTour(true));
 }
 
 if ($('startTourBtn')) {
   $('startTourBtn').addEventListener('click', () => {
     closeSheet();
-    startFeatureWalkthrough(true);
+    startCurrentViewTour(true);
   });
 }
 

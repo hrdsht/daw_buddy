@@ -139,8 +139,18 @@ export function isTourActive(): boolean {
   return Boolean(overlayEl);
 }
 
+export function isProjectPageActive(): boolean {
+  if (typeof document === 'undefined') return false;
+  return Boolean(document.querySelector('.page__headmain, .page__head, .page__harmony, #projectStickyBar, .project-tabs'));
+}
+
 export function startFeatureWalkthrough(force = false) {
-  const lastSeen = localStorage.getItem('dawBuddyTourSeenVersion');
+  if (isProjectPageActive()) {
+    startProjectWalkthrough(force);
+    return;
+  }
+
+  const lastSeen = typeof localStorage !== 'undefined' ? localStorage.getItem('dawBuddyTourSeenVersion') : null;
   if (!force && lastSeen === TOUR_VERSION) {
     return;
   }
@@ -152,7 +162,12 @@ export function startFeatureWalkthrough(force = false) {
 }
 
 export function startProjectWalkthrough(force = false) {
-  const lastSeen = localStorage.getItem('dawBuddyProjectTourSeenVersion');
+  if (!isProjectPageActive()) {
+    startFeatureWalkthrough(force);
+    return;
+  }
+
+  const lastSeen = typeof localStorage !== 'undefined' ? localStorage.getItem('dawBuddyProjectTourSeenVersion') : null;
   if (!force && lastSeen === TOUR_VERSION) {
     return;
   }
