@@ -71,51 +71,51 @@ shrink only slightly in ZIP. Offer clearly labelled alternatives later:
 RAR is deferred. It adds another tool/dependency and is less universally
 available; it should be considered only if measured results justify it.
 
-### Connection and security
+### Connection and Security Boundary (Zero-Server, Zero-Trust)
 
-- Never expose unauthenticated HTTP or plain FTP to the public internet.
-- Encrypt traffic, pair devices explicitly and give each phone a revocable
-  identity. A lost phone must be removable from DAW Buddy Settings.
-- Use short-lived download authorizations rather than permanent URLs.
-- Restrict every requested path to DAW Buddy's approved indexed audio. Resolve
-  paths before access and reject traversal, links and stale cache entries.
-- Rate-limit requests, cap archive size/file count and keep a local activity
-  log showing which device downloaded what and when.
-- Default to no remote access until the owner turns it on.
+To eliminate the need for running paid servers and protect against open-internet phishing, open-port vulnerabilities, and credential sniffing:
 
-For a personal beta, support the same Wi-Fi network or a trusted private VPN
-such as Tailscale rather than opening a router port. A polished internet-wide
-version would need a separately approved encrypted relay/service, including a
-decision about hosting cost, accounts and privacy.
+1. **No Open Ports or Traditional Web Servers**:
+   - The desktop never runs an open HTTP/FTP daemon listening on the public internet.
+   - Zero router configuration or port forwarding required.
 
-## Delivery phases
+2. **Zero-Server, Free & End-to-End Encrypted (E2EE) Architectural Options**:
 
-1. **Desktop groundwork:** read-only API, safe file allow-list, bundle queue,
-   checksums, cleanup policy and transfer tests.
-2. **Personal Android beta:** QR pairing and LAN/private-VPN browsing,
-   downloads, resume and Share-menu hand-off.
-3. **Remote product:** optional secure relay, device management, notifications
-   and a simple setup that does not require networking knowledge.
-4. **Later conveniences:** Wake-on-LAN where supported, download history and
-   owner-approved temporary links for individual files.
+   - **Option A: WebRTC Direct P2P DataChannels with Ephemeral QR Code (Recommended)**
+     - *How it works:* Desktop generates an ephemeral pairing token encoded into a QR code. When scanned by your phone (or opened via a short-lived link), the devices establish a direct, end-to-end encrypted WebRTC DataChannel via free public STUN servers (e.g. Google STUN).
+     - *Cost:* **$0 (100% Free, serverless)**.
+     - *Security:* DTLS 1.3 / SRTP encryption. Neither ISPs nor intermediate NAT traversal nodes can inspect or tamper with the audio stream.
+     - *Workflow:* Phone requests a render/stems bundle → Desktop streams it chunk-by-chunk to the phone → Transfer ends immediately.
 
-Native Android versus an installable web app should be decided with a small
-prototype. The protocol and security boundary must not depend on that UI
-choice.
+   - **Option B: SPAKE2 / Magic Wormhole Protocol (One-Time Passphrase)**
+     - *How it works:* Password Authenticated Key Exchange (PAKE) over Curve25519 and ChaCha20-Poly1305.
+     - *Cost:* **$0 (Uses free public rendezvous relays for encrypted signalling only)**.
+     - *Security:* Cryptographically immune to man-in-the-middle attacks and phishing. Relays only see randomized encrypted noise and cannot decrypt file bytes.
 
-## Acceptance criteria
+   - **Option C: Tailscale / WireGuard Private Mesh Network**
+     - *How it works:* Uses WireGuard peer-to-peer mesh. Free for individual users (up to 100 devices).
+     - *Security:* Direct encrypted point-to-point tunnel between your studio PC and phone over cellular data (5G/4G) without exposing any service to the outside world.
 
-1. A paired phone can list only the renders and stems DAW Buddy explicitly
-   exposes; arbitrary paths and project source files are rejected.
-2. One file and one multi-stem ZIP survive an interrupted/resumed transfer and
-   match the desktop checksums.
-3. Bundle creation never changes source audio and fails safely when disk space
-   is insufficient.
-4. Revoking the phone immediately blocks new browsing and downloads.
-5. The main DAW Buddy window and audio player remain usable during packaging
-   and transfer.
-6. Remote access is off by default and no plain FTP/public unauthenticated port
-   is introduced.
+3. **Strict One-Way Transmit Boundary & Native Share Handoff**:
+   - DAW Buddy's desktop agent is strictly **read-only / transmit-only**.
+   - The Android companion receives the requested audio file directly into device storage or memory.
+   - The user then uploads or shares the file to their chosen service (**WeTransfer, Google Drive, WhatsApp, Telegram, Dropbox, Email**) using Android's native system Share Sheet.
+   - DAW Buddy never needs to implement third-party upload credentials, WeTransfer API keys, or cloud storage accounts on the desktop.
+
+## Delivery Phases
+
+1. **Desktop Groundwork:** Safe file allow-list, read-only manifest generator, bundle compression queue, and sha256 checksums.
+2. **E2EE Peer-to-Peer Transfer Engine:** WebRTC DataChannel / P2P signalling handshake (ephemeral QR pairing) with zero server setup.
+3. **Android Companion App / PWA:** Mobile UI for browsing project renders/stems, initiating direct downloads, and triggering Android's native Share Sheet.
+4. **Resilience & Background Resume:** Chunked resume support for cellular network drops.
+
+## Acceptance Criteria
+
+1. **Zero Open Ports**: No open ports or unauthenticated services are exposed to the public internet.
+2. **Zero Hosting Cost**: The system operates 100% peer-to-peer using free, blind STUN/signalling mechanisms.
+3. **Strict Read-Only Guarantee**: The phone cannot delete, overwrite, rename, or modify any files on the studio computer.
+4. **Native Android Share Handoff**: Completed transfers immediately invoke Android's system share menu (WeTransfer, Drive, etc.).
+5. **Session Isolation**: Pairing tokens expire automatically; revoked devices cannot reconnect.
 
 ## Consequences
 
