@@ -71,11 +71,16 @@ function fftMagnitudes(real: Float64Array, imag: Float64Array): Float32Array {
   return mags;
 }
 
+const HANN_CACHE = new Map<number, Float32Array>();
+
 function hann(size: number): Float32Array {
+  const cached = HANN_CACHE.get(size);
+  if (cached) return cached;
   const w = new Float32Array(size);
   for (let i = 0; i < size; i += 1) {
     w[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (size - 1)));
   }
+  HANN_CACHE.set(size, w);
   return w;
 }
 

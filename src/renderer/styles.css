@@ -317,6 +317,58 @@ body[data-theme-style="classic"].theme-amoled {
   box-sizing: border-box;
 }
 
+/* ==================================================================
+   CUSTOM GLASSMORPHIC SCROLLBAR
+   ================================================================== */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+}
+
+body.theme-light * {
+  scrollbar-color: rgba(0, 0, 0, 0.16) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 999px;
+  border: 1.5px solid transparent;
+  background-clip: padding-box;
+  transition: background-color 200ms ease, box-shadow 200ms ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--amber);
+  box-shadow: 0 0 10px var(--accent-glow, rgba(0, 240, 255, 0.5));
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: var(--amber);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+body.theme-light ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.16);
+}
+
+body.theme-light ::-webkit-scrollbar-thumb:hover {
+  background: var(--amber);
+}
+
 html,
 body {
   margin: 0;
@@ -1304,6 +1356,145 @@ body.is-mac .topbar {
   font-family: var(--mono);
   color: var(--amber);
   font-weight: 700;
+}
+
+/* ==================================================================
+   STICKY COLLAPSIBLE MINI PROJECT HEADER BAR
+   ================================================================== */
+.page__sticky-bar {
+  position: sticky;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: var(--surface);
+  background: rgba(20, 25, 22, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--line);
+  padding: 8px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  margin: -18px -18px 14px -18px;
+  opacity: 0;
+  transform: translateY(-100%);
+  pointer-events: none;
+  transition: opacity 220ms cubic-bezier(0.16, 1, 0.3, 1),
+              transform 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+body[data-theme-style="ableton"] .page__sticky-bar {
+  background: rgba(30, 30, 36, 0.92);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0;
+}
+
+body.theme-amoled .page__sticky-bar {
+  background: rgba(0, 0, 0, 0.94);
+}
+
+body.theme-light .page__sticky-bar {
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.page__sticky-bar.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.sticky-bar__left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.sticky-bar__art {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r);
+  background: var(--raised);
+  border: 1px solid var(--line);
+  color: var(--amber);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+
+.sticky-bar__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sticky-bar__title-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sticky-bar__name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sticky-bar__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+}
+
+.sticky-bar__chip {
+  color: var(--amber);
+  font-family: var(--mono);
+  font-weight: 600;
+}
+
+.sticky-bar__scale-name {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.sticky-bar__right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+.sticky-bar__mini-kb {
+  display: flex;
+  align-items: center;
+  background: var(--raised);
+  padding: 3px 6px;
+  border-radius: var(--r);
+  border: 1px solid var(--line);
+}
+
+.sticky-bar__mini-kb svg {
+  display: block;
+}
+
+.sticky-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .harmony__wheel-col {

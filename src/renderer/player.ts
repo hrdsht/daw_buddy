@@ -597,7 +597,7 @@ const Player = (() => {
     ctx.beginPath();
     ctx.rect(0, 0, playedX, height);
     ctx.clip();
-    const amberHex = (typeof window !== 'undefined' ? getComputedStyle(document.body).getPropertyValue('--amber').trim() : '') || '#00f0ff';
+    const amberHex = getAmberColor();
     const lit = ctx.createLinearGradient(0, 0, 0, height);
     lit.addColorStop(0, amberHex);
     lit.addColorStop(0.5, amberHex);
@@ -618,6 +618,20 @@ const Player = (() => {
     ctx.lineTo(playedX, height - 4);
     ctx.stroke();
     ctx.shadowBlur = 0;
+  }
+
+  let cachedAmberHex = '';
+  let cachedAmberTime = 0;
+  function getAmberColor(): string {
+    const now = Date.now();
+    if (!cachedAmberHex || now - cachedAmberTime > 1000) {
+      cachedAmberHex =
+        (typeof window !== 'undefined'
+          ? getComputedStyle(document.body).getPropertyValue('--amber').trim()
+          : '') || '#00f0ff';
+      cachedAmberTime = now;
+    }
+    return cachedAmberHex;
   }
 
   /* -------------------------- transport -------------------------- */
@@ -694,7 +708,26 @@ const Player = (() => {
     }
   }
 
+  let isTicking = false;
+  let rafId: number | null = null;
+
+  function startTick() {
+    if (!isTicking) {
+      isTicking = true;
+      rafId = requestAnimationFrame(tick);
+    }
+  }
+
+  function stopTick() {
+    isTicking = false;
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+  }
+
   function tick() {
+    if (!isTicking) return;
     if (current && duration() > 0) {
       // Enforce a trim region: loop back to the start, or stop and release it.
       if (regionEnd !== null && !audio.paused && audio.currentTime >= regionEnd) {
@@ -709,7 +742,11 @@ const Player = (() => {
         broadcastState();
       }
     }
-    requestAnimationFrame(tick);
+    if (!audio.paused) {
+      rafId = requestAnimationFrame(tick);
+    } else {
+      isTicking = false;
+    }
   }
 
   canvas.addEventListener('click', (event) => {
@@ -729,16 +766,21 @@ const Player = (() => {
 
   audio.addEventListener('play', () => {
     playBtn.innerHTML = '&#10074;&#10074;';
+    startTick();
     emit();
     broadcastState();
   });
   audio.addEventListener('pause', () => {
     playBtn.innerHTML = '&#9654;';
+    stopTick();
+    draw();
     emit();
     broadcastState();
   });
   audio.addEventListener('ended', () => {
     playBtn.innerHTML = '&#9654;';
+    stopTick();
+    draw();
     emit();
     broadcastState();
   });
@@ -774,7 +816,6 @@ const Player = (() => {
     });
   }
 
-  requestAnimationFrame(tick);
   draw();
 
   return {

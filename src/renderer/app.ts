@@ -1363,6 +1363,42 @@ function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
   document.body.append(overlay);
 }
 
+function renderMiniStickyKeyboard(tonicPc: number, degrees: number[]) {
+  if (tonicPc === -1 || !degrees) return null;
+  const kb = kbLayoutFn(1, 8, 20);
+  const highlightedKeys = kbHighlightFn(kb.keys, tonicPc, degrees);
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svgKb = document.createElementNS(svgNS, 'svg');
+  svgKb.setAttribute('class', 'scale-keyboard mini-scale-keyboard');
+  svgKb.setAttribute('viewBox', `0 0 ${kb.width} ${kb.height}`);
+  svgKb.setAttribute('width', String(kb.width));
+  svgKb.setAttribute('height', String(kb.height));
+
+  highlightedKeys.filter((k) => k.type === 'white').forEach((k) => {
+    const rect = document.createElementNS(svgNS, 'rect');
+    rect.setAttribute('x', String(k.x));
+    rect.setAttribute('y', String(k.y));
+    rect.setAttribute('width', String(k.width - 1));
+    rect.setAttribute('height', String(k.height));
+    rect.setAttribute('rx', '1');
+    rect.setAttribute('class', `scale-key scale-key--white scale-key--${k.state}`);
+    svgKb.appendChild(rect);
+  });
+
+  highlightedKeys.filter((k) => k.type === 'black').forEach((k) => {
+    const rect = document.createElementNS(svgNS, 'rect');
+    rect.setAttribute('x', String(k.x));
+    rect.setAttribute('y', String(k.y));
+    rect.setAttribute('width', String(k.width));
+    rect.setAttribute('height', String(k.height));
+    rect.setAttribute('rx', '1');
+    rect.setAttribute('class', `scale-key scale-key--black scale-key--${k.state}`);
+    svgKb.appendChild(rect);
+  });
+
+  return svgKb;
+}
+
 function renderProjectHarmony(entry, rec, projectBpm) {
   let tonic = rec.tonic;
   let scale = rec.scale;
@@ -1612,6 +1648,10 @@ function runSampleAudit(entry, facts, box) {
     .auditSamples(entry.sessionPath)
     .then((res) => {
       if (!res) return;
+      if (sampleAuditCache.size > 50) {
+        const firstKey = sampleAuditCache.keys().next().value;
+        if (firstKey) sampleAuditCache.delete(firstKey);
+      }
       sampleAuditCache.set(entry.sessionPath, res);
       if (openProject === entry) paintSampleAudit(res, facts, box);
     })
@@ -1745,6 +1785,95 @@ function renderProjectPage() {
     Player.draw();
   }
 
+  let tonic = rec.tonic;
+  let scale = rec.scale;
+  if (!tonic && rec.key) {
+    const match = String(rec.key).trim().match(/^([A-Ga-g][#b♭]?)/);
+    if (match) tonic = match[1];
+    if (rec.key.includes('min')) scale = scale || 'minor';
+    else if (rec.key.includes('maj')) scale = scale || 'major';
+  }
+  const tonicPc = tonic ? DSP.NOTES.indexOf(tonic) : -1;
+  const degrees = (scale && DSP.SCALES[scale]) || (rec.key?.includes('min') ? DSP.SCALES.minor : DSP.SCALES.major);
+  const scaleName = tonic && scale ? `${tonic} ${scale}` : (rec.key || '');
+  const projectBpm = bpmFor(entry);
+
+  /* Sticky Collapsible Mini Project Header Bar */
+  const stickyBar = el('div', 'page__sticky-bar');
+  stickyBar.id = 'projectStickyBar';
+
+  const stickyLeft = el('div', 'sticky-bar__left');
+  const stickyArt = el('div', 'sticky-bar__art', projectBpm !== null ? formatBpm(projectBpm) : '♪');
+  stickyLeft.append(stickyArt);
+
+  const stickyInfo = el('div', 'sticky-bar__info');
+  const stickyTitleLine = el('div', 'sticky-bar__title-line');
+  if (entry.daw) {
+    const dawBadge = el('span', 'badge badge--daw', entry.daw);
+    if (customColor || currentThemeStyle() === 'ableton') {
+      dawBadge.style.borderColor = `${projColor.hex}44`;
+      dawBadge.style.color = projColor.hex;
+    }
+    stickyTitleLine.append(dawBadge);
+  }
+  stickyTitleLine.append(el('span', 'sticky-bar__name', entry.name));
+  stickyInfo.append(stickyTitleLine);
+
+  const stickyMeta = el('div', 'sticky-bar__meta');
+  if (projectBpm !== null) stickyMeta.append(el('span', 'sticky-bar__chip', `${formatBpm(projectBpm)} BPM`));
+  if (rec.key) {
+    stickyMeta.append(el('span', 'sticky-bar__chip', `${rec.key}${rec.camelot ? ` (${rec.camelot})` : ''}`));
+  }
+  if (scaleName) {
+    stickyMeta.append(el('span', 'sticky-bar__scale-name', scaleName));
+  }
+  stickyInfo.append(stickyMeta);
+  stickyLeft.append(stickyInfo);
+  stickyBar.append(stickyLeft);
+
+  const stickyRight = el('div', 'sticky-bar__right');
+  const miniKb = renderMiniStickyKeyboard(tonicPc, degrees);
+  if (miniKb) {
+    const kbWrap = el('div', 'sticky-bar__mini-kb');
+    kbWrap.title = scaleName ? `Scale: ${scaleName}` : 'Scale notes preview';
+    kbWrap.append(miniKb);
+    stickyRight.append(kbWrap);
+  }
+
+  const stickyActions = el('div', 'sticky-bar__actions');
+  const stickyOpen = el('button', 'pill pill--sm pill--solid', 'Open');
+  stickyOpen.disabled = !entry.sessionPath;
+  stickyOpen.addEventListener('click', () => openWithGuard(entry));
+  stickyActions.append(stickyOpen);
+
+  const stickyColorBtn = el('button', 'pill pill--sm color-picker-trigger');
+  const stickyDot = el('span', 'color-picker-trigger__dot');
+  stickyDot.style.backgroundColor = projColor.hex;
+  stickyDot.style.boxShadow = `0 0 6px ${projColor.hex}`;
+  stickyColorBtn.append(stickyDot);
+  stickyColorBtn.title = 'Assign project color';
+  stickyColorBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openProjectColorPicker(entry, rec);
+  });
+  stickyActions.append(stickyColorBtn);
+
+  stickyRight.append(stickyActions);
+  stickyBar.append(stickyRight);
+
+  viewEl.append(stickyBar);
+
+  viewEl.onscroll = () => {
+    const bar = document.getElementById('projectStickyBar');
+    if (bar) {
+      if (viewEl.scrollTop > 120) {
+        bar.classList.add('is-visible');
+      } else {
+        bar.classList.remove('is-visible');
+      }
+    }
+  };
+
   const crumbs = el('div', 'breadcrumbs');
   const backToProjects = el('button', 'breadcrumb__link', 'Projects');
   backToProjects.addEventListener('click', () => goList(null));
@@ -1761,7 +1890,6 @@ function renderProjectPage() {
   /* header */
   const head = el('div', 'page__head');
   const headMain = el('div', 'page__headmain');
-  const projectBpm = bpmFor(entry);
   const art = el('div', 'page__art', projectBpm !== null ? formatBpm(projectBpm) : '♪');
   headMain.append(art);
 
@@ -5813,9 +5941,13 @@ function closeSheet() {
 /* ============================== wiring ============================= */
 
 $('rescan').addEventListener('click', refresh);
+let searchDebounceTimer: any = null;
 searchEl.addEventListener('input', () => {
   if (view !== 'list') view = 'list';
-  render();
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+  searchDebounceTimer = setTimeout(() => {
+    render();
+  }, 60);
 });
 
 favFilterEl.addEventListener('click', () => {
