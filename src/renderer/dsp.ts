@@ -262,6 +262,10 @@ export interface RagaSuggestion {
   name: string;
   thaat: string;
   degrees: number[];
+  aarohana: string;
+  aarohanaDegrees: number[];
+  avarohana: string;
+  avarohanaDegrees: number[];
   sargam: string;
   time?: string;
   mood?: string;
@@ -273,6 +277,10 @@ export const RAGA_DEFINITIONS: Array<{
   name: string;
   thaat: string;
   degrees: number[];
+  aarohana: string;
+  aarohanaDegrees: number[];
+  avarohana: string;
+  avarohanaDegrees: number[];
   sargam: string;
   time: string;
   mood: string;
@@ -281,6 +289,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Bhairav',
     thaat: 'Bhairav',
     degrees: [0, 1, 4, 5, 7, 8, 11],
+    aarohana: 'S r G m P d N Ṡ',
+    aarohanaDegrees: [0, 1, 4, 5, 7, 8, 11, 12],
+    avarohana: 'Ṡ N d P m G r S',
+    avarohanaDegrees: [12, 11, 8, 7, 5, 4, 1, 0],
     sargam: 'S r G m P d N',
     time: 'Dawn / Early Morning',
     mood: 'Devotional, Majestic & Serene'
@@ -289,6 +301,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Ahir Bhairav',
     thaat: 'Bhairav',
     degrees: [0, 1, 4, 5, 7, 9, 10],
+    aarohana: 'S r G m P D n Ṡ',
+    aarohanaDegrees: [0, 1, 4, 5, 7, 9, 10, 12],
+    avarohana: 'Ṡ n D P m G r S',
+    avarohanaDegrees: [12, 10, 9, 7, 5, 4, 1, 0],
     sargam: 'S r G m P D n',
     time: 'Morning (1st Prahar)',
     mood: 'Peaceful, Divine & Uplifting'
@@ -297,6 +313,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Bairagi',
     thaat: 'Bhairav',
     degrees: [0, 1, 5, 7, 10],
+    aarohana: 'S r m P n Ṡ',
+    aarohanaDegrees: [0, 1, 5, 7, 10, 12],
+    avarohana: 'Ṡ n P m r S',
+    avarohanaDegrees: [12, 10, 7, 5, 1, 0],
     sargam: 'S r m P n',
     time: 'Early Morning',
     mood: 'Meditative, Renunciant & Pure'
@@ -305,6 +325,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Kalingada',
     thaat: 'Bhairav',
     degrees: [0, 1, 4, 5, 7, 8, 11],
+    aarohana: 'S r G m P d N Ṡ',
+    aarohanaDegrees: [0, 1, 4, 5, 7, 8, 11, 12],
+    avarohana: 'Ṡ N d P m G r S',
+    avarohanaDegrees: [12, 11, 8, 7, 5, 4, 1, 0],
     sargam: 'S r G m P d N',
     time: 'Late Morning',
     mood: 'Light, Melodic & Devotional'
@@ -313,6 +337,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Nat Bhairav',
     thaat: 'Bhairav',
     degrees: [0, 2, 4, 5, 7, 8, 11],
+    aarohana: 'S R G m P d N Ṡ',
+    aarohanaDegrees: [0, 2, 4, 5, 7, 8, 11, 12],
+    avarohana: 'Ṡ N d P m G R S',
+    avarohanaDegrees: [12, 11, 8, 7, 5, 4, 2, 0],
     sargam: 'S R G m P d N',
     time: 'Morning',
     mood: 'Soothing & Contemplative'
@@ -321,6 +349,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Yaman / Kalyan',
     thaat: 'Kalyan',
     degrees: [0, 2, 4, 6, 7, 9, 11],
+    aarohana: 'S R G M P D N Ṡ',
+    aarohanaDegrees: [0, 2, 4, 6, 7, 9, 11, 12],
+    avarohana: 'Ṡ N D P M G R S',
+    avarohanaDegrees: [12, 11, 9, 7, 6, 4, 2, 0],
     sargam: 'S R G M P D N',
     time: 'Evening (1st Prahar of Night)',
     mood: 'Romantic, Graceful & Blissful'
@@ -329,6 +361,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Bhoop / Bhupali',
     thaat: 'Kalyan',
     degrees: [0, 2, 4, 7, 9],
+    aarohana: 'S R G P D Ṡ',
+    aarohanaDegrees: [0, 2, 4, 7, 9, 12],
+    avarohana: 'Ṡ D P G R S',
+    avarohanaDegrees: [12, 9, 7, 4, 2, 0],
     sargam: 'S R G P D',
     time: 'Early Evening',
     mood: 'Grand, Peaceful & Soothing'
@@ -337,6 +373,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Shuddha Kalyan',
     thaat: 'Kalyan',
     degrees: [0, 2, 4, 7, 9, 11],
+    aarohana: 'S R G P D Ṡ',
+    aarohanaDegrees: [0, 2, 4, 7, 9, 12],
+    avarohana: 'Ṡ N D P M G R S',
+    avarohanaDegrees: [12, 11, 9, 7, 6, 4, 2, 0],
     sargam: 'S R G P D N',
     time: 'Night (1st Prahar)',
     mood: 'Serene & Stately'
@@ -345,6 +385,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Bihag',
     thaat: 'Bilawal',
     degrees: [0, 4, 5, 6, 7, 11],
+    aarohana: 'S G m P N Ṡ',
+    aarohanaDegrees: [0, 4, 5, 7, 11, 12],
+    avarohana: 'Ṡ N D P M P G m G R S',
+    avarohanaDegrees: [12, 11, 9, 7, 6, 7, 4, 5, 4, 2, 0],
     sargam: 'S G m M P N',
     time: 'Late Night (2nd Prahar)',
     mood: 'Romantic, Expressive & Longing'
@@ -353,6 +397,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Hansadhwani',
     thaat: 'Bilawal',
     degrees: [0, 2, 4, 7, 11],
+    aarohana: 'S R G P N Ṡ',
+    aarohanaDegrees: [0, 2, 4, 7, 11, 12],
+    avarohana: 'Ṡ N P G R S',
+    avarohanaDegrees: [12, 11, 7, 4, 2, 0],
     sargam: 'S R G P N',
     time: 'Evening',
     mood: 'Auspicious, Radiant & Joyous'
@@ -361,6 +409,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Bilawal / Alhaiya Bilawal',
     thaat: 'Bilawal',
     degrees: [0, 2, 4, 5, 7, 9, 11],
+    aarohana: 'S R G P D N Ṡ',
+    aarohanaDegrees: [0, 2, 4, 7, 9, 11, 12],
+    avarohana: 'Ṡ N D P D n D P m G R S',
+    avarohanaDegrees: [12, 11, 9, 7, 9, 10, 9, 7, 5, 4, 2, 0],
     sargam: 'S R G m P D N',
     time: 'Late Morning',
     mood: 'Cheerful, Fresh & Vibrant'
@@ -369,6 +421,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Khamaj',
     thaat: 'Khamaj',
     degrees: [0, 4, 5, 7, 9, 10, 11],
+    aarohana: 'S G m P D N Ṡ',
+    aarohanaDegrees: [0, 4, 5, 7, 9, 11, 12],
+    avarohana: 'Ṡ n D P m G R S',
+    avarohanaDegrees: [12, 10, 9, 7, 5, 4, 2, 0],
     sargam: 'S G m P D N n',
     time: 'Late Evening',
     mood: 'Sensuous, Playful & Expressive'
@@ -377,6 +433,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Desh',
     thaat: 'Khamaj',
     degrees: [0, 2, 5, 7, 10, 11],
+    aarohana: 'S R m P N Ṡ',
+    aarohanaDegrees: [0, 2, 5, 7, 11, 12],
+    avarohana: 'Ṡ n D P m G R S',
+    avarohanaDegrees: [12, 10, 9, 7, 5, 4, 2, 0],
     sargam: 'S R m P N n',
     time: 'Second Prahar of Night (Monsoon)',
     mood: 'Patriotic, Romantic & Sweet'
@@ -385,6 +445,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Rageshri',
     thaat: 'Khamaj',
     degrees: [0, 2, 4, 5, 9, 10],
+    aarohana: 'S R G m D n Ṡ',
+    aarohanaDegrees: [0, 2, 4, 5, 9, 10, 12],
+    avarohana: 'Ṡ n D m G R S',
+    avarohanaDegrees: [12, 10, 9, 5, 4, 2, 0],
     sargam: 'S R G m D n',
     time: 'Night (2nd Prahar)',
     mood: 'Romantic, Deep & Tender'
@@ -393,6 +457,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Kafi',
     thaat: 'Kafi',
     degrees: [0, 2, 3, 5, 7, 9, 10],
+    aarohana: 'S R g m P D n Ṡ',
+    aarohanaDegrees: [0, 2, 3, 5, 7, 9, 10, 12],
+    avarohana: 'Ṡ n D P m g R S',
+    avarohanaDegrees: [12, 10, 9, 7, 5, 3, 2, 0],
     sargam: 'S R g m P D n',
     time: 'Midnight (Spring/Holi)',
     mood: 'Joyful, Passionate & Folk-Rooted'
@@ -401,6 +469,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Bhimpalasi',
     thaat: 'Kafi',
     degrees: [0, 3, 5, 7, 10, 2, 9],
+    aarohana: 'S g m P n Ṡ',
+    aarohanaDegrees: [0, 3, 5, 7, 10, 12],
+    avarohana: 'Ṡ n D P m g R S',
+    avarohanaDegrees: [12, 10, 9, 7, 5, 3, 2, 0],
     sargam: 'S g m P n (R D in avroha)',
     time: 'Late Afternoon',
     mood: 'Tender, Poignant & Longing'
@@ -409,6 +481,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Bageshri',
     thaat: 'Kafi',
     degrees: [0, 2, 3, 5, 9, 10],
+    aarohana: 'S g m D n Ṡ',
+    aarohanaDegrees: [0, 3, 5, 9, 10, 12],
+    avarohana: 'Ṡ n D m g R S',
+    avarohanaDegrees: [12, 10, 9, 5, 3, 2, 0],
     sargam: 'S R g m D n',
     time: 'Midnight',
     mood: 'Romantic, Introspective & Sweet'
@@ -417,6 +493,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Brindavani Sarang',
     thaat: 'Kafi',
     degrees: [0, 2, 5, 7, 10, 11],
+    aarohana: 'S R m P N Ṡ',
+    aarohanaDegrees: [0, 2, 5, 7, 11, 12],
+    avarohana: 'Ṡ n P m R S',
+    avarohanaDegrees: [12, 10, 7, 5, 2, 0],
     sargam: 'S R m P N (n in avroha)',
     time: 'Afternoon',
     mood: 'Refreshing, Sunny & Sparkling'
@@ -425,6 +505,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Asavari',
     thaat: 'Asavari',
     degrees: [0, 2, 3, 5, 7, 8, 10],
+    aarohana: 'S R m P d Ṡ',
+    aarohanaDegrees: [0, 2, 5, 7, 8, 12],
+    avarohana: 'Ṡ n d P m g R S',
+    avarohanaDegrees: [12, 10, 8, 7, 5, 3, 2, 0],
     sargam: 'S R g m P d n',
     time: 'Morning (2nd Prahar)',
     mood: 'Melancholic, Yearning & Tender'
@@ -433,6 +517,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Darbari Kanada',
     thaat: 'Asavari',
     degrees: [0, 2, 3, 5, 7, 8, 10],
+    aarohana: 'S R g m P d n Ṡ',
+    aarohanaDegrees: [0, 2, 3, 5, 7, 8, 10, 12],
+    avarohana: 'Ṡ d n P m P g m R S',
+    avarohanaDegrees: [12, 8, 10, 7, 5, 7, 3, 5, 2, 0],
     sargam: 'S R g m P d n',
     time: 'Deep Midnight',
     mood: 'Majestic, Royal, Profound & Slow'
@@ -441,6 +529,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Jaunpuri',
     thaat: 'Asavari',
     degrees: [0, 2, 3, 5, 7, 8, 10],
+    aarohana: 'S R m P d n Ṡ',
+    aarohanaDegrees: [0, 2, 5, 7, 8, 10, 12],
+    avarohana: 'Ṡ n d P m g R S',
+    avarohanaDegrees: [12, 10, 8, 7, 5, 3, 2, 0],
     sargam: 'S R g m P d n',
     time: 'Late Morning',
     mood: 'Plaintive, Expressive & Melodic'
@@ -449,6 +541,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Bhairavi',
     thaat: 'Bhairavi',
     degrees: [0, 1, 3, 5, 7, 8, 10],
+    aarohana: 'S r g m P d n Ṡ',
+    aarohanaDegrees: [0, 1, 3, 5, 7, 8, 10, 12],
+    avarohana: 'Ṡ n d P m g r S',
+    avarohanaDegrees: [12, 10, 8, 7, 5, 3, 1, 0],
     sargam: 'S r g m P d n',
     time: 'Morning (Concert Finale / Anytime)',
     mood: 'Universal, Devotional & Cathartic'
@@ -457,6 +553,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Malkauns',
     thaat: 'Bhairavi',
     degrees: [0, 3, 5, 8, 10],
+    aarohana: 'S g m d n Ṡ',
+    aarohanaDegrees: [0, 3, 5, 8, 10, 12],
+    avarohana: 'Ṡ n d m g S',
+    avarohanaDegrees: [12, 10, 8, 5, 3, 0],
     sargam: 'S g m d n',
     time: 'Late Night (3rd Prahar)',
     mood: 'Intense, Meditative & Hypnotic'
@@ -465,6 +565,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Miyan Ki Todi',
     thaat: 'Todi',
     degrees: [0, 1, 3, 6, 7, 8, 11],
+    aarohana: 'S r g M d N Ṡ',
+    aarohanaDegrees: [0, 1, 3, 6, 8, 11, 12],
+    avarohana: 'Ṡ N d P M g r S',
+    avarohanaDegrees: [12, 11, 8, 7, 6, 3, 1, 0],
     sargam: 'S r g M P d N',
     time: 'Late Morning (2nd Prahar)',
     mood: 'Pathos, Devotion & Deep Meditation'
@@ -473,6 +577,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Gurjari Todi',
     thaat: 'Todi',
     degrees: [0, 1, 3, 6, 8, 11],
+    aarohana: 'S r g M d N Ṡ',
+    aarohanaDegrees: [0, 1, 3, 6, 8, 11, 12],
+    avarohana: 'Ṡ N d M g r S',
+    avarohanaDegrees: [12, 11, 8, 6, 3, 1, 0],
     sargam: 'S r g M d N',
     time: 'Late Morning',
     mood: 'Deeply Moving & Melancholic'
@@ -481,6 +589,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Poorvi',
     thaat: 'Poorvi',
     degrees: [0, 1, 4, 5, 6, 7, 8, 11],
+    aarohana: 'S r G M P d N Ṡ',
+    aarohanaDegrees: [0, 1, 4, 6, 7, 8, 11, 12],
+    avarohana: 'Ṡ N d P M G m G r S',
+    avarohanaDegrees: [12, 11, 8, 7, 6, 4, 5, 4, 1, 0],
     sargam: 'S r G m M P d N',
     time: 'Sunset (Sandhiprakash)',
     mood: 'Twilight, Mysterious & Mystical'
@@ -489,6 +601,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Puriya Dhanashree',
     thaat: 'Poorvi',
     degrees: [0, 1, 4, 6, 7, 8, 11],
+    aarohana: 'S r G M P d N Ṡ',
+    aarohanaDegrees: [0, 1, 4, 6, 7, 8, 11, 12],
+    avarohana: 'Ṡ N d P M G r S',
+    avarohanaDegrees: [12, 11, 8, 7, 6, 4, 1, 0],
     sargam: 'S r G M P d N',
     time: 'Late Afternoon / Dusk',
     mood: 'Romantic, Serious & Poignant'
@@ -497,6 +613,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Marwa',
     thaat: 'Marwa',
     degrees: [0, 1, 4, 6, 9, 11],
+    aarohana: 'S r G M D N Ṡ',
+    aarohanaDegrees: [0, 1, 4, 6, 9, 11, 12],
+    avarohana: 'Ṡ N D M G r S',
+    avarohanaDegrees: [12, 11, 9, 6, 4, 1, 0],
     sargam: 'S r G M D N',
     time: 'Sunset (Sandhiprakash)',
     mood: 'Anxious, Haunting, Yearning & Unique'
@@ -505,6 +625,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Charukesi',
     thaat: 'Charukesi',
     degrees: [0, 2, 4, 5, 7, 8, 10],
+    aarohana: 'S R G m P d n Ṡ',
+    aarohanaDegrees: [0, 2, 4, 5, 7, 8, 10, 12],
+    avarohana: 'Ṡ n d P m G R S',
+    avarohanaDegrees: [12, 10, 8, 7, 5, 4, 2, 0],
     sargam: 'S R G m P d n',
     time: 'Anytime / Evening',
     mood: 'Emotional, Melting, Sweet & Soulful'
@@ -513,6 +637,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Shivaranjani',
     thaat: 'Kafi',
     degrees: [0, 2, 3, 7, 9],
+    aarohana: 'S R g P D Ṡ',
+    aarohanaDegrees: [0, 2, 3, 7, 9, 12],
+    avarohana: 'Ṡ D P g R S',
+    avarohanaDegrees: [12, 9, 7, 3, 2, 0],
     sargam: 'S R g P D',
     time: 'Midnight / Anytime',
     mood: 'Tearful, Heartfelt, Romantic & Tragic'
@@ -521,6 +649,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Kirwani',
     thaat: 'Kalyan / Melakarta',
     degrees: [0, 2, 3, 5, 7, 8, 11],
+    aarohana: 'S R g m P d N Ṡ',
+    aarohanaDegrees: [0, 2, 3, 5, 7, 8, 11, 12],
+    avarohana: 'Ṡ N d P m g R S',
+    avarohanaDegrees: [12, 11, 8, 7, 5, 3, 2, 0],
     sargam: 'S R g m P d N',
     time: 'Night (1st Prahar)',
     mood: 'Melancholic yet Elegant'
@@ -529,6 +661,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Madhuvanti',
     thaat: 'Todi',
     degrees: [0, 2, 3, 6, 7, 9, 11],
+    aarohana: 'S g M P N Ṡ',
+    aarohanaDegrees: [0, 3, 6, 7, 11, 12],
+    avarohana: 'Ṡ N D P M g R S',
+    avarohanaDegrees: [12, 11, 9, 7, 6, 3, 2, 0],
     sargam: 'S R g M P D N',
     time: 'Late Afternoon / Dusk',
     mood: 'Sweet, Longing & Romantic'
@@ -537,6 +673,10 @@ export const RAGA_DEFINITIONS: Array<{
     name: 'Jog',
     thaat: 'Kafi',
     degrees: [0, 3, 4, 5, 7, 10],
+    aarohana: 'S G m P n Ṡ',
+    aarohanaDegrees: [0, 4, 5, 7, 10, 12],
+    avarohana: 'Ṡ n P m G m g S',
+    avarohanaDegrees: [12, 10, 7, 5, 4, 5, 3, 0],
     sargam: 'S g G m P n',
     time: 'Late Night',
     mood: 'Enchanting, Intoxicating & Soulful'

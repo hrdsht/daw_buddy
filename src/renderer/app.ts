@@ -21,7 +21,7 @@ import {
   DEGREE_NAMES,
   SARGAM_NAMES
 } from './scaleview';
-import { scaleMidi, notesFor } from './midiwrite';
+import { scaleMidi, notesFor, ragaMidi } from './midiwrite';
 
 const $ = (id: string): any => document.getElementById(id);
 
@@ -267,6 +267,7 @@ function render() {
 
   if (view === 'thisweek') return renderThisWeek();
   if (view === 'tools') return renderStandaloneTools();
+  if (view === 'scale-tool') return renderScaleMidiTool();
   if (view === 'dedupe') return renderDedupe();
   if (view === 'disk') return renderDiskInsights();
   if (view === 'id3') return renderId3Editor();
@@ -282,6 +283,7 @@ function render() {
 // or the name of the page/tool everywhere else.
 const TOOL_TITLES: Record<string, string> = {
   tools: 'Tools',
+  'scale-tool': 'Scale & Raaga Detector',
   dedupe: 'Sample cleanup',
   disk: 'Disk insights',
   id3: 'ID3 editor',
@@ -947,6 +949,17 @@ function playFullScale(tonicPc: number, degrees: number[], a4 = 440) {
   }, degrees.length * 440);
 }
 
+function playRagaSequence(tonicPc: number, aarohanaDegrees: number[], avarohanaDegrees: number[], a4 = 440) {
+  const fullSeq = [...aarohanaDegrees, ...avarohanaDegrees];
+  fullSeq.forEach((deg, idx) => {
+    const notePc = (tonicPc + deg) % 12;
+    const octave = 4 + Math.floor((tonicPc + deg) / 12);
+    setTimeout(() => {
+      playSynthNote(notePc, octave, a4, 0.65);
+    }, idx * 360);
+  });
+}
+
 function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
   document.querySelectorAll('.camelot-modal-overlay').forEach((node) => node.remove());
 
@@ -1085,7 +1098,7 @@ function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
 
     if (suggestedRagas && suggestedRagas.length > 0) {
       const ragasSection = el('div', 'scale-ragas-section');
-      ragasSection.append(el('h4', 'scale-notes__title', 'Matching Indian Raagas & Scale Suggestions'));
+      ragasSection.append(el('h4', 'scale-notes__title', 'Matching Indian Raagas (Aarohana & Avarohana)'));
 
       const ragasGrid = el('div', 'scale-ragas-grid');
       suggestedRagas.forEach((raga: any) => {
@@ -1100,8 +1113,19 @@ function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
         const sub = el('div', 'raga-card__thaat', `${raga.thaat} Thaat`);
         card.append(sub);
 
-        const sargamRow = el('div', 'raga-card__sargam', raga.sargam);
-        card.append(sargamRow);
+        // Display Aarohana (Ascending) & Avarohana (Descending) swara phrases
+        if (raga.aarohana) {
+          const aarohRow = el('div', 'raga-card__phrase raga-card__phrase--aaroh');
+          aarohRow.append(el('span', 'raga-phrase__tag', '▲ Aaroh:'));
+          aarohRow.append(el('span', 'raga-phrase__notes', raga.aarohana));
+          card.append(aarohRow);
+        }
+        if (raga.avarohana) {
+          const avarohRow = el('div', 'raga-card__phrase raga-card__phrase--avaroh');
+          avarohRow.append(el('span', 'raga-phrase__tag', '▼ Avaroh:'));
+          avarohRow.append(el('span', 'raga-phrase__notes', raga.avarohana));
+          card.append(avarohRow);
+        }
 
         if (raga.time || raga.mood) {
           const metaRow = el('div', 'raga-card__meta');
@@ -1110,7 +1134,59 @@ function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
           card.append(metaRow);
         }
 
-        card.title = `Click to load Raaga ${raga.name} on the keyboard & scale audition player`;
+        // Raga Actions: Audition (plays Aarohana + Avarohana sequence) & Drag MIDI to DAW
+        const ragaActions = el('div', 'raga-card__actions');
+
+        const previewBtn = el('button', 'pill pill--sm raga-btn--preview', '▶ Audition');
+        previewBtn.title = 'Audition Aarohana (ascending) & Avarohana (descending)';
+        previewBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const aaroh = raga.aarohanaDegrees || raga.degrees;
+          const avaroh = raga.avarohanaDegrees || [...aaroh].reverse();
+          playRagaSequence(tonicPc, aaroh, avaroh, selectedTuningA4);
+        });
+        ragaActions.append(previewBtn);
+
+        const ragaMidiBtn = el('button', 'pill pill--sm pill--solid raga-btn--midi', '⤓ Drag to DAW');
+        ragaMidiBtn.title = 'Drag onto any DAW track or click to export MIDI containing Aarohana & Avarohana phrases';
+        const aaroh = raga.aarohanaDegrees || raga.degrees;
+        const avaroh = raga.avarohanaDegrees || [...aaroh].reverse();
+        const rMidiBytes = ragaMidi(tonicPc, aaroh, avaroh, { bpm: projectBpm || 120 });
+        const cleanRagaName = raga.name.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const rMidiFileName = `${entry.name.replace(/[^a-zA-Z0-9_-]/g, '_')}_Raga_${cleanRagaName}_${selectedTonic}.mid`;
+
+        ragaMidiBtn.draggable = true;
+        ragaMidiBtn.addEventListener('dragstart', async (e: DragEvent) => {
+          if (e.dataTransfer) {
+            e.dataTransfer.setData('text/plain', rMidiFileName);
+            e.dataTransfer.effectAllowed = 'copy';
+            const canvas = document.createElement('canvas');
+            canvas.width = 1;
+            canvas.height = 1;
+            e.dataTransfer.setDragImage(canvas, 0, 0);
+          }
+          if (window.api.dragMidi) await window.api.dragMidi(rMidiFileName, Array.from(rMidiBytes));
+        });
+        ragaMidiBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (window.api.saveMidi) {
+            const saved = await window.api.saveMidi(rMidiFileName, Array.from(rMidiBytes));
+            if (saved) toast('Raga MIDI exported', saved);
+          } else {
+            const blob = new Blob([rMidiBytes.buffer as ArrayBuffer], { type: 'audio/midi' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = rMidiFileName;
+            a.click();
+            URL.revokeObjectURL(url);
+            toast('Raga MIDI exported', rMidiFileName);
+          }
+        });
+        ragaActions.append(ragaMidiBtn);
+        card.append(ragaActions);
+
+        card.title = `Click to load Raaga ${raga.name} on the keyboard`;
         card.addEventListener('click', () => {
           selectedScale = raga.degrees ? raga.name.toLowerCase() : selectedScale;
           if (raga.degrees) {
@@ -1118,7 +1194,9 @@ function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
             DSP.THAAT_MAP[raga.name.toLowerCase()] = `${raga.thaat} (${raga.name})`;
           }
           updateInspector();
-          playFullScale(tonicPc, raga.degrees || degrees, selectedTuningA4);
+          const aaroh = raga.aarohanaDegrees || raga.degrees;
+          const avaroh = raga.avarohanaDegrees || [...aaroh].reverse();
+          playRagaSequence(tonicPc, aaroh, avaroh, selectedTuningA4);
         });
 
         ragasGrid.append(card);
@@ -1530,9 +1608,33 @@ function renderProjectHarmony(entry, rec, projectBpm) {
     const ragasList = el('div', 'harmony__ragas-list');
     suggestedRagas.slice(0, 3).forEach((raga: any) => {
       const chip = el('button', 'harmony__raga-chip');
+      chip.append(el('span', 'harmony__raga-drag-icon', '⋮⋮'));
       chip.append(el('span', 'harmony__raga-name', raga.name));
       chip.append(el('span', 'harmony__raga-pct', `${raga.matchPercent}%`));
-      chip.title = `${raga.name} (${raga.thaat} Thaat) · ${raga.time || ''} · Click to inspect`;
+      
+      const aarohStr = raga.aarohana ? `\n▲ Aarohana: ${raga.aarohana}` : '';
+      const avarohStr = raga.avarohana ? `\n▼ Avarohana: ${raga.avarohana}` : '';
+      chip.title = `${raga.name} (${raga.thaat} Thaat) · ${raga.time || ''}${aarohStr}${avarohStr}\n\nDrag to DAW track or Click to inspect & export MIDI`;
+      
+      const aaroh = raga.aarohanaDegrees || raga.degrees;
+      const avaroh = raga.avarohanaDegrees || [...aaroh].reverse();
+      const rMidiBytes = ragaMidi(tonicPc, aaroh, avaroh, { bpm: projectBpm || 120 });
+      const cleanRagaName = raga.name.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const rMidiFileName = `${entry.name.replace(/[^a-zA-Z0-9_-]/g, '_')}_Raga_${cleanRagaName}_${tonic || 'C'}.mid`;
+
+      chip.draggable = true;
+      chip.addEventListener('dragstart', async (e: DragEvent) => {
+        if (e.dataTransfer) {
+          e.dataTransfer.setData('text/plain', rMidiFileName);
+          e.dataTransfer.effectAllowed = 'copy';
+          const canvas = document.createElement('canvas');
+          canvas.width = 1;
+          canvas.height = 1;
+          e.dataTransfer.setDragImage(canvas, 0, 0);
+        }
+        if (window.api.dragMidi) await window.api.dragMidi(rMidiFileName, Array.from(rMidiBytes));
+      });
+
       chip.addEventListener('click', (e) => {
         e.stopPropagation();
         openCamelotModal(entry, { ...rec, scale: raga.name.toLowerCase() }, projectBpm);
@@ -5872,8 +5974,562 @@ function openStandaloneTool(nextView) {
     vocalRebuildPreview = null;
   }
 
+  if (nextView === 'scale-tool') {
+    scaleToolState.error = null;
+  }
+
   viewEl.scrollTop = 0;
   render();
+}
+
+/* ======================= Scale & Raaga Detector Tool ======================= */
+
+let scaleToolState: {
+  file: { name: string; size: number; isMidi: boolean } | null;
+  analyzing: boolean;
+  result: any | null;
+  error: string | null;
+  activeScale: string | null;
+  activeTonic: string | null;
+} = {
+  file: null,
+  analyzing: false,
+  result: null,
+  error: null,
+  activeScale: null,
+  activeTonic: null
+};
+
+function parseMidiChromaAndTempo(arrayBuffer: ArrayBuffer) {
+  const bytes = new Uint8Array(arrayBuffer);
+  if (bytes.length < 14 || bytes[0] !== 0x4d || bytes[1] !== 0x54 || bytes[2] !== 0x68 || bytes[3] !== 0x64) {
+    throw new Error('Not a valid Standard MIDI File (.mid)');
+  }
+
+  const numTracks = (bytes[10] << 8) | bytes[11];
+  let bpm = 120;
+  let hasTempoMeta = false;
+  const chromaCounts = new Float64Array(12);
+  let totalEvents = 0;
+
+  let offset = 14;
+  for (let t = 0; t < numTracks && offset < bytes.length; t++) {
+    if (bytes[offset] !== 0x4d || bytes[offset + 1] !== 0x54 || bytes[offset + 2] !== 0x72 || bytes[offset + 3] !== 0x6b) {
+      break;
+    }
+    const trackLen = (bytes[offset + 4] << 24) | (bytes[offset + 5] << 16) | (bytes[offset + 6] << 8) | bytes[offset + 7];
+    offset += 8;
+    const trackEnd = offset + trackLen;
+
+    let runningStatus = 0;
+    while (offset < trackEnd && offset < bytes.length) {
+      // Read variable-length delta time
+      while (offset < bytes.length) {
+        const b = bytes[offset++];
+        if (!(b & 0x80)) break;
+      }
+
+      if (offset >= bytes.length) break;
+
+      let status = bytes[offset];
+      if (status & 0x80) {
+        runningStatus = status;
+        offset++;
+      } else {
+        status = runningStatus;
+      }
+
+      const msgType = status & 0xf0;
+
+      if (status === 0xff) {
+        const metaType = bytes[offset++];
+        let metaLen = 0;
+        while (offset < bytes.length) {
+          const b = bytes[offset++];
+          metaLen = (metaLen << 7) | (b & 0x7f);
+          if (!(b & 0x80)) break;
+        }
+
+        if (metaType === 0x51 && metaLen === 3 && offset + 3 <= bytes.length) {
+          const usPerQuarter = (bytes[offset] << 16) | (bytes[offset + 1] << 8) | bytes[offset + 2];
+          if (usPerQuarter > 0) {
+            bpm = Math.round(60000000 / usPerQuarter);
+            hasTempoMeta = true;
+          }
+        }
+        offset += metaLen;
+      } else if (status === 0xf0 || status === 0xf7) {
+        let sysexLen = 0;
+        while (offset < bytes.length) {
+          const b = bytes[offset++];
+          sysexLen = (sysexLen << 7) | (b & 0x7f);
+          if (!(b & 0x80)) break;
+        }
+        offset += sysexLen;
+      } else if (msgType === 0x90) {
+        const note = bytes[offset++];
+        const vel = bytes[offset++];
+        if (vel > 0) {
+          chromaCounts[note % 12] += 1;
+          totalEvents++;
+        }
+      } else if (msgType === 0x80 || msgType === 0xa0 || msgType === 0xb0 || msgType === 0xe0) {
+        offset += 2;
+      } else if (msgType === 0xc0 || msgType === 0xd0) {
+        offset += 1;
+      }
+    }
+    offset = trackEnd;
+  }
+
+  if (totalEvents === 0) {
+    throw new Error('No MIDI Note-On events found in file.');
+  }
+
+  let sum = 0;
+  for (let i = 0; i < 12; i++) sum += chromaCounts[i];
+  const normalizedChroma = new Float64Array(12);
+  for (let i = 0; i < 12; i++) normalizedChroma[i] = chromaCounts[i] / (sum || 1);
+
+  let bestTonic = 0;
+  let bestTonicScore = -1;
+  for (let i = 0; i < 12; i++) {
+    if (normalizedChroma[i] > bestTonicScore) {
+      bestTonicScore = normalizedChroma[i];
+      bestTonic = i;
+    }
+  }
+
+  const clean = DSP.suppressHarmonics(normalizedChroma);
+  const tonicResult = DSP.findTonic(clean, [normalizedChroma]);
+  const tonicPc = tonicResult.tonicPc >= 0 ? tonicResult.tonicPc : bestTonic;
+  const scaleResult = DSP.findScale(clean, tonicPc);
+  const ragas = DSP.findMatchingRagas(clean, tonicPc, 6);
+
+  const NOTES = DSP.NOTES;
+  const tonicNote = NOTES[tonicPc];
+  const scaleName = scaleResult.scale;
+  const isMajor = scaleName === 'major' || scaleName === 'lydian' || scaleName === 'mixolydian';
+  const camelot = isMajor
+    ? { C: '8B', G: '9B', D: '10B', A: '11B', E: '12B', B: '1B', 'F#': '2B', 'C#': '3B', 'G#': '4B', 'D#': '5B', 'A#': '6B', F: '7B' }[tonicNote] || '8B'
+    : { A: '8A', E: '9A', B: '10A', 'F#': '11A', 'C#': '12A', 'G#': '1A', 'D#': '2A', 'A#': '3A', F: '4A', C: '5A', G: '6A', D: '7A' }[tonicNote] || '8A';
+
+  return {
+    isMidi: true,
+    noteCount: totalEvents,
+    bpm: bpm,
+    bpmConfidence: hasTempoMeta ? 0.95 : 0.65,
+    key: `${tonicNote} ${isMajor ? 'maj' : 'min'}`,
+    camelot: camelot,
+    tonic: tonicNote,
+    tonicPc: tonicPc,
+    tonicConfidence: 0.9,
+    scale: scaleName,
+    scaleConfidence: scaleResult.confidence,
+    degrees: scaleResult.degrees,
+    tuningA4: 440,
+    tuningCents: 0,
+    thaat: DSP.THAAT_MAP[scaleName] || null,
+    ragas: ragas
+  };
+}
+
+async function handleScaleToolFile(file: File) {
+  const isMidi = /\.midi?$/i.test(file.name);
+  scaleToolState.file = { name: file.name, size: file.size, isMidi };
+  scaleToolState.analyzing = true;
+  scaleToolState.error = null;
+  scaleToolState.result = null;
+  scaleToolState.activeScale = null;
+  scaleToolState.activeTonic = null;
+  render();
+
+  try {
+    if (isMidi) {
+      const buffer = await file.arrayBuffer();
+      const result = parseMidiChromaAndTempo(buffer);
+      scaleToolState.result = result;
+      scaleToolState.activeScale = result.scale;
+      scaleToolState.activeTonic = result.tonic;
+    } else {
+      const arrayBuffer = await file.arrayBuffer();
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+      const sampleRate = audioBuffer.sampleRate;
+      const channelData = audioBuffer.getChannelData(0);
+      const analysis = DSP.analyse(channelData, sampleRate);
+      await audioCtx.close();
+
+      scaleToolState.result = {
+        isAudio: true,
+        durationSeconds: audioBuffer.duration,
+        ...analysis
+      };
+      scaleToolState.activeScale = analysis.scale;
+      scaleToolState.activeTonic = analysis.tonic;
+    }
+  } catch (err: any) {
+    console.error('Scale tool analysis error:', err);
+    scaleToolState.error = err?.message || 'Failed to analyze file. Please make sure it is a valid audio or MIDI file.';
+  } finally {
+    scaleToolState.analyzing = false;
+    render();
+  }
+}
+
+function renderScaleMidiTool() {
+  viewEl.innerHTML = '';
+
+  const section = el('div', 'section scale-tool-page');
+  
+  // Breadcrumb / Header
+  const breadcrumb = el('div', 'breadcrumb');
+  const back = el('button', 'breadcrumb__item', 'Tools');
+  back.addEventListener('click', () => {
+    navigationHistory.visit(captureLocation());
+    view = 'tools';
+    render();
+  });
+  breadcrumb.append(back, el('span', 'breadcrumb__sep', '/'), el('span', 'breadcrumb__current', 'Scale & Raaga Detector'));
+  section.append(breadcrumb);
+
+  section.append(headRow('Scale & Raaga Detector', 'Drop any audio sample or MIDI file to instantly detect BPM, scale, concert tuning, and matching Indian Raagas.'));
+
+  // Dropzone card
+  const dropZone = el('div', `scale-dropzone ${scaleToolState.analyzing ? 'scale-dropzone--analyzing' : ''}`);
+  
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file';
+  fileInput.accept = '.wav,.mp3,.flac,.ogg,.aif,.aiff,.mid,.midi,.m4a';
+  fileInput.style.display = 'none';
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files && fileInput.files[0]) {
+      handleScaleToolFile(fileInput.files[0]);
+    }
+  });
+
+  const dropContent = el('div', 'scale-dropzone__content');
+  dropContent.append(svgIcon('music', 'scale-dropzone__icon', 36));
+  
+  if (scaleToolState.analyzing) {
+    dropContent.append(el('h4', 'scale-dropzone__title', 'Analyzing musical content...'));
+    dropContent.append(el('p', 'scale-dropzone__subtitle', 'Extracting spectral chromagram, tempo onsets & Indian Raaga sequences'));
+    const spinner = el('div', 'spinner scale-dropzone__spinner');
+    dropContent.append(spinner);
+  } else {
+    dropContent.append(el('h4', 'scale-dropzone__title', 'Drop Audio Sample or MIDI file here'));
+    dropContent.append(el('p', 'scale-dropzone__subtitle', 'Supports WAV, MP3, FLAC, AIFF, OGG & Standard MIDI (.mid)'));
+    const browseBtn = el('button', 'pill pill--solid', 'Browse file...');
+    browseBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      fileInput.click();
+    });
+    dropContent.append(browseBtn);
+  }
+
+  dropZone.append(fileInput, dropContent);
+
+  // Drag & drop handlers
+  dropZone.addEventListener('dragover', (e: DragEvent) => {
+    e.preventDefault();
+    dropZone.classList.add('scale-dropzone--over');
+  });
+  dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('scale-dropzone--over');
+  });
+  dropZone.addEventListener('drop', (e: DragEvent) => {
+    e.preventDefault();
+    dropZone.classList.remove('scale-dropzone--over');
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleScaleToolFile(e.dataTransfer.files[0]);
+    }
+  });
+
+  section.append(dropZone);
+
+  // If error occurred
+  if (scaleToolState.error) {
+    const errorBox = el('div', 'callout callout--danger', `⚠️ ${scaleToolState.error}`);
+    section.append(errorBox);
+  }
+
+  // If analysis result available
+  if (scaleToolState.result && scaleToolState.file) {
+    const res = scaleToolState.result;
+    const tonicPc = res.tonicPc ?? (res.tonic ? DSP.NOTES.indexOf(res.tonic) : 0);
+    const selectedTonic = scaleToolState.activeTonic || res.tonic || 'C';
+    const selectedScale = scaleToolState.activeScale || res.scale || 'major';
+    const degrees = DSP.SCALES[selectedScale.toLowerCase()] || res.degrees || DSP.SCALES.major;
+    const tuningA4 = res.tuningA4 || 440;
+
+    const resultBox = el('div', 'scale-results-box');
+
+    // File info header
+    const fileHeader = el('div', 'scale-file-header');
+    fileHeader.append(el('div', 'scale-file-header__title', `🎵 ${scaleToolState.file.name}`));
+    fileHeader.append(el('div', 'scale-file-header__meta', `${scaleToolState.file.isMidi ? 'MIDI File' : 'Audio Sample'} · ${formatBytes(scaleToolState.file.size)}${res.durationSeconds ? ` · ${res.durationSeconds.toFixed(1)}s` : ''}`));
+    resultBox.append(fileHeader);
+
+    // Primary Metrics Grid
+    const metricsGrid = el('div', 'scale-metrics-grid');
+
+    // BPM Card
+    const bpmCard = el('div', 'scale-metric-card');
+    bpmCard.append(el('div', 'scale-metric__label', 'Detected Tempo'));
+    bpmCard.append(el('div', 'scale-metric__val scale-metric__val--bpm', `${formatBpm(res.bpm || 120)} BPM`));
+    bpmCard.append(el('div', 'scale-metric__sub', `${Math.round((res.bpmConfidence || 0.8) * 100)}% Confidence`));
+    metricsGrid.append(bpmCard);
+
+    // Key & Camelot Card
+    const keyCard = el('div', 'scale-metric-card');
+    keyCard.append(el('div', 'scale-metric__label', 'Key & Camelot'));
+    const camelotTag = res.camelot ? `<span class="scale-camelot-badge">${res.camelot}</span> ` : '';
+    const keyHtml = el('div', 'scale-metric__val');
+    keyHtml.innerHTML = `${camelotTag}${selectedTonic} ${selectedScale}`;
+    keyCard.append(keyHtml);
+    keyCard.append(el('div', 'scale-metric__sub', res.thaat ? `${res.thaat}` : (res.modal ? 'Modal Scale' : 'Western Standard')));
+    metricsGrid.append(keyCard);
+
+    // Concert Tuning Card
+    const tuningCard = el('div', 'scale-metric-card');
+    tuningCard.append(el('div', 'scale-metric__label', 'Concert Tuning'));
+    const isDetuned = Math.abs(tuningA4 - 440) > 0.5;
+    const tuningCentsStr = res.tuningCents ? ` (${res.tuningCents > 0 ? '+' : ''}${res.tuningCents.toFixed(1)}¢)` : '';
+    tuningCard.append(el('div', `scale-metric__val ${isDetuned ? 'scale-metric__val--detuned' : ''}`, `A4 = ${tuningA4.toFixed(1)} Hz`));
+    tuningCard.append(el('div', 'scale-metric__sub', isDetuned ? `Detuned${tuningCentsStr}` : 'Standard 440Hz'));
+    metricsGrid.append(tuningCard);
+
+    resultBox.append(metricsGrid);
+
+    // Interactive Scale Keyboard & Audition Section
+    const kbSection = el('div', 'scale-kb-section');
+    kbSection.append(el('h4', 'scale-notes__title', `Interactive Scale Keyboard: ${selectedTonic} ${selectedScale}`));
+
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const kbW = 420;
+    const kbH = 100;
+    const svgKb = document.createElementNS(svgNS, 'svg');
+    svgKb.setAttribute('class', 'scale-svg-kb');
+    svgKb.setAttribute('viewBox', `0 0 ${kbW} ${kbH}`);
+
+    const whiteNotes = [0, 2, 4, 5, 7, 9, 11];
+    const blackNotes = [1, 3, 6, 8, 10];
+    const whiteW = kbW / 7;
+    const whiteH = kbH;
+    const blackW = whiteW * 0.65;
+    const blackH = kbH * 0.62;
+    const blackOffsets: Record<number, number> = {
+      1: whiteW * 0.7,
+      3: whiteW * 1.7,
+      6: whiteW * 3.7,
+      8: whiteW * 4.7,
+      10: whiteW * 5.7
+    };
+
+    const inScalePcs = new Set(degrees.map((d: number) => (tonicPc + d) % 12));
+
+    // White keys
+    whiteNotes.forEach((pc, idx) => {
+      const isRoot = pc === tonicPc;
+      const isInScale = inScalePcs.has(pc);
+      const rect = document.createElementNS(svgNS, 'rect');
+      rect.setAttribute('x', String(idx * whiteW + 1));
+      rect.setAttribute('y', '0');
+      rect.setAttribute('width', String(whiteW - 2));
+      rect.setAttribute('height', String(whiteH - 2));
+      rect.setAttribute('rx', '4');
+      rect.setAttribute('class', `mini-kb-key mini-kb-key--white ${isInScale ? (isRoot ? 'mini-kb-key--root' : 'mini-kb-key--scale') : ''}`);
+      rect.addEventListener('click', () => playSynthNote(pc, 4, tuningA4));
+      svgKb.append(rect);
+
+      const label = document.createElementNS(svgNS, 'text');
+      label.setAttribute('x', String(idx * whiteW + whiteW / 2));
+      label.setAttribute('y', String(whiteH - 8));
+      label.setAttribute('text-anchor', 'middle');
+      label.setAttribute('class', 'mini-kb-label');
+      label.textContent = DSP.NOTES[pc];
+      svgKb.append(label);
+    });
+
+    // Black keys
+    blackNotes.forEach((pc) => {
+      const isRoot = pc === tonicPc;
+      const isInScale = inScalePcs.has(pc);
+      const x = blackOffsets[pc];
+      const rect = document.createElementNS(svgNS, 'rect');
+      rect.setAttribute('x', String(x));
+      rect.setAttribute('y', '0');
+      rect.setAttribute('width', String(blackW));
+      rect.setAttribute('height', String(blackH));
+      rect.setAttribute('rx', '3');
+      rect.setAttribute('class', `mini-kb-key mini-kb-key--black ${isInScale ? (isRoot ? 'mini-kb-key--root' : 'mini-kb-key--scale') : ''}`);
+      rect.addEventListener('click', () => playSynthNote(pc, 4, tuningA4));
+      svgKb.append(rect);
+    });
+
+    kbSection.append(svgKb);
+
+    // Scale Action buttons: Play Scale, Play Drone, Drag Scale MIDI
+    const scaleActions = el('div', 'scale-modal-actions');
+    
+    const playScaleBtn = el('button', 'pill pill--solid scale-action-btn', '▶ Play Scale');
+    playScaleBtn.addEventListener('click', () => playFullScale(tonicPc, degrees, tuningA4));
+    scaleActions.append(playScaleBtn);
+
+    const droneBtn = el('button', 'pill scale-action-btn', `🔊 Root Drone (${selectedTonic})`);
+    droneBtn.addEventListener('click', () => playSynthNote(tonicPc, 3, tuningA4, 2.5));
+    scaleActions.append(droneBtn);
+
+    const scaleMidiBtn = el('button', 'pill scale-midi-btn scale-action-btn', '⤓ Drag Scale MIDI to DAW');
+    const sMidiNotes = notesFor(tonicPc, degrees, 3);
+    const sMidiBytes = scaleMidi(sMidiNotes, { bpm: res.bpm || 120, bars: 4 });
+    const sMidiFileName = `${scaleToolState.file.name.replace(/\.[^/.]+$/, '')}_Scale_${selectedTonic}_${selectedScale}.mid`;
+    scaleMidiBtn.draggable = true;
+    scaleMidiBtn.addEventListener('dragstart', async (e: DragEvent) => {
+      if (e.dataTransfer) {
+        e.dataTransfer.setData('text/plain', sMidiFileName);
+        e.dataTransfer.effectAllowed = 'copy';
+        const canvas = document.createElement('canvas');
+        canvas.width = 1;
+        canvas.height = 1;
+        e.dataTransfer.setDragImage(canvas, 0, 0);
+      }
+      if (window.api.dragMidi) await window.api.dragMidi(sMidiFileName, Array.from(sMidiBytes));
+    });
+    scaleMidiBtn.addEventListener('click', async () => {
+      if (window.api.saveMidi) {
+        const saved = await window.api.saveMidi(sMidiFileName, Array.from(sMidiBytes));
+        if (saved) toast('Scale MIDI exported', saved);
+      } else {
+        const blob = new Blob([sMidiBytes.buffer as ArrayBuffer], { type: 'audio/midi' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = sMidiFileName;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast('Scale MIDI exported', sMidiFileName);
+      }
+    });
+    scaleActions.append(scaleMidiBtn);
+
+    kbSection.append(scaleActions);
+    resultBox.append(kbSection);
+
+    // Matching Indian Raagas Section
+    const suggestedRagas = res.ragas || [];
+    if (suggestedRagas.length > 0) {
+      const ragasSection = el('div', 'scale-ragas-section');
+      ragasSection.append(el('h4', 'scale-notes__title', 'Matching Indian Classical Raagas (Aarohana & Avarohana)'));
+
+      const ragasGrid = el('div', 'scale-ragas-grid');
+      suggestedRagas.forEach((raga: any) => {
+        const isCurrentRaga = selectedScale === raga.name.toLowerCase();
+        const card = el('div', `raga-card ${isCurrentRaga ? 'raga-card--active' : ''}`);
+
+        const top = el('div', 'raga-card__header');
+        top.append(el('span', 'raga-card__name', raga.name));
+        top.append(el('span', 'raga-card__pct', `${raga.matchPercent}% Match`));
+        card.append(top);
+
+        const sub = el('div', 'raga-card__thaat', `${raga.thaat} Thaat`);
+        card.append(sub);
+
+        if (raga.aarohana) {
+          const aarohRow = el('div', 'raga-card__phrase raga-card__phrase--aaroh');
+          aarohRow.append(el('span', 'raga-phrase__tag', '▲ Aaroh:'));
+          aarohRow.append(el('span', 'raga-phrase__notes', raga.aarohana));
+          card.append(aarohRow);
+        }
+        if (raga.avarohana) {
+          const avarohRow = el('div', 'raga-card__phrase raga-card__phrase--avaroh');
+          avarohRow.append(el('span', 'raga-phrase__tag', '▼ Avaroh:'));
+          avarohRow.append(el('span', 'raga-phrase__notes', raga.avarohana));
+          card.append(avarohRow);
+        }
+
+        if (raga.time || raga.mood) {
+          const metaRow = el('div', 'raga-card__meta');
+          if (raga.time) metaRow.append(el('span', 'raga-card__time', `🕒 ${raga.time}`));
+          if (raga.mood) metaRow.append(el('span', 'raga-card__mood', `✨ ${raga.mood}`));
+          card.append(metaRow);
+        }
+
+        const ragaActions = el('div', 'raga-card__actions');
+
+        const previewBtn = el('button', 'pill pill--sm raga-btn--preview', '▶ Audition');
+        previewBtn.title = 'Audition Aarohana (ascending) & Avarohana (descending)';
+        previewBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const aaroh = raga.aarohanaDegrees || raga.degrees;
+          const avaroh = raga.avarohanaDegrees || [...aaroh].reverse();
+          playRagaSequence(tonicPc, aaroh, avaroh, tuningA4);
+        });
+        ragaActions.append(previewBtn);
+
+        const ragaMidiBtn = el('button', 'pill pill--sm pill--solid raga-btn--midi', '⤓ Drag to DAW');
+        ragaMidiBtn.title = 'Drag onto any DAW track or click to export MIDI containing Aarohana & Avarohana phrases';
+        const aaroh = raga.aarohanaDegrees || raga.degrees;
+        const avaroh = raga.avarohanaDegrees || [...aaroh].reverse();
+        const rMidiBytes = ragaMidi(tonicPc, aaroh, avaroh, { bpm: res.bpm || 120 });
+        const cleanRagaName = raga.name.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const rMidiFileName = `${scaleToolState.file.name.replace(/\.[^/.]+$/, '')}_Raga_${cleanRagaName}_${selectedTonic}.mid`;
+
+        ragaMidiBtn.draggable = true;
+        ragaMidiBtn.addEventListener('dragstart', async (e: DragEvent) => {
+          if (e.dataTransfer) {
+            e.dataTransfer.setData('text/plain', rMidiFileName);
+            e.dataTransfer.effectAllowed = 'copy';
+            const canvas = document.createElement('canvas');
+            canvas.width = 1;
+            canvas.height = 1;
+            e.dataTransfer.setDragImage(canvas, 0, 0);
+          }
+          if (window.api.dragMidi) await window.api.dragMidi(rMidiFileName, Array.from(rMidiBytes));
+        });
+        ragaMidiBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (window.api.saveMidi) {
+            const saved = await window.api.saveMidi(rMidiFileName, Array.from(rMidiBytes));
+            if (saved) toast('Raga MIDI exported', saved);
+          } else {
+            const blob = new Blob([rMidiBytes.buffer as ArrayBuffer], { type: 'audio/midi' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = rMidiFileName;
+            a.click();
+            URL.revokeObjectURL(url);
+            toast('Raga MIDI exported', rMidiFileName);
+          }
+        });
+        ragaActions.append(ragaMidiBtn);
+        card.append(ragaActions);
+
+        card.title = `Click to select Raaga ${raga.name}`;
+        card.addEventListener('click', () => {
+          scaleToolState.activeScale = raga.name.toLowerCase();
+          if (raga.degrees) {
+            DSP.SCALES[raga.name.toLowerCase()] = raga.degrees;
+            DSP.THAAT_MAP[raga.name.toLowerCase()] = `${raga.thaat} (${raga.name})`;
+          }
+          render();
+          const aaroh = raga.aarohanaDegrees || raga.degrees;
+          const avaroh = raga.avarohanaDegrees || [...aaroh].reverse();
+          playRagaSequence(tonicPc, aaroh, avaroh, tuningA4);
+        });
+
+        ragasGrid.append(card);
+      });
+
+      ragasSection.append(ragasGrid);
+      resultBox.append(ragasSection);
+    }
+
+    section.append(resultBox);
+  }
+
+  viewEl.append(section);
 }
 
 function renderStandaloneTools() {
@@ -5891,6 +6547,12 @@ function renderStandaloneTools() {
 
   const grid = el('div', 'tool-grid');
   [
+    {
+      view: 'scale-tool',
+      icon: 'music',
+      title: 'Scale & Raaga Detector',
+      text: 'Drop any audio sample or MIDI file to instantly guess BPM, musical key, scale, tuning, and Indian Raagas.'
+    },
     {
       view: 'dedupe',
       icon: 'copy',
@@ -6163,6 +6825,7 @@ const ICONS: Record<string, string> = {
   tag: '<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
   activity: '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
   mic: '<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>',
+  music: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
   compass: '<circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>',
   settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 13.5a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-2.87 1.2V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 6 19.4l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 3.4 13.5H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.6 6l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 10.5 3.4V3a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 2.87 1.2l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.88z"/>'
 };

@@ -85,6 +85,63 @@ export function scaleMidi(notes: number[], options: MidiOptions = {}): Uint8Arra
 }
 
 /**
+ * Writes a melodic Standard MIDI File containing the sequential Aarohana (Ascending)
+ * followed by Avarohana (Descending) of an Indian Raga.
+ */
+export function ragaMidi(
+  tonicPc: number,
+  aarohanaDegrees: number[],
+  avarohanaDegrees: number[],
+  options: MidiOptions = {}
+): Uint8Array {
+  const bpm = options.bpm || 120;
+  const velocity = options.velocity || 85;
+  const octave = 4; // C4 base octave
+  const base = 12 * (octave + 1) + tonicPc;
+
+  const noteDuration = Math.round(TPQ); // 1 quarter note per swara
+  const events: number[] = [];
+
+  // Tempo — microseconds per quarter note.
+  const usPerQuarter = Math.round(60000000 / bpm);
+  events.push(
+    ...vlq(0), 0xff, 0x51, 0x03,
+    (usPerQuarter >> 16) & 0xff, (usPerQuarter >> 8) & 0xff, usPerQuarter & 0xff
+  );
+
+  // 4/4 time signature
+  events.push(...vlq(0), 0xff, 0x58, 0x04, 4, 2, 24, 8);
+
+  const fullSequenceDegrees = [...aarohanaDegrees, ...avarohanaDegrees];
+  const midiNotes = fullSequenceDegrees.map((d) => Math.max(0, Math.min(127, base + d)));
+
+  midiNotes.forEach((note) => {
+    // Note ON at current timestamp
+    events.push(...vlq(0), 0x90, note & 0x7f, velocity);
+    // Note OFF after noteDuration ticks
+    events.push(...vlq(noteDuration), 0x80, note & 0x7f, 0);
+  });
+
+  events.push(...vlq(0), 0xff, 0x2f, 0x00); // End of track
+
+  const head = [
+    0x4d, 0x54, 0x68, 0x64, // 'MThd'
+    ...be32(6),
+    ...be16(0), // format 0
+    ...be16(1), // one track
+    ...be16(TPQ)
+  ];
+
+  const track = [
+    0x4d, 0x54, 0x72, 0x6b, // 'MTrk'
+    ...be32(events.length),
+    ...events
+  ];
+
+  return new Uint8Array([...head, ...track]);
+}
+
+/**
  * Scale degrees to MIDI notes in a chosen octave.
  * Octave 3 by default — low enough to read as a root, high enough not to turn into mud.
  */

@@ -40,5 +40,32 @@ function testMidiGeneration() {
   assert.equal(bytes[bytes.length - 1], 0x00);
 }
 
+function testRagaMidiGeneration() {
+  // Bhairav Aarohana: [0, 1, 4, 5, 7, 8, 11, 12], Avarohana: [12, 11, 8, 7, 5, 4, 1, 0] in C (tonicPc 0)
+  const aaroh = [0, 1, 4, 5, 7, 8, 11, 12];
+  const avaroh = [12, 11, 8, 7, 5, 4, 1, 0];
+  const bytes = midiwrite.ragaMidi(0, aaroh, avaroh, { bpm: 120 });
+  assert.ok(bytes instanceof Uint8Array);
+
+  // Check MIDI header 'MThd'
+  assert.equal(bytes[0], 0x4d);
+  assert.equal(bytes[1], 0x54);
+  assert.equal(bytes[2], 0x68);
+  assert.equal(bytes[3], 0x64);
+
+  // Track header 'MTrk'
+  assert.equal(bytes[14], 0x4d);
+  assert.equal(bytes[15], 0x54);
+  assert.equal(bytes[16], 0x72);
+  assert.equal(bytes[17], 0x6b);
+
+  // Verify end of track bytes (FF 2F 00)
+  assert.ok(bytes.length > 80);
+  assert.equal(bytes[bytes.length - 3], 0xff);
+  assert.equal(bytes[bytes.length - 2], 0x2f);
+  assert.equal(bytes[bytes.length - 1], 0x00);
+}
+
 testMidiGeneration();
+testRagaMidiGeneration();
 console.log('ok - testMidiGeneration');
