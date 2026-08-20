@@ -7781,12 +7781,13 @@ function renderRandomizerTool(entry: any = null) {
     el(
       'p',
       'randomizer-yt-desc',
-      'Instant search queries pre-crafted for your default web browser to explore reference tracks, live DJ sets, and fusion challenges in this genre. (Zero internet traffic inside DAW Buddy).'
+      'Instant search queries pre-crafted for your default web browser to explore reference tracks, live DJ sets, and raaga song references. (Zero internet traffic inside DAW Buddy).'
     )
   );
   ytSection.append(ytHead);
 
   const genreName = state.genre ? state.genre.name : 'Electronic';
+  const isRaga = Boolean(state.raga);
   const ragaOrScale = state.raga ? state.raga.name : state.scaleName;
 
   const ytCardsGrid = el('div', 'randomizer-yt-grid');
@@ -7822,12 +7823,28 @@ function renderRandomizerTool(entry: any = null) {
   ytCard2.append(btn2);
   ytCardsGrid.append(ytCard2);
 
-  // 3. Fusion Challenge
-  const q3 = `${genreName} ${ragaOrScale} fusion beat`;
+  // 3. Raaga / Scale Song Reference (feasible raaga song query)
+  const q3 = isRaga
+    ? `raaga ${state.raga.name} songs`
+    : `${state.tonic} ${state.scaleName} songs popular melody`;
   const ytCard3 = el('div', 'randomizer-yt-card');
-  ytCard3.append(el('div', 'randomizer-yt-card__tag', '🪘 Fusion Challenge'));
-  ytCard3.append(el('div', 'randomizer-yt-card__query', `"${genreName}" + ${ragaOrScale}`));
-  ytCard3.append(el('div', 'randomizer-yt-card__desc', 'See how producers blend this scale/melody with modern beats.'));
+  ytCard3.append(el('div', 'randomizer-yt-card__tag', isRaga ? '🪘 Raaga Songs & Melodies' : '🎼 Scale Song References'));
+  ytCard3.append(
+    el(
+      'div',
+      'randomizer-yt-card__query',
+      isRaga ? `Raaga ${state.raga.name} Songs` : `${state.tonic} ${state.scaleName} Songs`
+    )
+  );
+  ytCard3.append(
+    el(
+      'div',
+      'randomizer-yt-card__desc',
+      isRaga
+        ? `Audition classic compositions, film melodies, and iconic songs based on ${state.raga.name}.`
+        : `Audition popular songs and melodies written in ${state.tonic} ${state.scaleName}.`
+    )
+  );
   const btn3 = el('button', 'pill pill--sm pill--yt', 'Open in Browser ↗');
   btn3.addEventListener('click', () => openInBrowser(q3));
   ytCard3.append(btn3);
@@ -7851,7 +7868,7 @@ function renderRandomizerTool(entry: any = null) {
   const customInput = document.createElement('input');
   customInput.type = 'text';
   customInput.className = 'randomizer-yt-input';
-  customInput.value = `${genreName} ${state.tonic} ${ragaOrScale} ${state.bpm} bpm`;
+  customInput.value = isRaga ? `Raaga ${state.raga.name} songs` : `${genreName} ${state.tonic} ${state.scaleName} ${state.bpm} bpm`;
   customSearchRow.append(customInput);
 
   const customSearchBtn = el('button', 'pill pill--solid pill--yt-main', '🔍 Search YouTube in Browser');

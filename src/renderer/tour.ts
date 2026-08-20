@@ -147,7 +147,7 @@ export const TOOL_TOUR_STEPS: Record<string, TourStep[]> = {
     {
       target: '.randomizer-yt-section, .randomizer-yt-grid',
       title: '📺 YouTube Inspiration Explorer',
-      description: 'Click pre-crafted search queries to audition reference tracks, live sets, fusion challenges, and production masterclasses in your default browser.',
+      description: 'Click pre-crafted search queries to audition reference tracks, live sets, raaga-based song references, and production masterclasses in your default browser.',
       position: 'top'
     }
   ],
