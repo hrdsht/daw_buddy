@@ -1587,7 +1587,7 @@ function paintSampleAudit(res, facts, box) {
     chip.classList.add('statchip--alert');
     facts.append(chip);
 
-    const callout = el('div', 'callout callout--warn');
+    const callout = el('div', 'callout callout--alert');
     callout.append(
       el('b', null, `${n} referenced sample${n === 1 ? '' : 's'} not found on disk`)
     );
@@ -2017,7 +2017,7 @@ function renderProjectFilesTab(entry) {
     dragHint.title = 'Drag project session file';
     row.append(dragHint);
 
-    const actions = el('div', 'tabs');
+    const actions = el('div', 'filerow__actions');
     const reveal = el('button', 'pill pill--sm', `Show in ${settings.fileManager}`);
     reveal.addEventListener('click', (event) => {
       event.stopPropagation();

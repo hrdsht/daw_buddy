@@ -2504,6 +2504,11 @@ body.is-mac .topbar {
   border-left: 3px solid var(--amber);
 }
 
+.callout--alert {
+  border-left: 3px solid var(--alert);
+  background: color-mix(in srgb, var(--alert) 7%, var(--raised));
+}
+
 /* ============================= player ============================= */
 
 .player {
