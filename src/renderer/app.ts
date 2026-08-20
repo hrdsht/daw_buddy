@@ -1174,7 +1174,7 @@ function getAudioContext(): AudioContext | null {
     if (AudioCtx) _audioCtx = new AudioCtx();
   }
   if (_audioCtx && _audioCtx.state === 'suspended') {
-    _audioCtx.resume();
+    _audioCtx.resume().catch(() => {});
   }
   return _audioCtx;
 }
@@ -1183,29 +1183,37 @@ function playSynthNote(pc: number, octave = 4, a4 = 440, duration = 0.85) {
   try {
     const ctx = getAudioContext();
     if (!ctx) return;
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
     const midi = 12 * (octave + 1) + pc;
     const freq = a4 * Math.pow(2, (midi - 69) / 12);
 
+    const now = ctx.currentTime;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'triangle';
-    osc.frequency.setValueAtTime(freq, ctx.currentTime);
+    osc.frequency.setValueAtTime(freq, now);
 
-    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.24, ctx.currentTime + 0.03);
-    gain.gain.linearRampToValueAtTime(0.18, ctx.currentTime + duration * 0.35);
-    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.exponentialRampToValueAtTime(0.32, now + 0.025);
+    gain.gain.linearRampToValueAtTime(0.22, now + duration * 0.35);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
 
     osc.connect(gain);
     gain.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + duration);
+    osc.start(now);
+    osc.stop(now + duration + 0.05);
   } catch (err) {
     console.error('Audio synth error:', err);
   }
 }
 
 function playFullScale(tonicPc: number, degrees: number[], a4 = 440) {
+  const ctx = getAudioContext();
+  if (ctx && ctx.state === 'suspended') {
+    ctx.resume().catch(() => {});
+  }
   degrees.forEach((interval, idx) => {
     const notePc = (tonicPc + interval) % 12;
     const octave = interval < 12 ? (notePc < tonicPc ? 5 : 4) : (4 + Math.floor(interval / 12));
@@ -1219,6 +1227,10 @@ function playFullScale(tonicPc: number, degrees: number[], a4 = 440) {
 }
 
 function playRagaSequence(tonicPc: number, aarohanaDegrees: number[], avarohanaDegrees: number[], a4 = 440) {
+  const ctx = getAudioContext();
+  if (ctx && ctx.state === 'suspended') {
+    ctx.resume().catch(() => {});
+  }
   const fullSeq = [...aarohanaDegrees, ...avarohanaDegrees];
   fullSeq.forEach((deg, idx) => {
     const notePc = (tonicPc + deg) % 12;
@@ -7465,18 +7477,53 @@ function renderRandomizerTool(entry: any = null) {
   bpmCard.append(metroToggleBtn);
   metricsGrid.append(bpmCard);
 
-  // 3. Key & Camelot Card
-  const keyCard = el('div', 'scale-metric-card');
+  // 3. Key & Camelot Card (with interactive audition action)
+  const keyCard = el('div', 'scale-metric-card scale-metric-card--actionable');
   keyCard.append(el('div', 'scale-metric__label', 'Key & Scale'));
   const camelotTag = `<span class="scale-camelot-badge">${state.camelot}</span> `;
   const keyHtml = el('div', 'scale-metric__val');
   keyHtml.innerHTML = `${camelotTag}${state.tonic} ${state.scaleName}`;
   keyCard.append(keyHtml);
   keyCard.append(el('div', 'scale-metric__sub', state.thaat ? `${state.thaat} Thaat` : 'Western Scale'));
+
+  const playScaleAction = () => {
+    if (state.raga && (state.raga.aarohanaDegrees || state.raga.degrees)) {
+      const aaroh = state.raga.aarohanaDegrees || state.raga.degrees;
+      const avaroh = state.raga.avarohanaDegrees || [...aaroh].reverse();
+      playRagaSequence(state.tonicPc, aaroh, avaroh, state.tuningA4);
+    } else {
+      playFullScale(state.tonicPc, state.degrees, state.tuningA4);
+    }
+  };
+
+  const playKeyBtn = el('button', 'pill pill--sm', '▶ Audition Scale');
+  playKeyBtn.style.marginTop = '8px';
+  playKeyBtn.title = 'Play full scale notes and tonic tone';
+  playKeyBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    playScaleAction();
+    playKeyBtn.textContent = '🔊 Playing Scale…';
+    playKeyBtn.classList.add('pill--solid');
+    setTimeout(() => {
+      playKeyBtn.textContent = '▶ Audition Scale';
+      playKeyBtn.classList.remove('pill--solid');
+    }, Math.max(2200, (state.degrees.length + 2) * 440));
+  });
+  keyCard.append(playKeyBtn);
+  keyCard.title = 'Click to audition scale & root tone';
+  keyCard.addEventListener('click', () => {
+    playScaleAction();
+    playKeyBtn.textContent = '🔊 Playing Scale…';
+    playKeyBtn.classList.add('pill--solid');
+    setTimeout(() => {
+      playKeyBtn.textContent = '▶ Audition Scale';
+      playKeyBtn.classList.remove('pill--solid');
+    }, Math.max(2200, (state.degrees.length + 2) * 440));
+  });
   metricsGrid.append(keyCard);
 
-  // 4. Time Signature & Tala Card
-  const meterCard = el('div', 'scale-metric-card');
+  // 4. Time Signature & Tala Card (with interactive rhythm pulse audition action)
+  const meterCard = el('div', 'scale-metric-card scale-metric-card--actionable');
   meterCard.append(el('div', 'scale-metric__label', 'Time Signature & Tala'));
   meterCard.append(el('div', 'scale-metric__val', state.timeSignature));
   if (state.tala) {
@@ -7489,6 +7536,26 @@ function renderRandomizerTool(entry: any = null) {
   } else {
     meterCard.append(el('div', 'scale-metric__sub', 'Standard Meter'));
   }
+
+  const isMeterPlaying = Player.isMetronome();
+  const meterPlayBtn = el('button', `pill pill--sm ${isMeterPlaying ? 'pill--solid pill--metro is-on' : ''}`, isMeterPlaying ? '⏹ Stop Rhythm' : `🥁 Play Rhythm (${state.timeSignature})`);
+  meterPlayBtn.style.marginTop = '8px';
+  meterPlayBtn.title = `Audition ${state.timeSignature} meter rhythm pattern in real-time`;
+  meterPlayBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    Player.setMetronomeBpm(state.bpm);
+    Player.setMetronomeSignature(state.timeSignature);
+    Player.setMetronome(!Player.isMetronome());
+    renderRandomizerTool(entry);
+  });
+  meterCard.append(meterPlayBtn);
+  meterCard.title = `Click to toggle ${state.timeSignature} meter pulse`;
+  meterCard.addEventListener('click', () => {
+    Player.setMetronomeBpm(state.bpm);
+    Player.setMetronomeSignature(state.timeSignature);
+    Player.setMetronome(!Player.isMetronome());
+    renderRandomizerTool(entry);
+  });
   metricsGrid.append(meterCard);
 
   // 4. Raaga Time & Mood Card

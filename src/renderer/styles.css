@@ -4569,6 +4569,16 @@ body.multi-select-mode .filerow__select-handle {
   gap: 4px;
 }
 
+.scale-metric-card--actionable {
+  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+}
+
+.scale-metric-card--actionable:hover {
+  border-color: var(--line-strong);
+  background: var(--hover);
+  transform: translateY(-1px);
+}
+
 .scale-metric__label {
   font-size: 11px;
   font-weight: 600;
