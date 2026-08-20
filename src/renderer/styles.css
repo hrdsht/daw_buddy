@@ -59,7 +59,8 @@ body[data-theme-style="minimalist"].theme-light {
   --amber-ink: #ffffff;
   --sage: #0284c7;
   --alert: #dc2626;
-  --line: rgba(18, 23, 20, 0.09);
+  --line: rgba(18, 23, 20, 0.16);
+  --line-crisp: #cbd5e1;
   --accent-glow: 0 2px 8px rgba(0, 143, 160, 0.2);
 }
 
@@ -129,7 +130,8 @@ body[data-theme-style="ableton"].theme-light {
   --amber-ink: #ffffff;
   --sage: #0284c7;
   --alert: #e11d48;
-  --line: rgba(0, 0, 0, 0.12);
+  --line: rgba(0, 0, 0, 0.20);
+  --line-crisp: #9fa0aa;
   --r: 2px;
   --r-lg: 3px;
   --accent-glow: none;
@@ -237,7 +239,8 @@ body[data-theme-style="classic"].theme-light {
   --amber-ink: #f7fff2;
   --sage: #237d60;
   --alert: #c83f35;
-  --line: rgba(25, 42, 23, 0.11);
+  --line: rgba(25, 42, 23, 0.18);
+  --line-crisp: #b0beb0;
 }
 
 body[data-theme-style="classic"].theme-light[data-accent="green"] { --amber: #65a832; }
@@ -1003,6 +1006,14 @@ body.is-mac .topbar {
 
 .row.is-selected {
   background: var(--raised);
+}
+
+body.theme-light .row {
+  border-bottom: 1px solid var(--line);
+}
+
+body.theme-light .thead {
+  border-bottom: 1.5px solid var(--line);
 }
 
 /* A version inside an expanded group: indented, quieter, still fully usable. */

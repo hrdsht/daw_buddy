@@ -712,10 +712,11 @@ const Player = (() => {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
 
+    const isLight = typeof document !== 'undefined' && document.body.classList.contains('theme-light');
     const mid = height / 2;
 
     // Centre line, always visible so an empty player still looks intentional
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.07)';
+    ctx.strokeStyle = isLight ? 'rgba(0, 0, 0, 0.14)' : 'rgba(255, 255, 255, 0.08)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(0, mid);
@@ -730,37 +731,33 @@ const Player = (() => {
       : demoProgress;
     const playedX = width * progress;
 
-    // One filled shape: across the top, back along the bottom, closed.
+    // Sample-accurate, perfectly aligned symmetric waveform shape
     const path = new Path2D();
-    const step = width / (effectivePeaks.length - 1);
+    const len = effectivePeaks.length;
+    const step = width / Math.max(1, len - 1);
     const amp = mid * 0.92;
 
-    path.moveTo(0, mid - effectivePeaks[0] * amp);
-    for (let i = 1; i < effectivePeaks.length; i += 1) {
+    // Top half: 0 -> len - 1
+    path.moveTo(0, mid - Math.max(0.015, effectivePeaks[0]) * amp);
+    for (let i = 1; i < len; i += 1) {
       const x = i * step;
-      const y = mid - effectivePeaks[i] * amp;
-      const prevX = (i - 1) * step;
-      const prevY = mid - effectivePeaks[i - 1] * amp;
-      // Quadratic through the midpoint — this is what turns a jagged comb
-      // into a curve without losing the shape of the track.
-      path.quadraticCurveTo(prevX, prevY, (prevX + x) / 2, (prevY + y) / 2);
+      const y = mid - Math.max(0.015, effectivePeaks[i]) * amp;
+      path.lineTo(x, y);
     }
-    for (let i = effectivePeaks.length - 1; i >= 0; i -= 1) {
+
+    // Bottom half: len - 1 -> 0
+    for (let i = len - 1; i >= 0; i -= 1) {
       const x = i * step;
-      const y = mid + effectivePeaks[i] * amp;
-      const prevX = Math.min(effectivePeaks.length - 1, i + 1) * step;
-      const prevY = mid + effectivePeaks[Math.min(effectivePeaks.length - 1, i + 1)] * amp;
-      path.quadraticCurveTo(prevX, prevY, (prevX + x) / 2, (prevY + y) / 2);
+      const y = mid + Math.max(0.015, effectivePeaks[i]) * amp;
+      path.lineTo(x, y);
     }
     path.closePath();
 
-    // Unplayed portion
+    // Unplayed portion (adaptive fill contrast for light & dark surfaces)
     ctx.save();
-    const dim = ctx.createLinearGradient(0, 0, 0, height);
-    dim.addColorStop(0, 'rgba(255, 255, 255, 0.16)');
-    dim.addColorStop(0.5, 'rgba(255, 255, 255, 0.22)');
-    dim.addColorStop(1, 'rgba(255, 255, 255, 0.16)');
-    ctx.fillStyle = dim;
+    ctx.fillStyle = isLight
+      ? 'rgba(0, 0, 0, 0.18)'
+      : 'rgba(255, 255, 255, 0.22)';
     ctx.fill(path);
     ctx.restore();
 
@@ -771,32 +768,24 @@ const Player = (() => {
       ctx.rect(0, 0, playedX, height);
       ctx.clip();
       const amberHex = getAmberColor();
-      const lit = ctx.createLinearGradient(0, 0, 0, height);
-      lit.addColorStop(0, amberHex);
-      lit.addColorStop(0.5, amberHex);
-      lit.addColorStop(1, amberHex);
-      ctx.fillStyle = lit;
-      ctx.shadowColor = 'rgba(0, 0, 0, 0)';
-      ctx.shadowBlur = 0;
+      ctx.fillStyle = amberHex;
       ctx.fill(path);
       ctx.restore();
     }
 
     // Playhead
-    ctx.strokeStyle = '#f3f2f0';
-    ctx.lineWidth = 1;
-    ctx.shadowColor = 'rgba(0, 0, 0, 0)';
-    ctx.shadowBlur = 0;
+    ctx.strokeStyle = isLight ? '#121714' : '#f3f2f0';
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(playedX, 4);
-    ctx.lineTo(playedX, height - 4);
+    ctx.moveTo(playedX, 2);
+    ctx.lineTo(playedX, height - 2);
     ctx.stroke();
 
     // Subtle Demo Waveform watermark label when idle/onboarding
     if (!current) {
       ctx.save();
       ctx.font = '500 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.26)';
+      ctx.fillStyle = isLight ? 'rgba(0, 0, 0, 0.35)' : 'rgba(255, 255, 255, 0.26)';
       ctx.fillText('DEMO WAVEFORM PREVIEW', 10, 14);
       ctx.restore();
     }

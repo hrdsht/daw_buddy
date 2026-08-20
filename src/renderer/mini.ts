@@ -45,10 +45,11 @@ function drawWaveform(peaks: number[] | null, progress: number) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, width, height);
 
+  const isLight = typeof document !== 'undefined' && document.body.classList.contains('theme-light');
   const mid = height / 2;
 
   // Center line
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+  ctx.strokeStyle = isLight ? 'rgba(0, 0, 0, 0.14)' : 'rgba(255, 255, 255, 0.1)';
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(0, mid);
@@ -59,28 +60,27 @@ function drawWaveform(peaks: number[] | null, progress: number) {
 
   const playedX = width * progress;
 
-  // Unplayed background wave
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-  const step = width / (peaks.length - 1);
+  // Symmetric waveform shape
+  const len = peaks.length;
+  const step = width / Math.max(1, len - 1);
   const amp = mid * 0.9;
 
   ctx.beginPath();
-  ctx.moveTo(0, mid - peaks[0] * amp);
-  for (let i = 1; i < peaks.length; i += 1) {
+  ctx.moveTo(0, mid - Math.max(0.02, peaks[0]) * amp);
+  for (let i = 1; i < len; i += 1) {
     const x = i * step;
-    const y = mid - peaks[i] * amp;
-    const prevX = (i - 1) * step;
-    const prevY = mid - peaks[i - 1] * amp;
-    ctx.quadraticCurveTo(prevX, prevY, (prevX + x) / 2, (prevY + y) / 2);
+    const y = mid - Math.max(0.02, peaks[i]) * amp;
+    ctx.lineTo(x, y);
   }
-  for (let i = peaks.length - 1; i >= 0; i -= 1) {
+  for (let i = len - 1; i >= 0; i -= 1) {
     const x = i * step;
-    const y = mid + peaks[i] * amp;
-    const prevX = Math.min(peaks.length - 1, i + 1) * step;
-    const prevY = mid + peaks[Math.min(peaks.length - 1, i + 1)] * amp;
-    ctx.quadraticCurveTo(prevX, prevY, (prevX + x) / 2, (prevY + y) / 2);
+    const y = mid + Math.max(0.02, peaks[i]) * amp;
+    ctx.lineTo(x, y);
   }
   ctx.closePath();
+
+  // Unplayed background wave
+  ctx.fillStyle = isLight ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.22)';
   ctx.fill();
 
   // Played progress wave (clipped)
