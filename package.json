@@ -3,7 +3,7 @@
   "version": "0.3.0-beta.1",
   "description": "Browse, analyse and tidy your music production sessions",
   "main": "dist/main/main.js",
-  "author": "Hrdsht",
+  "author": "ba55ick",
   "license": "MIT",
   "scripts": {
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
