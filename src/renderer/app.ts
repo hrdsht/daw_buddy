@@ -518,14 +518,28 @@ function visible() {
   });
 
   return list.slice().sort((a, b) => {
+    const ra = record(a.path);
+    const rb = record(b.path);
     if (sortBy === 'name') return a.name.localeCompare(b.name) * sortDir;
     if (sortBy === 'key') {
       return (
-        (record(a.path).camelot || '~').localeCompare(record(b.path).camelot || '~') *
-        sortDir
+        (ra.camelot || '~').localeCompare(rb.camelot || '~') * sortDir
       );
     }
     if (sortBy === 'bpm') return ((bpmFor(a) || 0) - (bpmFor(b) || 0)) * sortDir;
+    if (sortBy === 'saves') return ((a.backupCount || 0) - (b.backupCount || 0)) * sortDir;
+    if (sortBy === 'audio') return ((a.audioCount || 0) - (b.audioCount || 0)) * sortDir;
+    if (sortBy === 'favourite') {
+      const diff = (ra.favourite ? 1 : 0) - (rb.favourite ? 1 : 0);
+      // Tie-break flagged/unflagged groups by newest first, so a "favourites
+      // first" list still reads chronologically within each group.
+      return diff !== 0 ? diff * sortDir : (a.modified - b.modified) * -1;
+    }
+    if (sortBy === 'notes') {
+      const hasA = ra.note && ra.note.trim() ? 1 : 0;
+      const hasB = rb.note && rb.note.trim() ? 1 : 0;
+      return hasA !== hasB ? (hasA - hasB) * sortDir : (a.modified - b.modified) * -1;
+    }
     return (a.modified - b.modified) * sortDir;
   });
 }
