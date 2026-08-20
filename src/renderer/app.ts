@@ -130,6 +130,7 @@ let favOnly = false;
 let sortBy = 'modified';
 let sortDir = -1;
 const noteTimers = new Map();
+const sampleAuditCache = new Map(); // sessionPath -> audit result, cleared on rescan
 let dedupeState = { groups: [], scanned: 0, folders: 0, chosen: new Set<number>() };
 let silenceProgressStatus = null;
 let finishProgressStatus = null;
@@ -183,6 +184,7 @@ function applySettings() {
 }
 
 async function refresh() {
+  sampleAuditCache.clear();
   if (view === 'list') showSpinner('Scanning', 'Reading your folders.');
 
   const result = browsing
@@ -1556,6 +1558,55 @@ function renderProjectHarmony(entry, rec, projectBpm) {
 
 /* =========================== project page ========================== */
 
+// Audit the open set for missing samples and paint the result into the header
+// facts + a detail callout. Cached per session so tab switches don't re-scan;
+// the cache is cleared on a rescan (refresh()).
+function runSampleAudit(entry, facts, box) {
+  const cached = sampleAuditCache.get(entry.sessionPath);
+  if (cached) {
+    paintSampleAudit(cached, facts, box);
+    return;
+  }
+  window.api
+    .auditSamples(entry.sessionPath)
+    .then((res) => {
+      if (!res) return;
+      sampleAuditCache.set(entry.sessionPath, res);
+      if (openProject === entry) paintSampleAudit(res, facts, box);
+    })
+    .catch(() => {});
+}
+
+function paintSampleAudit(res, facts, box) {
+  if (!res.supported || res.error || res.referenced === 0) return;
+  box.innerHTML = '';
+
+  if (res.missing && res.missing.length) {
+    const n = res.missing.length;
+    const chip = fact('Missing samples', String(n));
+    chip.classList.add('statchip--alert');
+    facts.append(chip);
+
+    const callout = el('div', 'callout callout--warn');
+    callout.append(
+      el('b', null, `${n} referenced sample${n === 1 ? '' : 's'} not found on disk`)
+    );
+    const list = el('div', 'sample-audit__list');
+    res.missing.slice(0, 40).forEach((m) => {
+      const item = el('div', 'sample-audit__item');
+      item.append(el('span', 'sample-audit__name', m.name || '(unnamed)'));
+      if (m.relativePath) item.append(el('span', 'sample-audit__path', m.relativePath));
+      list.append(item);
+    });
+    callout.append(list);
+    if (n > 40) callout.append(el('div', 'muted', `…and ${n - 40} more`));
+    box.append(callout);
+  } else {
+    // All references resolve — a quiet, reassuring chip.
+    facts.append(fact('Samples', `${res.present} ✓`));
+  }
+}
+
 function renderProjectPage() {
   const entry = openProject;
   const rec = record(entry.path);
@@ -1630,6 +1681,11 @@ function renderProjectPage() {
   actions.append(fav);
 
   viewEl.append(actions);
+
+  /* missing-media audit (Ableton sets only, best-effort) */
+  const auditBox = el('div', 'sample-audit');
+  viewEl.append(auditBox);
+  runSampleAudit(entry, facts, auditBox);
 
   /* tabs */
   const tabs = el('div', 'tabs project-tabs');
