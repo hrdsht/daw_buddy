@@ -1462,6 +1462,13 @@ function renderProjectHarmony(entry, rec, projectBpm) {
     svgKb.appendChild(rect);
   });
 
+  svgKb.style.cursor = 'pointer';
+  svgKb.setAttribute('title', 'Click to open Camelot Harmonic Wheel & Scale Inspector');
+  svgKb.addEventListener('click', (e: MouseEvent) => {
+    e.stopPropagation();
+    openCamelotModal(entry, rec, projectBpm);
+  });
+
   kbCol.append(svgKb);
 
   // Drag MIDI button
@@ -1835,8 +1842,13 @@ function renderProjectPage() {
   const miniKb = renderMiniStickyKeyboard(tonicPc, degrees);
   if (miniKb) {
     const kbWrap = el('div', 'sticky-bar__mini-kb');
-    kbWrap.title = scaleName ? `Scale: ${scaleName}` : 'Scale notes preview';
+    kbWrap.style.cursor = 'pointer';
+    kbWrap.title = 'Open Camelot Harmonic Wheel & Scale Inspector';
     kbWrap.append(miniKb);
+    kbWrap.addEventListener('click', (e: MouseEvent) => {
+      e.stopPropagation();
+      openCamelotModal(entry, rec, projectBpm);
+    });
     stickyRight.append(kbWrap);
   }
 

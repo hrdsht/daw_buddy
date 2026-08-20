@@ -1485,10 +1485,21 @@ body.theme-light .page__sticky-bar {
   padding: 3px 6px;
   border-radius: var(--r);
   border: 1px solid var(--line);
+  cursor: pointer;
+  transition: all 120ms ease;
+  user-select: none;
+}
+
+.sticky-bar__mini-kb:hover {
+  background: var(--hover);
+  border-color: var(--amber);
+  transform: translateY(-1px);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.25);
 }
 
 .sticky-bar__mini-kb svg {
   display: block;
+  pointer-events: none;
 }
 
 .sticky-bar__actions {
