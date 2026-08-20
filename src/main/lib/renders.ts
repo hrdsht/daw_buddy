@@ -293,6 +293,7 @@ function groupRenders(files) {
         part: detectPart(base),
         where: file.where,
         formats: [],
+        files: [],
         modified: 0,
         size: 0,
         primary: null
@@ -300,6 +301,7 @@ function groupRenders(files) {
     }
 
     const group = groups.get(key);
+    group.files.push(file);
     const format = file.ext.replace('.', '');
     if (!group.formats.includes(format)) group.formats.push(format);
     if (file.modified > group.modified) group.modified = file.modified;
