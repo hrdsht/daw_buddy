@@ -3938,6 +3938,10 @@ body.multi-select-mode .filerow__select-handle {
   border-left: none;
 }
 
+.tour-card[data-position="center"] .tour-card__arrow {
+  display: none !important;
+}
+
 .tour-card__head {
   display: flex;
   justify-content: space-between;

@@ -808,6 +808,10 @@ function updateSortLabel() {
   });
 }
 
+function effectiveTime(entry: any): number {
+  return Math.max(entry?.modified || 0, entry?.renderModified || 0, entry?.lastActivity || 0);
+}
+
 function visible() {
   const q = parseQuery(searchEl.value);
   const active = hasQuery(q);
@@ -837,14 +841,14 @@ function visible() {
       const diff = (ra.favourite ? 1 : 0) - (rb.favourite ? 1 : 0);
       // Tie-break flagged/unflagged groups by newest first, so a "favourites
       // first" list still reads chronologically within each group.
-      return diff !== 0 ? diff * sortDir : (a.modified - b.modified) * -1;
+      return diff !== 0 ? diff * sortDir : (effectiveTime(a) - effectiveTime(b)) * -1;
     }
     if (sortBy === 'notes') {
       const hasA = ra.note && ra.note.trim() ? 1 : 0;
       const hasB = rb.note && rb.note.trim() ? 1 : 0;
-      return hasA !== hasB ? (hasA - hasB) * sortDir : (a.modified - b.modified) * -1;
+      return hasA !== hasB ? (hasA - hasB) * sortDir : (effectiveTime(a) - effectiveTime(b)) * -1;
     }
-    return (a.modified - b.modified) * sortDir;
+    return (effectiveTime(a) - effectiveTime(b)) * sortDir;
   });
 }
 
@@ -1049,7 +1053,12 @@ function buildRow(entry) {
   health.append(el('div', 'meter__caption', `${entry.backupCount}`));
   row.append(health);
 
-  row.append(el('div', 'cell', timeAgo(entry.modified)));
+  const rowTime = effectiveTime(entry);
+  const timeCell = el('div', 'cell', timeAgo(rowTime));
+  if (entry.renderModified && entry.renderModified > (entry.modified || 0)) {
+    timeCell.title = `Rendered ${timeAgo(entry.renderModified)} (Saved ${timeAgo(entry.modified || 0)})`;
+  }
+  row.append(timeCell);
 
   row.addEventListener('click', () => {
     selected = entry.path;

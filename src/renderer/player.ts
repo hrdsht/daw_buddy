@@ -75,6 +75,42 @@ const Player = (() => {
   let metronomeBpm: number | null = null;
   let lastMetronomeTickIndex = -1;
 
+  // Demo / Placeholder waveform state when no real audio is loaded yet
+  const DEMO_DURATION = 180; // 3:00 min demo audio
+  const demoPeaks = generateDemoPeaks(300);
+  let demoProgress = 0;
+  let isDemoPlaying = false;
+  let demoRafId: number | null = null;
+  let demoStartTime = 0;
+  let demoOsc: OscillatorNode | null = null;
+  let demoGainNode: GainNode | null = null;
+
+  function generateDemoPeaks(buckets = 300): Float32Array {
+    const out = new Float32Array(buckets);
+    for (let i = 0; i < buckets; i++) {
+      const norm = i / buckets;
+      let env = 0.5;
+      if (norm < 0.15) {
+        env = 0.2 + 0.6 * (norm / 0.15);
+      } else if (norm < 0.35) {
+        env = 0.65 + 0.15 * Math.sin(norm * 40);
+      } else if (norm < 0.55) {
+        env = 0.85 + 0.12 * Math.cos(norm * 50);
+      } else if (norm < 0.7) {
+        env = 0.45 + 0.2 * Math.sin(norm * 30);
+      } else if (norm < 0.9) {
+        env = 0.92 + 0.08 * Math.sin(norm * 60);
+      } else {
+        env = 0.8 * (1 - (norm - 0.9) / 0.1) + 0.1;
+      }
+      const beat = Math.pow(Math.abs(Math.sin(norm * Math.PI * 32)), 4) * 0.25;
+      const sub = Math.sin(norm * Math.PI * 8) * 0.1;
+      const noise = ((Math.sin(i * 997 + i * i * 13) + 1) / 2) * 0.2;
+      out[i] = Math.max(0.12, Math.min(0.98, (env + beat + sub + noise) * 0.8));
+    }
+    return smooth(out, 2);
+  }
+
   // Region audition (the trim editor). When regionEnd is set, playback stops or
   // loops at that point. This is a SHARED singleton, so every normal transport
   // path — play(), a scrub, a new load() — must clear it, or the next full-file
@@ -278,9 +314,8 @@ const Player = (() => {
   }
 
   function enableReverbFromControl() {
-    if (!current) return;
     reverbEnabled = true;
-    verbBtn.classList.add('is-on');
+    if (verbBtn) verbBtn.classList.add('is-on');
     buildChain();
     applyReverbLevel();
   }
@@ -313,24 +348,24 @@ const Player = (() => {
 
   function closeReverbPanel() {
     reverbPanel.hidden = true;
-    verbBtn.setAttribute('aria-expanded', 'false');
+    if (verbBtn) verbBtn.setAttribute('aria-expanded', 'false');
   }
 
   function openReverbPanel() {
-    if (!current) return;
     syncReverbControls();
     reverbPanel.hidden = false;
-    verbBtn.setAttribute('aria-expanded', 'true');
-
-    const buttonRect = verbBtn.getBoundingClientRect();
-    const panelRect = reverbPanel.getBoundingClientRect();
-    const left = Math.min(
-      window.innerWidth - panelRect.width - 12,
-      Math.max(12, buttonRect.right - panelRect.width)
-    );
-    reverbPanel.style.left = `${left}px`;
-    reverbPanel.style.bottom = `${window.innerHeight - buttonRect.top + 8}px`;
-    reverbInputs.decay.focus();
+    if (verbBtn) {
+      verbBtn.setAttribute('aria-expanded', 'true');
+      const buttonRect = verbBtn.getBoundingClientRect();
+      const panelRect = reverbPanel.getBoundingClientRect();
+      const left = Math.min(
+        window.innerWidth - panelRect.width - 12,
+        Math.max(12, buttonRect.right - panelRect.width)
+      );
+      reverbPanel.style.left = `${left}px`;
+      reverbPanel.style.bottom = `${window.innerHeight - buttonRect.top + 8}px`;
+    }
+    if (reverbInputs.decay) reverbInputs.decay.focus();
   }
 
   verbBtn.addEventListener('contextmenu', (event) => {
@@ -567,6 +602,7 @@ const Player = (() => {
   /* --------------------------- loading --------------------------- */
 
   async function load(file, { autoplay = true } = {}) {
+    if (isDemoPlaying) stopDemoPlayback();
     const serial = ++loadSerial;
     clearRegion(); // a new file starts as whole-file playback
     current = { path: file.path, name: file.name };
@@ -686,31 +722,34 @@ const Player = (() => {
     ctx.lineTo(width, mid);
     ctx.stroke();
 
-    if (!peaks || peaks.length === 0) return;
+    const effectivePeaks = peaks || demoPeaks;
+    if (!effectivePeaks || effectivePeaks.length === 0) return;
 
-    const progress = duration() > 0 ? audio.currentTime / duration() : 0;
+    const progress = current
+      ? (duration() > 0 ? audio.currentTime / duration() : 0)
+      : demoProgress;
     const playedX = width * progress;
 
     // One filled shape: across the top, back along the bottom, closed.
     const path = new Path2D();
-    const step = width / (peaks.length - 1);
+    const step = width / (effectivePeaks.length - 1);
     const amp = mid * 0.92;
 
-    path.moveTo(0, mid - peaks[0] * amp);
-    for (let i = 1; i < peaks.length; i += 1) {
+    path.moveTo(0, mid - effectivePeaks[0] * amp);
+    for (let i = 1; i < effectivePeaks.length; i += 1) {
       const x = i * step;
-      const y = mid - peaks[i] * amp;
+      const y = mid - effectivePeaks[i] * amp;
       const prevX = (i - 1) * step;
-      const prevY = mid - peaks[i - 1] * amp;
+      const prevY = mid - effectivePeaks[i - 1] * amp;
       // Quadratic through the midpoint — this is what turns a jagged comb
       // into a curve without losing the shape of the track.
       path.quadraticCurveTo(prevX, prevY, (prevX + x) / 2, (prevY + y) / 2);
     }
-    for (let i = peaks.length - 1; i >= 0; i -= 1) {
+    for (let i = effectivePeaks.length - 1; i >= 0; i -= 1) {
       const x = i * step;
-      const y = mid + peaks[i] * amp;
-      const prevX = Math.min(peaks.length - 1, i + 1) * step;
-      const prevY = mid + peaks[Math.min(peaks.length - 1, i + 1)] * amp;
+      const y = mid + effectivePeaks[i] * amp;
+      const prevX = Math.min(effectivePeaks.length - 1, i + 1) * step;
+      const prevY = mid + effectivePeaks[Math.min(effectivePeaks.length - 1, i + 1)] * amp;
       path.quadraticCurveTo(prevX, prevY, (prevX + x) / 2, (prevY + y) / 2);
     }
     path.closePath();
@@ -726,20 +765,22 @@ const Player = (() => {
     ctx.restore();
 
     // Played portion, clipped to everything left of the playhead
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(0, 0, playedX, height);
-    ctx.clip();
-    const amberHex = getAmberColor();
-    const lit = ctx.createLinearGradient(0, 0, 0, height);
-    lit.addColorStop(0, amberHex);
-    lit.addColorStop(0.5, amberHex);
-    lit.addColorStop(1, amberHex);
-    ctx.fillStyle = lit;
-    ctx.shadowColor = 'rgba(0, 0, 0, 0)';
-    ctx.shadowBlur = 0;
-    ctx.fill(path);
-    ctx.restore();
+    if (playedX > 0) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, playedX, height);
+      ctx.clip();
+      const amberHex = getAmberColor();
+      const lit = ctx.createLinearGradient(0, 0, 0, height);
+      lit.addColorStop(0, amberHex);
+      lit.addColorStop(0.5, amberHex);
+      lit.addColorStop(1, amberHex);
+      ctx.fillStyle = lit;
+      ctx.shadowColor = 'rgba(0, 0, 0, 0)';
+      ctx.shadowBlur = 0;
+      ctx.fill(path);
+      ctx.restore();
+    }
 
     // Playhead
     ctx.strokeStyle = '#f3f2f0';
@@ -750,7 +791,15 @@ const Player = (() => {
     ctx.moveTo(playedX, 4);
     ctx.lineTo(playedX, height - 4);
     ctx.stroke();
-    ctx.shadowBlur = 0;
+
+    // Subtle Demo Waveform watermark label when idle/onboarding
+    if (!current) {
+      ctx.save();
+      ctx.font = '500 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.26)';
+      ctx.fillText('DEMO WAVEFORM PREVIEW', 10, 14);
+      ctx.restore();
+    }
   }
 
   let cachedAmberHex = '';
@@ -769,7 +818,83 @@ const Player = (() => {
 
   /* -------------------------- transport -------------------------- */
 
+  function startDemoPlayback() {
+    isDemoPlaying = true;
+    playBtn.innerHTML = '&#10074;&#10074;';
+    demoStartTime = performance.now() - (demoProgress * DEMO_DURATION * 1000);
+    buildChain();
+    startDemoDrone();
+    demoTick();
+  }
+
+  function stopDemoPlayback() {
+    isDemoPlaying = false;
+    playBtn.innerHTML = '&#9654;';
+    if (demoRafId !== null) {
+      cancelAnimationFrame(demoRafId);
+      demoRafId = null;
+    }
+    stopDemoDrone();
+    draw();
+  }
+
+  function startDemoDrone() {
+    if (!audioContext) audioContext = new AudioContext();
+    if (audioContext.state === 'suspended') audioContext.resume();
+    if (demoOsc) return;
+    try {
+      demoOsc = audioContext.createOscillator();
+      demoOsc.type = 'triangle';
+      demoOsc.frequency.setValueAtTime(220, audioContext.currentTime);
+      demoGainNode = audioContext.createGain();
+      demoGainNode.gain.setValueAtTime(0.001, audioContext.currentTime);
+      demoGainNode.gain.exponentialRampToValueAtTime(0.04 * (Number(volumeEl.value) || 0.8), audioContext.currentTime + 0.1);
+      demoOsc.connect(demoGainNode);
+      demoGainNode.connect(audioContext.destination);
+      demoOsc.start();
+    } catch (_) {}
+  }
+
+  function stopDemoDrone() {
+    if (demoGainNode && audioContext) {
+      try {
+        demoGainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.08);
+        setTimeout(() => {
+          if (demoOsc) {
+            try { demoOsc.stop(); demoOsc.disconnect(); } catch (_) {}
+            demoOsc = null;
+          }
+          demoGainNode = null;
+        }, 90);
+      } catch (_) {
+        if (demoOsc) {
+          try { demoOsc.stop(); demoOsc.disconnect(); } catch (_) {}
+          demoOsc = null;
+        }
+        demoGainNode = null;
+      }
+    }
+  }
+
+  function demoTick() {
+    if (!isDemoPlaying) return;
+    const now = performance.now();
+    const elapsedSec = (now - demoStartTime) / 1000;
+    demoProgress = elapsedSec / DEMO_DURATION;
+    if (demoProgress >= 1) {
+      demoProgress = 0;
+      stopDemoPlayback();
+      return;
+    }
+    if (timeEl) {
+      timeEl.textContent = `${clock(demoProgress * DEMO_DURATION)} / ${clock(DEMO_DURATION)}`;
+    }
+    draw();
+    demoRafId = requestAnimationFrame(demoTick);
+  }
+
   function play() {
+    if (isDemoPlaying) stopDemoPlayback();
     // A plain play is always the whole file — drop any trim region first.
     clearRegion();
     if (audioContext && audioContext.state === 'suspended') audioContext.resume();
@@ -808,9 +933,13 @@ const Player = (() => {
   }
 
   function toggle() {
-    if (!current) return;
-    if (audio.paused) play();
-    else audio.pause();
+    if (current) {
+      if (audio.paused) play();
+      else audio.pause();
+    } else {
+      if (isDemoPlaying) stopDemoPlayback();
+      else startDemoPlayback();
+    }
   }
 
   function duration() {
@@ -893,13 +1022,26 @@ const Player = (() => {
   }
 
   canvas.addEventListener('click', (event) => {
-    if (!current || duration() === 0) return;
-    clearRegion(); // scrubbing the main player leaves trim-region mode
-    lastMetronomeTickIndex = -1;
     const rect = canvas.getBoundingClientRect();
-    audio.currentTime = ((event.clientX - rect.left) / rect.width) * duration();
-    draw();
-    broadcastState();
+    const clickRatio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+
+    if (current && duration() > 0) {
+      clearRegion(); // scrubbing the main player leaves trim-region mode
+      lastMetronomeTickIndex = -1;
+      audio.currentTime = clickRatio * duration();
+      draw();
+      broadcastState();
+    } else if (!current) {
+      // Interactive scrubbing on demo waveform
+      demoProgress = clickRatio;
+      if (isDemoPlaying) {
+        demoStartTime = performance.now() - (demoProgress * DEMO_DURATION * 1000);
+      }
+      if (timeEl) {
+        timeEl.textContent = `${clock(demoProgress * DEMO_DURATION)} / ${clock(DEMO_DURATION)}`;
+      }
+      draw();
+    }
   });
 
   playBtn.addEventListener('click', toggle);

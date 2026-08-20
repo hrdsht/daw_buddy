@@ -40,7 +40,7 @@ export const TOUR_STEPS: TourStep[] = [
     target: '.player',
     title: 'Real-time Transport & Waveform',
     description:
-      'Scrub interactive audio waveforms, audition with custom Reverb, engage root-note Drone synths, and monitor with safety soft clipping.',
+      'Scrub interactive audio waveforms, audition with custom Reverb, engage root-note Drone synths, and monitor with safety soft clipping. When no audio is loaded, DAW Buddy displays an interactive Demo Waveform Preview.',
     position: 'top'
   },
   {
@@ -86,23 +86,17 @@ export const PROJECT_TOUR_STEPS: TourStep[] = [
     title: 'Populated Renders & Bounces',
     description:
       'All exported mixdowns, master bounces, and audio renders for this project are automatically discovered and populated here.',
-    position: 'bottom',
-    beforeStep: () => {
-      const rendersBtn = Array.from(document.querySelectorAll('.project-tabs button')).find((b) =>
-        b.textContent?.trim().toLowerCase().includes('renders')
-      ) as HTMLButtonElement;
-      if (rendersBtn) rendersBtn.click();
-    }
+    position: 'bottom'
   },
   {
-    target: '.format-pills, .filerow',
+    target: '.format-pills, .filerow, .section',
     title: 'Drag & Drop Audio Formats (WAV, MP3, FLAC)',
     description:
       'Grab any [ WAV ], [ MP3 ], or [ FLAC ] pill and drag it straight into your DAW, Discord, or WhatsApp without digging through Windows Explorer.',
     position: 'top'
   },
   {
-    target: '.filerow__actions, .filerow .pill--sm',
+    target: '.filerow__actions, .filerow .pill--sm, .section',
     title: 'On-Demand Audio & Stem Analysis',
     description:
       'Click "Analyse" on any render or audio file to detect its exact tempo (BPM), musical key, Camelot code, and Indian Raagas in the background.',
@@ -113,19 +107,13 @@ export const PROJECT_TOUR_STEPS: TourStep[] = [
     title: 'Multitrack Stems Management',
     description:
       'Switch to the Stems tab to preview and manage all isolated track stems. You can play stems, drag them to your DAW, or use the Smart Renamer tool to organize cryptic stem names.',
-    position: 'bottom',
-    beforeStep: () => {
-      const stemsBtn = Array.from(document.querySelectorAll('.project-tabs button')).find((b) =>
-        b.textContent?.trim().toLowerCase().includes('stems')
-      ) as HTMLButtonElement;
-      if (stemsBtn) stemsBtn.click();
-    }
+    position: 'bottom'
   },
   {
     target: '.player',
     title: 'Real-Time Audio Player & Space Reverb',
     description:
-      'Audition mixdowns without launching heavy DAW software. Scrub the interactive waveform, adjust listening volume, or engage the space reverb simulator.',
+      'Audition mixdowns without launching heavy DAW software. Scrub the interactive waveform, adjust listening volume, or engage the space reverb simulator. Displays an interactive Demo Waveform Preview until an audio render is played.',
     position: 'top'
   }
 ];
@@ -294,6 +282,7 @@ export function hasSeenToolTour(toolKey: string): boolean {
 }
 
 export function startToolWalkthrough(toolKey: string, force = false) {
+  if (!force && isTourActive()) return;
   const steps = TOOL_TOUR_STEPS[toolKey] || TOOL_TOUR_STEPS.tools;
   if (!steps || steps.length === 0) return;
 
@@ -310,6 +299,7 @@ export function startToolWalkthrough(toolKey: string, force = false) {
 }
 
 export function startFeatureWalkthrough(force = false) {
+  if (!force && isTourActive()) return;
   if (isProjectPageActive()) {
     startProjectWalkthrough(force);
     return;
@@ -327,6 +317,7 @@ export function startFeatureWalkthrough(force = false) {
 }
 
 export function startProjectWalkthrough(force = false) {
+  if (!force && isTourActive()) return;
   if (!isProjectPageActive()) {
     startFeatureWalkthrough(force);
     return;
@@ -422,15 +413,38 @@ async function renderTourStep(index: number) {
     await new Promise((r) => setTimeout(r, 60));
   }
 
-  const targetEl = document.querySelector(step.target) as HTMLElement;
-  if (!targetEl) {
-    // If target not in current view, advance or finish
-    if (index < steps.length - 1) {
-      renderTourStep(index + 1);
-    } else {
-      completeTour();
+  // Resilient target resolution: check step.target selectors, fallback to .section, #view, main, body
+  let targetEl: HTMLElement | null = null;
+  let isCentered = false;
+
+  if (step.target) {
+    const selectors = step.target.split(',').map((s) => s.trim()).filter(Boolean);
+    for (const sel of selectors) {
+      const found = document.querySelector(sel) as HTMLElement | null;
+      if (found) {
+        const r = found.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) {
+          targetEl = found;
+          break;
+        }
+      }
     }
-    return;
+  }
+
+  // Fallback to active section, header, or view container
+  if (!targetEl) {
+    const fallback = (document.querySelector('.section, .page__head, #view, main') as HTMLElement | null);
+    if (fallback) {
+      const r = fallback.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) {
+        targetEl = fallback;
+      }
+    }
+  }
+
+  if (!targetEl || targetEl === document.body) {
+    targetEl = document.body;
+    isCentered = true;
   }
 
   targetEl.classList.add('tour-highlight-active');
@@ -441,61 +455,72 @@ async function renderTourStep(index: number) {
   overlayEl = document.createElement('div');
   overlayEl.className = 'tour-overlay';
 
-  // Backdrop SVG with spotlight cutout
+  // Backdrop SVG with spotlight cutout (or full backdrop if centered)
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('class', 'tour-spotlight-svg');
   svg.setAttribute('width', '100%');
   svg.setAttribute('height', '100%');
 
-  const mask = document.createElementNS('http://www.w3.org/2000/svg', 'mask');
-  mask.setAttribute('id', 'tour-spotlight-mask');
-
-  const whiteRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-  whiteRect.setAttribute('x', '0');
-  whiteRect.setAttribute('y', '0');
-  whiteRect.setAttribute('width', '100%');
-  whiteRect.setAttribute('height', '100%');
-  whiteRect.setAttribute('fill', 'white');
-  mask.appendChild(whiteRect);
-
   const rect = targetEl.getBoundingClientRect();
   const pad = 6;
   const cutX = Math.max(0, rect.left - pad);
   const cutY = Math.max(0, rect.top - pad);
-  const cutW = rect.width + pad * 2;
-  const cutH = rect.height + pad * 2;
+  const cutW = Math.min(window.innerWidth - cutX, rect.width + pad * 2);
+  const cutH = Math.min(window.innerHeight - cutY, rect.height + pad * 2);
 
-  const cutRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-  cutRect.setAttribute('x', String(cutX));
-  cutRect.setAttribute('y', String(cutY));
-  cutRect.setAttribute('width', String(cutW));
-  cutRect.setAttribute('height', String(cutH));
-  cutRect.setAttribute('rx', '8');
-  cutRect.setAttribute('ry', '8');
-  cutRect.setAttribute('fill', 'black');
-  mask.appendChild(cutRect);
+  if (!isCentered && cutW > 20 && cutH > 20 && targetEl !== document.body) {
+    const mask = document.createElementNS('http://www.w3.org/2000/svg', 'mask');
+    mask.setAttribute('id', 'tour-spotlight-mask');
 
-  svg.appendChild(mask);
+    const whiteRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    whiteRect.setAttribute('x', '0');
+    whiteRect.setAttribute('y', '0');
+    whiteRect.setAttribute('width', '100%');
+    whiteRect.setAttribute('height', '100%');
+    whiteRect.setAttribute('fill', 'white');
+    mask.appendChild(whiteRect);
 
-  const darkRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-  darkRect.setAttribute('x', '0');
-  darkRect.setAttribute('y', '0');
-  darkRect.setAttribute('width', '100%');
-  darkRect.setAttribute('height', '100%');
-  darkRect.setAttribute('fill', 'rgba(0, 0, 0, 0.72)');
-  darkRect.setAttribute('mask', 'url(#tour-spotlight-mask)');
-  svg.appendChild(darkRect);
+    const cutRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    cutRect.setAttribute('x', String(cutX));
+    cutRect.setAttribute('y', String(cutY));
+    cutRect.setAttribute('width', String(cutW));
+    cutRect.setAttribute('height', String(cutH));
+    cutRect.setAttribute('rx', '8');
+    cutRect.setAttribute('ry', '8');
+    cutRect.setAttribute('fill', 'black');
+    mask.appendChild(cutRect);
+
+    svg.appendChild(mask);
+
+    const darkRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    darkRect.setAttribute('x', '0');
+    darkRect.setAttribute('y', '0');
+    darkRect.setAttribute('width', '100%');
+    darkRect.setAttribute('height', '100%');
+    darkRect.setAttribute('fill', 'rgba(0, 0, 0, 0.72)');
+    darkRect.setAttribute('mask', 'url(#tour-spotlight-mask)');
+    svg.appendChild(darkRect);
+
+    // Spotlight animated border ring
+    const ring = document.createElement('div');
+    ring.className = 'tour-spotlight-ring';
+    ring.style.left = `${cutX}px`;
+    ring.style.top = `${cutY}px`;
+    ring.style.width = `${cutW}px`;
+    ring.style.height = `${cutH}px`;
+    overlayEl.appendChild(ring);
+  } else {
+    // Pure clean backdrop for modal/centered overview
+    const darkRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    darkRect.setAttribute('x', '0');
+    darkRect.setAttribute('y', '0');
+    darkRect.setAttribute('width', '100%');
+    darkRect.setAttribute('height', '100%');
+    darkRect.setAttribute('fill', 'rgba(0, 0, 0, 0.75)');
+    svg.appendChild(darkRect);
+  }
 
   overlayEl.appendChild(svg);
-
-  // Spotlight animated border ring
-  const ring = document.createElement('div');
-  ring.className = 'tour-spotlight-ring';
-  ring.style.left = `${cutX}px`;
-  ring.style.top = `${cutY}px`;
-  ring.style.width = `${cutW}px`;
-  ring.style.height = `${cutH}px`;
-  overlayEl.appendChild(ring);
 
   // Tooltip card with directional arrow
   const card = document.createElement('div');
@@ -571,8 +596,8 @@ async function renderTourStep(index: number) {
   overlayEl.appendChild(card);
   document.body.appendChild(overlayEl);
 
-  // Position Card & Arrow relative to target
-  positionTourCard(card, arrow, rect, step.position || 'bottom');
+  // Position Card & Arrow relative to target or center
+  positionTourCard(card, arrow, rect, step.position || 'bottom', isCentered);
 
   window.addEventListener('keydown', handleKeydown);
   window.addEventListener('resize', handleResize);
@@ -582,18 +607,29 @@ function positionTourCard(
   card: HTMLElement,
   arrow: HTMLElement,
   targetRect: DOMRect,
-  preferredPos: 'top' | 'bottom' | 'left' | 'right'
+  preferredPos: 'top' | 'bottom' | 'left' | 'right',
+  isCentered = false
 ) {
   const cardW = 340;
   const pad = 14;
   const viewportW = window.innerWidth;
   const viewportH = window.innerHeight;
+  const cardH = card.offsetHeight || 200;
 
+  if (isCentered) {
+    const top = Math.max(20, (viewportH - cardH) / 2);
+    const left = Math.max(20, (viewportW - cardW) / 2);
+    card.style.top = `${top}px`;
+    card.style.left = `${left}px`;
+    card.setAttribute('data-position', 'center');
+    arrow.style.display = 'none';
+    return;
+  }
+
+  arrow.style.display = '';
   let pos = preferredPos;
   let top = 0;
   let left = 0;
-
-  const cardH = card.offsetHeight || 200;
 
   if (pos === 'bottom') {
     top = targetRect.bottom + pad;

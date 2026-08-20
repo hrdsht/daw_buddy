@@ -12,11 +12,19 @@ async function testWatcherOperations() {
   try {
     let bounceCalled = false;
     let bouncedData = null;
+    let projectChanged = false;
 
-    startWatching([tmpDir], (data) => {
-      bounceCalled = true;
-      bouncedData = data;
-    }, { pollWatching: false });
+    startWatching(
+      [tmpDir],
+      (data) => {
+        bounceCalled = true;
+        bouncedData = data;
+      },
+      (changed) => {
+        projectChanged = true;
+      },
+      { pollWatching: false }
+    );
 
     assert.ok(typeof startWatching === 'function', 'startWatching must be defined');
     assert.ok(typeof stopWatching === 'function', 'stopWatching must be defined');

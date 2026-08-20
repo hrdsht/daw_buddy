@@ -101,6 +101,10 @@ function flatten(name) {
  * Returns display rows: a lone entry stays a plain row, a group becomes one
  * row carrying its members.
  */
+function effectiveModified(entry) {
+  return Math.max(entry.modified || 0, entry.renderModified || 0, entry.lastActivity || 0);
+}
+
 function groupVersions(entries) {
   const byFolder = new Map();
 
@@ -151,14 +155,14 @@ function groupVersions(entries) {
       if (members.length < 2) continue;
 
       members.forEach((entry) => claimed.add(entry));
-      members.sort((a, b) => b.modified - a.modified);
+      members.sort((a, b) => effectiveModified(b) - effectiveModified(a));
       rows.push(asGroup(info.label, members));
     }
 
     group.filter((entry) => !claimed.has(entry)).forEach((entry) => rows.push(asRow(entry)));
   }
 
-  rows.sort((a, b) => b.modified - a.modified);
+  rows.sort((a, b) => effectiveModified(b) - effectiveModified(a));
   return rows;
 }
 
@@ -184,6 +188,9 @@ function asGroup(label, members) {
     isGroup: true,
     versions: members,
     versionCount: members.length,
+    modified: Math.max(...members.map((entry) => entry.modified || 0)),
+    renderModified: Math.max(...members.map((entry) => entry.renderModified || 0)),
+    lastActivity: Math.max(...members.map(effectiveModified)),
     // Any version having audio is enough to light the Play button.
     audioCount: members.reduce((sum, entry) => sum + (entry.audioCount || 0), 0),
     backupCount: Math.max(...members.map((entry) => entry.backupCount || 0)),

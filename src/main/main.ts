@@ -455,6 +455,22 @@ async function ensureOutputFolder() {
   return target;
 }
 
+let rescanDebounceTimer: NodeJS.Timeout | null = null;
+
+function triggerBackgroundRescan() {
+  if (rescanDebounceTimer) clearTimeout(rescanDebounceTimer);
+  rescanDebounceTimer = setTimeout(async () => {
+    try {
+      const result = await scanProjects();
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('projects:updated', result);
+      }
+    } catch (err: any) {
+      console.error('[watcher] Background rescan failed:', err?.message || err);
+    }
+  }, 600);
+}
+
 function restartWatcher() {
   const current = settings.get();
   startWatching(
@@ -475,6 +491,13 @@ function restartWatcher() {
           }
         });
       }
+      triggerBackgroundRescan();
+    },
+    (changedSessionFiles) => {
+      console.log(
+        `[watcher] Project saved/modified: ${changedSessionFiles.map((p) => path.basename(p)).join(', ')}`
+      );
+      triggerBackgroundRescan();
     },
     { pollWatching: current.pollWatching }
   );

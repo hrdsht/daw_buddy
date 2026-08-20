@@ -21,23 +21,40 @@ const path = require('path');
 const chokidar = require('chokidar');
 
 const { parseVersion } = require('./media');
+const daw = require('./daw');
+const { AUDIO_EXTS } = require('./renders');
 
-const WATCHED = new Set(['.wav', '.mp3', '.aiff', '.flac']);
-const SKIP_FOLDERS = /[\\/](samples|recorded|freeze|backup)[\\/]/i;
+const WATCHED_AUDIO = new Set(AUDIO_EXTS ? [...AUDIO_EXTS] : ['.wav', '.mp3', '.aiff', '.aif', '.flac', '.ogg']);
+const SKIP_FOLDERS = /[\\/](samples|recorded|freeze|backup|presets|node_modules|\.git)[\\/]/i;
 
 // How long to hold a new render before reporting it, so its other formats
 // can arrive and join the same event.
-const GROUP_MS = 6000;
+const GROUP_MS = 3000;
 
 let watcher = null;
 let pending = new Map();
+let projectDebounceTimer: NodeJS.Timeout | null = null;
+let changedProjects = new Set<string>();
 
-function startWatching(roots, onBounce, options: Record<string, any> = {}) {
+function startWatching(
+  roots: string[],
+  onBounce: (bounce: Record<string, any>) => void,
+  onProjectChange?: (changedPaths: string[]) => void,
+  options: Record<string, any> = {}
+) {
   stopWatching();
 
   if (!roots || roots.length === 0) {
     console.log('[watcher] No folders on the list — nothing to watch.');
     return;
+  }
+
+  // Support optional 3rd argument being options if onProjectChange is omitted
+  let projectCallback = onProjectChange;
+  let opts = options;
+  if (typeof onProjectChange === 'object' && onProjectChange !== null) {
+    opts = onProjectChange;
+    projectCallback = undefined;
   }
 
   watcher = chokidar.watch(roots, {
@@ -52,34 +69,46 @@ function startWatching(roots, onBounce, options: Record<string, any> = {}) {
     // Normally the OS tells us when a file appears — ReadDirectoryChangesW on
     // Windows, FSEvents on macOS. Network shares send neither, so polling asks
     // the disk over and over instead. Correct everywhere, just heavier.
-    usePolling: Boolean(options.pollWatching),
+    usePolling: Boolean(opts.pollWatching),
     interval: 1500,
     binaryInterval: 2000,
 
     awaitWriteFinish: {
-      stabilityThreshold: 3000,
+      stabilityThreshold: 2000,
       pollInterval: 200
     }
   });
 
-  watcher.on('add', (filePath) => {
-    const ext = path.extname(filePath).toLowerCase();
-    if (!WATCHED.has(ext)) return;
+  const handleFile = (filePath: string) => {
     if (SKIP_FOLDERS.test(filePath)) return;
+    const ext = path.extname(filePath).toLowerCase();
 
-    hold(filePath, ext, onBounce);
-  });
+    // 1. Audio Render / Bounce detection
+    if (WATCHED_AUDIO.has(ext)) {
+      hold(filePath, ext, onBounce);
+      return;
+    }
+
+    // 2. DAW Project File / Package save detection
+    if (daw.isSessionFile(filePath) || daw.isSessionPackage(filePath)) {
+      if (daw.isBackupFile(filePath)) return;
+      holdProject(filePath, projectCallback);
+    }
+  };
+
+  watcher.on('add', handleFile);
+  watcher.on('change', handleFile);
 
   watcher.on('error', (err) => console.error('[watcher] error:', err.message));
 
   console.log(
-    `[watcher] Watching ${roots.length} folder(s) for new bounces` +
-      `${options.pollWatching ? ' (polling mode)' : ''}:`
+    `[watcher] Watching ${roots.length} folder(s) for new bounces and project saves` +
+      `${opts.pollWatching ? ' (polling mode)' : ''}:`
   );
   roots.forEach((root) => console.log(`           ${root}`));
 }
 
-function hold(filePath, ext, onBounce) {
+function hold(filePath: string, ext: string, onBounce: (bounce: Record<string, any>) => void) {
   const folder = path.dirname(filePath);
   const stem = path.basename(filePath, ext);
   const { base, version } = parseVersion(stem);
@@ -109,15 +138,37 @@ function hold(filePath, ext, onBounce) {
   record.timer = setTimeout(() => {
     pending.delete(key);
     delete record.timer;
-    onBounce(record);
+    if (typeof onBounce === 'function') {
+      onBounce(record);
+    }
   }, GROUP_MS);
 
   pending.set(key, record);
 }
 
+function holdProject(filePath: string, onProjectChange?: (changedPaths: string[]) => void) {
+  changedProjects.add(filePath);
+  if (projectDebounceTimer) clearTimeout(projectDebounceTimer);
+
+  projectDebounceTimer = setTimeout(() => {
+    const list = [...changedProjects];
+    changedProjects.clear();
+    projectDebounceTimer = null;
+    if (typeof onProjectChange === 'function') {
+      onProjectChange(list);
+    }
+  }, 1000);
+}
+
 function stopWatching() {
   pending.forEach((record) => clearTimeout(record.timer));
   pending = new Map();
+
+  if (projectDebounceTimer) {
+    clearTimeout(projectDebounceTimer);
+    projectDebounceTimer = null;
+  }
+  changedProjects.clear();
 
   if (watcher) {
     watcher.close();

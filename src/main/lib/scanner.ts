@@ -106,7 +106,9 @@ function normaliseOptions(options) {
 }
 
 function byNewest(a, b) {
-  return b.modified - a.modified;
+  const aTime = Math.max(a.modified || 0, a.renderModified || 0, a.lastActivity || 0);
+  const bTime = Math.max(b.modified || 0, b.renderModified || 0, b.lastActivity || 0);
+  return bTime - aTime;
 }
 
 /* ================================================================== */
@@ -225,7 +227,12 @@ async function walk(dir, root, depth, options, out) {
     // Loose audio sitting in this folder counts too.
     const fileExt = path.extname(entry.name).toLowerCase();
     if (AUDIO_EXTS.has(fileExt)) {
-      addAudio(options, dir, path.basename(entry.name, fileExt));
+      try {
+        const stat = await fs.stat(full);
+        addAudio(options, dir, path.basename(entry.name, fileExt), stat.mtimeMs);
+      } catch {
+        addAudio(options, dir, path.basename(entry.name, fileExt), 0);
+      }
       continue;
     }
 
@@ -247,44 +254,58 @@ async function indexAudio(dir, options) {
 
   for (const entry of contents) {
     if (entry.name.startsWith('.')) continue;
+    const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      await indexAudio(path.join(dir, entry.name), options);
+      await indexAudio(full, options);
       continue;
     }
     const ext = path.extname(entry.name).toLowerCase();
     if (AUDIO_EXTS.has(ext)) {
-      addAudio(options, dir, path.basename(entry.name, ext));
+      try {
+        const stat = await fs.stat(full);
+        addAudio(options, dir, path.basename(entry.name, ext), stat.mtimeMs);
+      } catch {
+        addAudio(options, dir, path.basename(entry.name, ext), 0);
+      }
     }
   }
 }
 
-function addAudio(options, dir, stem) {
+function addAudio(options, dir, stem, mtime = 0) {
   const key = normalisePath(dir);
   if (!options.audioIndex.has(key)) options.audioIndex.set(key, []);
-  options.audioIndex.get(key).push(flatten(stem));
+  options.audioIndex.get(key).push({
+    stem: flatten(stem),
+    mtime: Number(mtime) || 0
+  });
 }
 
 /**
- * How many indexed audio files look like they belong to this session.
- *
- * Deliberately a plain name match against everything the walk already saw,
- * with no attempt to scope by folder. This only decides whether the Play
- * button is live — the project page does the real, location-aware lookup in
- * renders.js. A cheap yes/no that is right matters more here than being
- * precise about which folder it came from.
+ * How many indexed audio files look like they belong to this session and the
+ * newest render modification timestamp among them.
  */
-function countAudioFor(sessionName, projectFolder, root, options) {
+function audioStatsFor(sessionName, projectFolder, root, options) {
   const wanted = flatten(sessionName);
-  if (wanted.length < 3) return 0;
+  if (wanted.length < 3) return { count: 0, latestMtime: 0 };
 
   let count = 0;
-  for (const [audioFolder, stems] of options.audioIndex) {
+  let latestMtime = 0;
+  for (const [audioFolder, items] of options.audioIndex) {
     if (!audioFolderBelongsToProject(audioFolder, projectFolder, root)) continue;
-    count += stems.filter(
-      (stem) => stem === wanted || stem.startsWith(wanted)
-    ).length;
+    for (const item of items) {
+      const itemStem = typeof item === 'object' && item ? item.stem : item;
+      const itemMtime = typeof item === 'object' && item ? item.mtime : 0;
+      if (itemStem === wanted || (typeof itemStem === 'string' && itemStem.startsWith(wanted))) {
+        count += 1;
+        if (itemMtime > latestMtime) latestMtime = itemMtime;
+      }
+    }
   }
-  return count;
+  return { count, latestMtime };
+}
+
+function countAudioFor(sessionName, projectFolder, root, options) {
+  return audioStatsFor(sessionName, projectFolder, root, options).count;
 }
 
 /**
@@ -360,6 +381,8 @@ async function buildEntry({ sessionPath, folder, root, isPackage }, options, fol
     packaged: false,
     packagedAt: null,
     modified: 0,
+    renderModified: 0,
+    lastActivity: 0,
     size: 0,
     audioCount: 0,
     videoCount: 0,
@@ -406,7 +429,10 @@ async function buildEntry({ sessionPath, folder, root, isPackage }, options, fol
 
   // An .flp with a .zip of a similar name means it was exported as a zipped
   // loop package. We never look inside the zip; only the pairing matters.
-  entry.audioCount = countAudioFor(name, folder, root, options);
+  const audioStats = audioStatsFor(name, folder, root, options);
+  entry.audioCount = audioStats.count;
+  entry.renderModified = audioStats.latestMtime || 0;
+  entry.lastActivity = Math.max(entry.modified || 0, entry.renderModified || 0);
   entry.videoCount = info.videos;
 
   const zipMatch = matchingZip(name, info.zips);
