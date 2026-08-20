@@ -1462,9 +1462,10 @@ function renderProjectPage() {
 
   /* header */
   const head = el('div', 'page__head');
+  const headMain = el('div', 'page__headmain');
   const projectBpm = bpmFor(entry);
   const art = el('div', 'page__art', projectBpm !== null ? formatBpm(projectBpm) : '♪');
-  head.append(art);
+  headMain.append(art);
 
   const titles = el('div', 'page__titles');
   titles.append(el('div', 'page__kicker', entry.daw || 'Project'));
@@ -1483,7 +1484,8 @@ function renderProjectPage() {
   facts.append(fact('Modified', timeAgo(entry.modified)));
   if (entry.packaged) facts.append(fact('Exported', timeAgo(entry.packagedAt)));
   titles.append(facts);
-  head.append(titles);
+  headMain.append(titles);
+  head.append(headMain);
 
   const harmony = renderProjectHarmony(entry, rec, projectBpm);
   if (harmony) head.append(harmony);
@@ -1763,9 +1765,9 @@ function renderVideosTab(entry) {
 }
 
 function fact(label, value) {
-  const node = el('span');
-  node.append(document.createTextNode(`${label} `));
-  node.append(el('b', null, value));
+  const node = el('div', 'statchip');
+  node.append(el('span', 'statchip__label', label));
+  node.append(el('span', 'statchip__value', value));
   return node;
 }
 

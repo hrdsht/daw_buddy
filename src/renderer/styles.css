@@ -926,7 +926,19 @@ body.is-mac .topbar {
   gap: 20px;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   padding: 12px 4px 18px;
+}
+
+/* Art tile + title/facts cluster. Keeps them together and lets the harmony
+   panel wrap onto its own line when the window is narrow, instead of crushing
+   the title column (which used to wrap the name letter-by-letter). */
+.page__headmain {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  flex: 1 1 360px;
+  min-width: 0;
 }
 
 .page__art {
@@ -1681,14 +1693,35 @@ body.is-mac .topbar {
 .page__facts {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 14px;
-  font-size: 13px;
-  color: var(--muted);
+  gap: 8px;
+  margin-top: 12px;
 }
 
-.page__facts b {
-  color: var(--text);
+/* Compact reference-style stat chips for the header facts (BPM, Key, Saves…). */
+.statchip {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 64px;
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--raised);
+}
+
+.statchip__label {
+  font-size: 10px;
   font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.statchip__value {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
 }
 
 .page__actions {
