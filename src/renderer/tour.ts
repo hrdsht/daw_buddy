@@ -58,7 +58,7 @@ export const TOUR_STEPS: TourStep[] = [
   }
 ];
 
-const TOUR_VERSION = '0.1.0';
+const TOUR_VERSION = '0.3.0-beta.1';
 let activeStepIndex = 0;
 let overlayEl: HTMLElement | null = null;
 
