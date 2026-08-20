@@ -252,7 +252,11 @@ function render() {
   if (view === 'project') return renderProjectPage();
 
   // If returning to non-project views, reset dynamic project theme overrides back to user's setting
-  if (currentThemeStyle() === 'ableton') {
+  if (currentThemeStyle() === 'ableton' || document.body.style.getPropertyValue('--amber')) {
+    document.body.style.removeProperty('--amber');
+    document.body.style.removeProperty('--amber-ink');
+    document.body.style.removeProperty('--sage');
+    document.body.style.removeProperty('--accent-glow');
     document.documentElement.style.removeProperty('--amber');
     document.documentElement.style.removeProperty('--amber-ink');
     document.documentElement.style.removeProperty('--sage');
@@ -1783,8 +1787,12 @@ function renderProjectPage() {
   const autoColor = getAbletonProjectColor(entry.sessionPath || entry.path || entry.name);
   const projColor = customColor ? { hex: customColor, ink: '#ffffff' } : autoColor;
 
-  // Dynamic project color mapping (waveform, header, and active accents match project clip color)
+  // Dynamic project color mapping (waveform, header, buttons, and active accents match project clip color)
   if (customColor || currentThemeStyle() === 'ableton') {
+    document.body.style.setProperty('--amber', projColor.hex);
+    document.body.style.setProperty('--amber-ink', projColor.ink || '#ffffff');
+    document.body.style.setProperty('--sage', projColor.hex);
+    document.body.style.setProperty('--accent-glow', `0 0 18px ${projColor.hex}66`);
     document.documentElement.style.setProperty('--amber', projColor.hex);
     document.documentElement.style.setProperty('--amber-ink', projColor.ink || '#ffffff');
     document.documentElement.style.setProperty('--sage', projColor.hex);

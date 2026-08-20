@@ -165,8 +165,8 @@ export function getAbletonProjectColor(sessionPathOrName: string) {
     hash = (hash << 5) - hash + str.charCodeAt(i);
     hash |= 0;
   }
-  const idx = Math.abs(hash) % ABLETON_CLIP_PALETTE.length;
-  return ABLETON_CLIP_PALETTE[idx];
+  const idx = Math.abs(hash) % ABLETON_PALETTE_GRID.length;
+  return ABLETON_PALETTE_GRID[idx];
 }
 
 export function currentSurface(): 'dark' | 'light' | 'amoled' {
