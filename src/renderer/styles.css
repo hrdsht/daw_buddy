@@ -2239,12 +2239,13 @@ body.theme-light .page__sticky-bar {
   flex-wrap: wrap;
 }
 
-.breadcrumbs {
+.breadcrumbs,
+.breadcrumb {
   display: flex;
   align-items: center;
-  min-height: 38px;
+  min-height: 28px;
   gap: 7px;
-  padding: 8px 4px 0;
+  padding: 4px 4px 8px;
   overflow: hidden;
   color: var(--dim);
   font-family: var(--mono);
@@ -4608,12 +4609,14 @@ body.multi-select-mode .filerow__select-handle {
   gap: 12px;
 }
 
-.scale-svg-kb {
+.scale-svg-kb,
+.scale-kb-section .scale-keyboard {
   width: 100%;
-  max-width: 520px;
-  height: auto;
+  max-width: 560px;
+  height: 76px;
   border-radius: var(--r);
-  overflow: visible;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
 
 /* Time signature and Indian Tala styles */

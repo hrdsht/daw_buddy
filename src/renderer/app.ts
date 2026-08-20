@@ -6887,8 +6887,8 @@ function renderScaleMidiTool() {
   const section = el('div', 'section scale-tool-page');
   
   // Breadcrumb / Header
-  const breadcrumb = el('div', 'breadcrumb');
-  const back = el('button', 'breadcrumb__item', 'Tools');
+  const breadcrumb = el('div', 'breadcrumbs');
+  const back = el('button', 'breadcrumb__link', '← All tools');
   back.addEventListener('click', () => {
     navigationHistory.visit(captureLocation());
     view = 'tools';
@@ -7005,70 +7005,51 @@ function renderScaleMidiTool() {
 
     resultBox.append(metricsGrid);
 
-    // Interactive Scale Keyboard & Audition Section
+    // Interactive 2-octave Scale Keyboard & Audition Section
     const kbSection = el('div', 'scale-kb-section');
     kbSection.append(el('h4', 'scale-notes__title', `Interactive Scale Keyboard: ${selectedTonic} ${selectedScale}`));
 
+    const kb = kbLayoutFn(2, 19, 70);
+    const highlightedKeys = kbHighlightFn(kb.keys, tonicPc, degrees);
     const svgNS = 'http://www.w3.org/2000/svg';
-    const kbW = 420;
-    const kbH = 100;
     const svgKb = document.createElementNS(svgNS, 'svg');
-    svgKb.setAttribute('class', 'scale-svg-kb');
-    svgKb.setAttribute('viewBox', `0 0 ${kbW} ${kbH}`);
+    svgKb.setAttribute('class', 'scale-keyboard');
+    svgKb.setAttribute('viewBox', `0 0 ${kb.width} ${kb.height}`);
+    svgKb.setAttribute('width', '100%');
+    svgKb.setAttribute('height', '76');
 
-    const whiteNotes = [0, 2, 4, 5, 7, 9, 11];
-    const blackNotes = [1, 3, 6, 8, 10];
-    const whiteW = kbW / 7;
-    const whiteH = kbH;
-    const blackW = whiteW * 0.65;
-    const blackH = kbH * 0.62;
-    const blackOffsets: Record<number, number> = {
-      1: whiteW * 0.7,
-      3: whiteW * 1.7,
-      6: whiteW * 3.7,
-      8: whiteW * 4.7,
-      10: whiteW * 5.7
-    };
-
-    const inScalePcs = new Set(degrees.map((d: number) => (tonicPc + d) % 12));
-
-    // White keys
-    whiteNotes.forEach((pc, idx) => {
-      const isRoot = pc === tonicPc;
-      const isInScale = inScalePcs.has(pc);
+    // Render whites first
+    highlightedKeys.filter((k) => k.type === 'white').forEach((k) => {
       const rect = document.createElementNS(svgNS, 'rect');
-      rect.setAttribute('x', String(idx * whiteW + 1));
-      rect.setAttribute('y', '0');
-      rect.setAttribute('width', String(whiteW - 2));
-      rect.setAttribute('height', String(whiteH - 2));
-      rect.setAttribute('rx', '4');
-      rect.setAttribute('class', `mini-kb-key mini-kb-key--white ${isInScale ? (isRoot ? 'mini-kb-key--root' : 'mini-kb-key--scale') : ''}`);
-      rect.addEventListener('click', () => playSynthNote(pc, 4, tuningA4));
-      svgKb.append(rect);
-
-      const label = document.createElementNS(svgNS, 'text');
-      label.setAttribute('x', String(idx * whiteW + whiteW / 2));
-      label.setAttribute('y', String(whiteH - 8));
-      label.setAttribute('text-anchor', 'middle');
-      label.setAttribute('class', 'mini-kb-label');
-      label.textContent = DSP.NOTES[pc];
-      svgKb.append(label);
+      rect.setAttribute('x', String(k.x));
+      rect.setAttribute('y', String(k.y));
+      rect.setAttribute('width', String(k.width - 1));
+      rect.setAttribute('height', String(k.height));
+      rect.setAttribute('rx', '3');
+      rect.setAttribute('class', `scale-key scale-key--white scale-key--${k.state}`);
+      const degInterval = ((k.pc - tonicPc) % 12 + 12) % 12;
+      const degName = k.degree ? (DEGREE_NAMES[degInterval] || `${k.degree}`) : 'out of scale';
+      const sargam = k.degree ? (SARGAM_NAMES[degInterval] || '') : '';
+      rect.innerHTML = `<title>${k.name} (${degName}${sargam ? ` · ${sargam}` : ''})</title>`;
+      rect.addEventListener('click', () => playSynthNote(k.pc, 4 + k.octave, tuningA4));
+      svgKb.appendChild(rect);
     });
 
-    // Black keys
-    blackNotes.forEach((pc) => {
-      const isRoot = pc === tonicPc;
-      const isInScale = inScalePcs.has(pc);
-      const x = blackOffsets[pc];
+    // Render blacks on top
+    highlightedKeys.filter((k) => k.type === 'black').forEach((k) => {
       const rect = document.createElementNS(svgNS, 'rect');
-      rect.setAttribute('x', String(x));
-      rect.setAttribute('y', '0');
-      rect.setAttribute('width', String(blackW));
-      rect.setAttribute('height', String(blackH));
+      rect.setAttribute('x', String(k.x));
+      rect.setAttribute('y', String(k.y));
+      rect.setAttribute('width', String(k.width));
+      rect.setAttribute('height', String(k.height));
       rect.setAttribute('rx', '3');
-      rect.setAttribute('class', `mini-kb-key mini-kb-key--black ${isInScale ? (isRoot ? 'mini-kb-key--root' : 'mini-kb-key--scale') : ''}`);
-      rect.addEventListener('click', () => playSynthNote(pc, 4, tuningA4));
-      svgKb.append(rect);
+      rect.setAttribute('class', `scale-key scale-key--black scale-key--${k.state}`);
+      const degInterval = ((k.pc - tonicPc) % 12 + 12) % 12;
+      const degName = k.degree ? (DEGREE_NAMES[degInterval] || `${k.degree}`) : 'out of scale';
+      const sargam = k.degree ? (SARGAM_NAMES[degInterval] || '') : '';
+      rect.innerHTML = `<title>${k.name} (${degName}${sargam ? ` · ${sargam}` : ''})</title>`;
+      rect.addEventListener('click', () => playSynthNote(k.pc, 4 + k.octave, tuningA4));
+      svgKb.appendChild(rect);
     });
 
     kbSection.append(svgKb);
@@ -7367,16 +7348,16 @@ function renderRandomizerTool(entry: any = null) {
   const section = el('div', 'section randomizer-page');
 
   // Breadcrumbs
-  const breadcrumb = el('div', 'breadcrumb');
+  const breadcrumb = el('div', 'breadcrumbs');
   if (entry) {
-    const backProj = el('button', 'breadcrumb__item', entry.name);
+    const backProj = el('button', 'breadcrumb__link', `← ${entry.name}`);
     backProj.addEventListener('click', () => {
       projectTool = null;
       render();
     });
     breadcrumb.append(backProj, el('span', 'breadcrumb__sep', '/'), el('span', 'breadcrumb__current', 'Music Randomizer'));
   } else {
-    const back = el('button', 'breadcrumb__item', 'Tools');
+    const back = el('button', 'breadcrumb__link', '← All tools');
     back.addEventListener('click', () => {
       navigationHistory.visit(captureLocation());
       view = 'tools';
@@ -7524,70 +7505,51 @@ function renderRandomizerTool(entry: any = null) {
 
   resultBox.append(metricsGrid);
 
-  // Interactive Scale Keyboard & Audition Section
+  // Interactive 2-octave Scale Keyboard & Audition Section
   const kbSection = el('div', 'scale-kb-section');
   kbSection.append(el('h4', 'scale-notes__title', `Interactive Scale Keyboard: ${state.tonic} ${state.scaleName}`));
 
+  const kb = kbLayoutFn(2, 19, 70);
+  const highlightedKeys = kbHighlightFn(kb.keys, state.tonicPc, state.degrees);
   const svgNS = 'http://www.w3.org/2000/svg';
-  const kbW = 420;
-  const kbH = 100;
   const svgKb = document.createElementNS(svgNS, 'svg');
-  svgKb.setAttribute('class', 'scale-svg-kb');
-  svgKb.setAttribute('viewBox', `0 0 ${kbW} ${kbH}`);
+  svgKb.setAttribute('class', 'scale-keyboard');
+  svgKb.setAttribute('viewBox', `0 0 ${kb.width} ${kb.height}`);
+  svgKb.setAttribute('width', '100%');
+  svgKb.setAttribute('height', '76');
 
-  const whiteNotes = [0, 2, 4, 5, 7, 9, 11];
-  const blackNotes = [1, 3, 6, 8, 10];
-  const whiteW = kbW / 7;
-  const whiteH = kbH;
-  const blackW = whiteW * 0.65;
-  const blackH = kbH * 0.62;
-  const blackOffsets: Record<number, number> = {
-    1: whiteW * 0.7,
-    3: whiteW * 1.7,
-    6: whiteW * 3.7,
-    8: whiteW * 4.7,
-    10: whiteW * 5.7
-  };
-
-  const inScalePcs = new Set(state.degrees.map((d: number) => (state.tonicPc + d) % 12));
-
-  // White keys
-  whiteNotes.forEach((pc, idx) => {
-    const isRoot = pc === state.tonicPc;
-    const isInScale = inScalePcs.has(pc);
+  // Render whites first
+  highlightedKeys.filter((k) => k.type === 'white').forEach((k) => {
     const rect = document.createElementNS(svgNS, 'rect');
-    rect.setAttribute('x', String(idx * whiteW + 1));
-    rect.setAttribute('y', '0');
-    rect.setAttribute('width', String(whiteW - 2));
-    rect.setAttribute('height', String(whiteH - 2));
-    rect.setAttribute('rx', '4');
-    rect.setAttribute('class', `mini-kb-key mini-kb-key--white ${isInScale ? (isRoot ? 'mini-kb-key--root' : 'mini-kb-key--scale') : ''}`);
-    rect.addEventListener('click', () => playSynthNote(pc, 4, state.tuningA4));
-    svgKb.append(rect);
-
-    const label = document.createElementNS(svgNS, 'text');
-    label.setAttribute('x', String(idx * whiteW + whiteW / 2));
-    label.setAttribute('y', String(whiteH - 8));
-    label.setAttribute('text-anchor', 'middle');
-    label.setAttribute('class', 'mini-kb-label');
-    label.textContent = DSP.NOTES[pc];
-    svgKb.append(label);
+    rect.setAttribute('x', String(k.x));
+    rect.setAttribute('y', String(k.y));
+    rect.setAttribute('width', String(k.width - 1));
+    rect.setAttribute('height', String(k.height));
+    rect.setAttribute('rx', '3');
+    rect.setAttribute('class', `scale-key scale-key--white scale-key--${k.state}`);
+    const degInterval = ((k.pc - state.tonicPc) % 12 + 12) % 12;
+    const degName = k.degree ? (DEGREE_NAMES[degInterval] || `${k.degree}`) : 'out of scale';
+    const sargam = k.degree ? (SARGAM_NAMES[degInterval] || '') : '';
+    rect.innerHTML = `<title>${k.name} (${degName}${sargam ? ` · ${sargam}` : ''})</title>`;
+    rect.addEventListener('click', () => playSynthNote(k.pc, 4 + k.octave, state.tuningA4));
+    svgKb.appendChild(rect);
   });
 
-  // Black keys
-  blackNotes.forEach((pc) => {
-    const isRoot = pc === state.tonicPc;
-    const isInScale = inScalePcs.has(pc);
-    const x = blackOffsets[pc];
+  // Render blacks on top
+  highlightedKeys.filter((k) => k.type === 'black').forEach((k) => {
     const rect = document.createElementNS(svgNS, 'rect');
-    rect.setAttribute('x', String(x));
-    rect.setAttribute('y', '0');
-    rect.setAttribute('width', String(blackW));
-    rect.setAttribute('height', String(blackH));
+    rect.setAttribute('x', String(k.x));
+    rect.setAttribute('y', String(k.y));
+    rect.setAttribute('width', String(k.width));
+    rect.setAttribute('height', String(k.height));
     rect.setAttribute('rx', '3');
-    rect.setAttribute('class', `mini-kb-key mini-kb-key--black ${isInScale ? (isRoot ? 'mini-kb-key--root' : 'mini-kb-key--scale') : ''}`);
-    rect.addEventListener('click', () => playSynthNote(pc, 4, state.tuningA4));
-    svgKb.append(rect);
+    rect.setAttribute('class', `scale-key scale-key--black scale-key--${k.state}`);
+    const degInterval = ((k.pc - state.tonicPc) % 12 + 12) % 12;
+    const degName = k.degree ? (DEGREE_NAMES[degInterval] || `${k.degree}`) : 'out of scale';
+    const sargam = k.degree ? (SARGAM_NAMES[degInterval] || '') : '';
+    rect.innerHTML = `<title>${k.name} (${degName}${sargam ? ` · ${sargam}` : ''})</title>`;
+    rect.addEventListener('click', () => playSynthNote(k.pc, 4 + k.octave, state.tuningA4));
+    svgKb.appendChild(rect);
   });
 
   kbSection.append(svgKb);
