@@ -46,6 +46,7 @@ import {
   ACCENTS,
   SURFACES,
   ABLETON_CLIP_PALETTE,
+  ABLETON_PALETTE_GRID,
   getAbletonProjectColor
 } from './dom';
 
@@ -719,11 +720,15 @@ function buildRow(entry) {
   const row = el('article', 'row');
   if (selected === entry.path) row.classList.add('is-selected');
 
-  if (currentThemeStyle() === 'ableton') {
-    const abletonColor = getAbletonProjectColor(entry.sessionPath || entry.path || entry.name);
+  const customColor = rec.customColor;
+  const projectColor = customColor
+    ? { hex: customColor, ink: '#ffffff' }
+    : getAbletonProjectColor(entry.sessionPath || entry.path || entry.name);
+
+  if (currentThemeStyle() === 'ableton' || customColor) {
     const tag = el('div', 'row__ableton-tag');
-    tag.style.backgroundColor = abletonColor.hex;
-    tag.style.color = abletonColor.hex;
+    tag.style.backgroundColor = projectColor.hex;
+    tag.style.color = projectColor.hex;
     row.append(tag);
   }
 
@@ -744,10 +749,9 @@ function buildRow(entry) {
 
   if (entry.daw) {
     const dawBadge = el('span', 'badge badge--daw', entry.daw);
-    if (currentThemeStyle() === 'ableton') {
-      const abletonColor = getAbletonProjectColor(entry.sessionPath || entry.path || entry.name);
-      dawBadge.style.borderColor = `${abletonColor.hex}44`;
-      dawBadge.style.color = abletonColor.hex;
+    if (currentThemeStyle() === 'ableton' || customColor) {
+      dawBadge.style.borderColor = `${projectColor.hex}44`;
+      dawBadge.style.color = projectColor.hex;
     }
     line.append(dawBadge);
   }
@@ -1637,16 +1641,98 @@ function paintSampleAudit(res, facts, box) {
   }
 }
 
+function openProjectColorPicker(entry: any, rec: any) {
+  document.querySelectorAll('.color-picker-overlay').forEach((node) => node.remove());
+
+  const overlay = el('div', 'modal-overlay color-picker-overlay');
+  const dialog = el('div', 'color-picker-modal');
+
+  const header = el('div', 'color-picker-modal__header');
+  const titleGroup = el('div', 'color-picker-modal__titles');
+  titleGroup.append(el('h3', 'color-picker-modal__title', 'Assign Project Color'));
+  titleGroup.append(
+    el(
+      'p',
+      'color-picker-modal__subtitle',
+      'Color code projects for visual priority cue (Ableton Track Matrix)'
+    )
+  );
+  header.append(titleGroup);
+
+  const closeBtn = el('button', 'round color-picker-modal__close', '✕');
+  closeBtn.title = 'Close (Esc)';
+  closeBtn.addEventListener('click', () => overlay.remove());
+  header.append(closeBtn);
+  dialog.append(header);
+
+  const body = el('div', 'color-picker-modal__body');
+  const grid = el('div', 'ableton-color-grid');
+
+  const currentCustom = rec.customColor;
+  const currentAuto = getAbletonProjectColor(entry.sessionPath || entry.path || entry.name).hex;
+  const activeHex = (currentCustom || currentAuto || '').toLowerCase();
+
+  ABLETON_PALETTE_GRID.forEach((color) => {
+    const swatch = el('button', 'ableton-color-swatch');
+    swatch.style.backgroundColor = color.hex;
+    swatch.style.color = color.hex;
+    swatch.title = color.name;
+    if (activeHex === color.hex.toLowerCase()) {
+      swatch.classList.add('is-selected');
+    }
+
+    swatch.addEventListener('click', async () => {
+      await saveRecord(entry.path, { customColor: color.hex });
+      overlay.remove();
+      render();
+    });
+
+    grid.append(swatch);
+  });
+
+  body.append(grid);
+
+  const footer = el('div', 'color-picker-modal__footer');
+  const resetBtn = el('button', 'pill pill--sm', 'Reset to Auto Color');
+  resetBtn.addEventListener('click', async () => {
+    await saveRecord(entry.path, { customColor: null });
+    overlay.remove();
+    render();
+  });
+  footer.append(resetBtn);
+
+  body.append(footer);
+  dialog.append(body);
+  overlay.append(dialog);
+
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      overlay.remove();
+      window.removeEventListener('keydown', onKey);
+    }
+  };
+  window.addEventListener('keydown', onKey);
+
+  document.body.append(overlay);
+}
+
 function renderProjectPage() {
   const entry = openProject;
   const rec = record(entry.path);
   viewEl.innerHTML = '';
 
-  // Dynamic project color mapping for Ableton theme (waveform, header, and active accents match project clip color)
-  if (currentThemeStyle() === 'ableton') {
-    const projColor = getAbletonProjectColor(entry.sessionPath || entry.path || entry.name);
+  const customColor = rec.customColor;
+  const autoColor = getAbletonProjectColor(entry.sessionPath || entry.path || entry.name);
+  const projColor = customColor ? { hex: customColor, ink: '#ffffff' } : autoColor;
+
+  // Dynamic project color mapping (waveform, header, and active accents match project clip color)
+  if (customColor || currentThemeStyle() === 'ableton') {
     document.documentElement.style.setProperty('--amber', projColor.hex);
-    document.documentElement.style.setProperty('--amber-ink', projColor.ink);
+    document.documentElement.style.setProperty('--amber-ink', projColor.ink || '#ffffff');
     document.documentElement.style.setProperty('--sage', projColor.hex);
     document.documentElement.style.setProperty('--accent-glow', `0 0 18px ${projColor.hex}66`);
     Player.draw();
@@ -1719,6 +1805,19 @@ function renderProjectPage() {
     renderCollections();
   });
   actions.append(fav);
+
+  const colorBtn = el('button', 'pill color-picker-trigger');
+  const swatchIcon = el('span', 'color-picker-trigger__dot');
+  swatchIcon.style.backgroundColor = projColor.hex;
+  swatchIcon.style.boxShadow = `0 0 8px ${projColor.hex}`;
+  colorBtn.append(swatchIcon);
+  colorBtn.append(el('span', null, rec.customColor ? 'Custom Color' : 'Color'));
+  colorBtn.title = 'Assign custom priority color for this project (Ableton Track Matrix)';
+  colorBtn.addEventListener('click', (e: MouseEvent) => {
+    e.stopPropagation();
+    openProjectColorPicker(entry, rec);
+  });
+  actions.append(colorBtn);
 
   viewEl.append(actions);
 
