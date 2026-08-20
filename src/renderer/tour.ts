@@ -273,7 +273,7 @@ export const TOOL_TOUR_STEPS: Record<string, TourStep[]> = {
   ]
 };
 
-export const TOUR_VERSION = '0.4.0-beta.1';
+export const TOUR_VERSION = '0.4.1-beta.1';
 let activeStepIndex = 0;
 let overlayEl: HTMLElement | null = null;
 let currentTourMode: 'home' | 'project' | 'tool' = 'home';
