@@ -86,10 +86,11 @@ export function toast(title: string, body: string, isAlert = false) {
   setTimeout(() => node.remove(), 7000);
 }
 
-export const THEME_STYLES = ['minimalist', 'classic'];
+export const THEME_STYLES = ['minimalist', 'ableton', 'classic'];
 export const MINIMALIST_ACCENTS = ['cyan', 'mint', 'lime', 'pink', 'mono'];
+export const ABLETON_ACCENTS = ['mint', 'magenta', 'yellow', 'sky', 'lavender', 'amber', 'coral'];
 export const CLASSIC_ACCENTS = ['green', 'blue', 'yellow', 'amber', 'red'];
-export const ACCENTS = [...MINIMALIST_ACCENTS, ...CLASSIC_ACCENTS];
+export const ACCENTS = Array.from(new Set([...MINIMALIST_ACCENTS, ...ABLETON_ACCENTS, ...CLASSIC_ACCENTS]));
 export const SURFACES = ['dark', 'light', 'amoled'];
 
 export function currentSurface(): 'dark' | 'light' | 'amoled' {
@@ -98,8 +99,11 @@ export function currentSurface(): 'dark' | 'light' | 'amoled' {
   return 'dark';
 }
 
-export function currentThemeStyle(): 'minimalist' | 'classic' {
-  return document.body.dataset.themeStyle === 'classic' ? 'classic' : 'minimalist';
+export function currentThemeStyle(): 'minimalist' | 'ableton' | 'classic' {
+  const style = document.body.dataset.themeStyle;
+  if (style === 'ableton') return 'ableton';
+  if (style === 'classic') return 'classic';
+  return 'minimalist';
 }
 
 export function applyAppearance(accent?: string, surface?: string, themeStyle?: string) {
@@ -109,10 +113,10 @@ export function applyAppearance(accent?: string, surface?: string, themeStyle?: 
   if (!THEME_STYLES.includes(themeStyle)) themeStyle = 'minimalist';
 
   if (!accent) {
-    accent = localStorage.getItem('dawBuddyAccent') || (themeStyle === 'minimalist' ? 'cyan' : 'green');
+    accent = localStorage.getItem('dawBuddyAccent') || (themeStyle === 'minimalist' ? 'cyan' : (themeStyle === 'ableton' ? 'mint' : 'green'));
   }
   if (!ACCENTS.includes(accent)) {
-    accent = themeStyle === 'minimalist' ? 'cyan' : 'green';
+    accent = themeStyle === 'minimalist' ? 'cyan' : (themeStyle === 'ableton' ? 'mint' : 'green');
   }
 
   if (!surface) {
@@ -126,6 +130,7 @@ export function applyAppearance(accent?: string, surface?: string, themeStyle?: 
   document.body.classList.toggle('theme-amoled', surface === 'amoled');
   document.body.classList.toggle('theme-classic', themeStyle === 'classic');
   document.body.classList.toggle('theme-minimalist', themeStyle === 'minimalist');
+  document.body.classList.toggle('theme-ableton', themeStyle === 'ableton');
 
   const themeToggleEl = $('themeToggle');
   const light = surface === 'light';
@@ -141,8 +146,10 @@ export function applyAppearance(accent?: string, surface?: string, themeStyle?: 
 
   // Toggle swatch sets visibility
   const minSwatches = $('minimalistSwatches');
+  const abletonSwatches = $('abletonSwatches');
   const classicSwatches = $('classicSwatches');
   if (minSwatches) minSwatches.hidden = themeStyle !== 'minimalist';
+  if (abletonSwatches) abletonSwatches.hidden = themeStyle !== 'ableton';
   if (classicSwatches) classicSwatches.hidden = themeStyle !== 'classic';
 
   // Highlight active swatches and surface buttons

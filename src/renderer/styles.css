@@ -81,6 +81,122 @@ body[data-theme-style="minimalist"].theme-amoled {
 }
 
 /* ==================================================================
+   ABLETON LIVE THEME (High-Tech DAW Precision & Clip Matrix Palette)
+   ================================================================== */
+body[data-theme-style="ableton"] {
+  --bg: #1e1e24;
+  --surface: #2b2b34;
+  --raised: #34343f;
+  --hover: #3e3e4c;
+  --active: #474757;
+  --text: #e2e2ee;
+  --muted: #9595a8;
+  --dim: #6c6c80;
+
+  --amber: #00d699;
+  --amber-ink: #001f14;
+  --sage: #29a9ff;
+  --alert: #ff3366;
+
+  --line: rgba(255, 255, 255, 0.09);
+  --line-crisp: #121217;
+
+  --r: 2px;
+  --r-lg: 3px;
+  --accent-glow: 0 0 10px rgba(0, 214, 153, 0.35);
+}
+
+/* Ableton Accents (Dark) */
+body[data-theme-style="ableton"][data-accent="mint"] { --amber: #00d699; --amber-ink: #001f14; --sage: #2ee6a8; --accent-glow: 0 0 12px rgba(0, 214, 153, 0.4); }
+body[data-theme-style="ableton"][data-accent="magenta"] { --amber: #ff2e93; --amber-ink: #ffffff; --sage: #f03888; --accent-glow: 0 0 12px rgba(255, 46, 147, 0.4); }
+body[data-theme-style="ableton"][data-accent="yellow"] { --amber: #fadb38; --amber-ink: #1f1a00; --sage: #ffdf33; --accent-glow: 0 0 12px rgba(250, 219, 56, 0.4); }
+body[data-theme-style="ableton"][data-accent="sky"] { --amber: #29a9ff; --amber-ink: #001529; --sage: #3690ea; --accent-glow: 0 0 12px rgba(41, 169, 255, 0.4); }
+body[data-theme-style="ableton"][data-accent="lavender"] { --amber: #9d7aff; --amber-ink: #110526; --sage: #b392f0; --accent-glow: 0 0 12px rgba(157, 122, 255, 0.4); }
+body[data-theme-style="ableton"][data-accent="amber"] { --amber: #e06c1b; --amber-ink: #ffffff; --sage: #d9822b; --accent-glow: 0 0 12px rgba(224, 108, 27, 0.4); }
+body[data-theme-style="ableton"][data-accent="coral"] { --amber: #f78c80; --amber-ink: #240a07; --sage: #f56f5e; --accent-glow: 0 0 12px rgba(247, 140, 128, 0.4); }
+
+/* Ableton Light */
+body[data-theme-style="ableton"].theme-light {
+  --bg: #c8c8cf;
+  --surface: #d8d8df;
+  --raised: #e6e6ec;
+  --hover: #f0f0f5;
+  --active: #dedee5;
+  --text: #18181f;
+  --muted: #525262;
+  --dim: #7a7a8a;
+  --amber: #00a876;
+  --amber-ink: #ffffff;
+  --sage: #0284c7;
+  --alert: #e11d48;
+  --line: rgba(0, 0, 0, 0.12);
+  --r: 2px;
+  --r-lg: 3px;
+  --accent-glow: none;
+}
+
+body[data-theme-style="ableton"].theme-light[data-accent="mint"] { --amber: #009968; --amber-ink: #ffffff; }
+body[data-theme-style="ableton"].theme-light[data-accent="magenta"] { --amber: #d91b75; --amber-ink: #ffffff; }
+body[data-theme-style="ableton"].theme-light[data-accent="yellow"] { --amber: #b89807; --amber-ink: #ffffff; }
+body[data-theme-style="ableton"].theme-light[data-accent="sky"] { --amber: #1677c9; --amber-ink: #ffffff; }
+body[data-theme-style="ableton"].theme-light[data-accent="lavender"] { --amber: #754fdf; --amber-ink: #ffffff; }
+body[data-theme-style="ableton"].theme-light[data-accent="amber"] { --amber: #be5307; --amber-ink: #ffffff; }
+body[data-theme-style="ableton"].theme-light[data-accent="coral"] { --amber: #d15647; --amber-ink: #ffffff; }
+
+/* Ableton AMOLED (True Pure Black Base with Neon Grid Lines) */
+body[data-theme-style="ableton"].theme-amoled {
+  --bg: #000000;
+  --surface: #0a0a0d;
+  --raised: #14141a;
+  --hover: #1f1f28;
+  --active: #2a2a36;
+  --text: #f0f0fa;
+  --muted: #a6a6bc;
+  --dim: #6c6c80;
+  --line: rgba(255, 255, 255, 0.12);
+  --r: 2px;
+  --r-lg: 3px;
+}
+
+/* Ableton Sharp Lines Structural Overrides */
+body[data-theme-style="ableton"] .sidebar,
+body[data-theme-style="ableton"] .filerow,
+body[data-theme-style="ableton"] .card,
+body[data-theme-style="ableton"] .panel,
+body[data-theme-style="ableton"] .pill,
+body[data-theme-style="ableton"] .badge,
+body[data-theme-style="ableton"] .search,
+body[data-theme-style="ableton"] .hero,
+body[data-theme-style="ableton"] .tools__grid > * {
+  border-radius: 2px !important;
+  border-width: 1px;
+}
+
+body[data-theme-style="ableton"] .player {
+  border-top: 1px solid var(--line);
+  box-shadow: none;
+}
+
+body[data-theme-style="ableton"] .sidebar {
+  border-right: 1px solid var(--line);
+}
+
+body[data-theme-style="ableton"] .hero {
+  border: 1px solid var(--line);
+}
+
+body[data-theme-style="ableton"] .filerow {
+  border: 1px solid transparent;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0 !important;
+}
+
+body[data-theme-style="ableton"] .filerow:hover {
+  border-color: var(--line);
+  background: var(--hover);
+}
+
+/* ==================================================================
    STUDIO CLASSIC THEME (Heritage Console)
    ================================================================== */
 body[data-theme-style="classic"] {
@@ -176,6 +292,14 @@ body[data-theme-style="classic"].theme-amoled {
 .swatch--lime { background: #9dde64; }
 .swatch--pink { background: #ff2d78; }
 .swatch--mono { background: #ffffff; }
+/* Ableton swatches */
+.swatch--ableton-mint { background: #00d699; }
+.swatch--ableton-magenta { background: #ff2e93; }
+.swatch--ableton-yellow { background: #fadb38; }
+.swatch--ableton-sky { background: #29a9ff; }
+.swatch--ableton-lavender { background: #9d7aff; }
+.swatch--ableton-amber { background: #e06c1b; }
+.swatch--ableton-coral { background: #f78c80; }
 /* Classic swatches */
 .swatch--green { background: #9dde64; }
 .swatch--blue { background: #6db6ff; }

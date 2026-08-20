@@ -2050,10 +2050,19 @@ function buildRenderRow(entry, render) {
 
   row.append(createSelectHandle(item));
 
-  const play = el('button', 'filerow__play', '▶');
-  play.addEventListener('click', (event) => {
+  const analyse = el('button', 'pill pill--sm', 'Analyse');
+  analyse.addEventListener('click', async (event) => {
     event.stopPropagation();
-    Player.load(render.primary);
+    await analyseRender(entry, render, analyse);
+  });
+
+  const play = el('button', 'filerow__play', '▶');
+  play.addEventListener('click', async (event) => {
+    event.stopPropagation();
+    await Player.load(render.primary, { autoplay: true });
+    if (entry) {
+      await analyseRender(entry, { primary: render.primary }, analyse, { refresh: false });
+    }
   });
   row.append(play);
 
@@ -2061,7 +2070,7 @@ function buildRenderRow(entry, render) {
   const nameRow = el('div', 'filerow__name-row');
   nameRow.append(el('span', 'filerow__name', render.label));
 
-  // Draggable format buttons (WAV, MP3, FLAC, AIFF)
+  // Draggable & click-to-analyse format buttons (WAV, MP3, FLAC, AIFF)
   const formatFiles = render.files && render.files.length ? render.files : [render.primary];
   const sortedFormats = [...formatFiles].sort((a, b) => {
     if (a.ext === '.wav') return -1;
@@ -2073,7 +2082,7 @@ function buildRenderRow(entry, render) {
   sortedFormats.forEach((fmtFile) => {
     const extClean = (fmtFile.ext || '').replace('.', '').toUpperCase();
     const pill = el('button', `format-pill format-pill--${extClean.toLowerCase()}`, extClean);
-    pill.title = `Hold & Drag ${extClean} directly to WhatsApp, DAW, or Explorer · Click to audition ${extClean} (${formatBytes(fmtFile.size)})`;
+    pill.title = `Single click: play & analyse ${extClean} (${formatBytes(fmtFile.size)}) · Hold & drag directly to WhatsApp/DAW`;
     pill.draggable = true;
 
     pill.addEventListener('dragstart', async (e: DragEvent) => {
@@ -2087,9 +2096,13 @@ function buildRenderRow(entry, render) {
       }
     });
 
-    pill.addEventListener('click', (e: MouseEvent) => {
+    pill.addEventListener('click', async (e: MouseEvent) => {
       e.stopPropagation();
-      Player.load(fmtFile);
+      // Single click: load, analyse, and play that specific format!
+      await Player.load(fmtFile, { autoplay: true });
+      if (entry) {
+        await analyseRender(entry, { primary: fmtFile }, analyse, { refresh: false });
+      }
     });
 
     pillsWrap.append(pill);
@@ -2122,15 +2135,15 @@ function buildRenderRow(entry, render) {
   dragHint.title = 'Drag file into DAW or Explorer';
   row.append(dragHint);
 
-  const analyse = el('button', 'pill pill--sm', 'Analyse');
-  analyse.addEventListener('click', async (event) => {
-    event.stopPropagation();
-    await analyseRender(entry, render, analyse);
-  });
   row.append(analyse);
 
   row.dataset.path = render.primary.path;
-  row.addEventListener('dblclick', () => Player.load(render.primary));
+  row.addEventListener('dblclick', async () => {
+    await Player.load(render.primary, { autoplay: true });
+    if (entry) {
+      await analyseRender(entry, { primary: render.primary }, analyse, { refresh: false });
+    }
+  });
   attachDraggableAndSelectable(row, item);
   return row;
 }
