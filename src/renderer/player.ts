@@ -791,6 +791,7 @@ const Player = (() => {
     playRegion,
     stopRegion,
     seek,
+    draw,
     onChange: (fn) => listeners.push(fn)
   };
 })();

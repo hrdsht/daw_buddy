@@ -41,9 +41,12 @@ import {
   currentThemeStyle,
   THEME_STYLES,
   MINIMALIST_ACCENTS,
+  ABLETON_ACCENTS,
   CLASSIC_ACCENTS,
   ACCENTS,
-  SURFACES
+  SURFACES,
+  ABLETON_CLIP_PALETTE,
+  getAbletonProjectColor
 } from './dom';
 
 // Initialize saved appearance (Default: Minimalist, Dark, Cyan)
@@ -239,6 +242,17 @@ function render() {
   setPageTitle();
 
   if (view === 'project') return renderProjectPage();
+
+  // If returning to non-project views, reset dynamic project theme overrides back to user's setting
+  if (currentThemeStyle() === 'ableton') {
+    document.documentElement.style.removeProperty('--amber');
+    document.documentElement.style.removeProperty('--amber-ink');
+    document.documentElement.style.removeProperty('--sage');
+    document.documentElement.style.removeProperty('--accent-glow');
+    applyAppearance();
+    Player.draw();
+  }
+
   if (view === 'thisweek') return renderThisWeek();
   if (view === 'tools') return renderStandaloneTools();
   if (view === 'dedupe') return renderDedupe();
@@ -705,6 +719,14 @@ function buildRow(entry) {
   const row = el('article', 'row');
   if (selected === entry.path) row.classList.add('is-selected');
 
+  if (currentThemeStyle() === 'ableton') {
+    const abletonColor = getAbletonProjectColor(entry.sessionPath || entry.path || entry.name);
+    const tag = el('div', 'row__ableton-tag');
+    tag.style.backgroundColor = abletonColor.hex;
+    tag.style.color = abletonColor.hex;
+    row.append(tag);
+  }
+
   const fileToDrag = entry.audioPath || entry.sessionPath || entry.path;
   const item: SelectedItem = {
     id: entry.path,
@@ -720,7 +742,15 @@ function buildRow(entry) {
   line.append(createSelectHandle(item));
   line.append(el('span', 'row__name', entry.name));
 
-  if (entry.daw) line.append(el('span', 'badge badge--daw', entry.daw));
+  if (entry.daw) {
+    const dawBadge = el('span', 'badge badge--daw', entry.daw);
+    if (currentThemeStyle() === 'ableton') {
+      const abletonColor = getAbletonProjectColor(entry.sessionPath || entry.path || entry.name);
+      dawBadge.style.borderColor = `${abletonColor.hex}44`;
+      dawBadge.style.color = abletonColor.hex;
+    }
+    line.append(dawBadge);
+  }
   if (rec.favourite) line.append(el('span', 'badge badge--fav', 'Fav'));
   if (entry.packaged) {
     const badge = el('span', 'badge badge--packaged', 'Packaged');
@@ -1611,6 +1641,16 @@ function renderProjectPage() {
   const entry = openProject;
   const rec = record(entry.path);
   viewEl.innerHTML = '';
+
+  // Dynamic project color mapping for Ableton theme (waveform, header, and active accents match project clip color)
+  if (currentThemeStyle() === 'ableton') {
+    const projColor = getAbletonProjectColor(entry.sessionPath || entry.path || entry.name);
+    document.documentElement.style.setProperty('--amber', projColor.hex);
+    document.documentElement.style.setProperty('--amber-ink', projColor.ink);
+    document.documentElement.style.setProperty('--sage', projColor.hex);
+    document.documentElement.style.setProperty('--accent-glow', `0 0 18px ${projColor.hex}66`);
+    Player.draw();
+  }
 
   const crumbs = el('div', 'breadcrumbs');
   const backToProjects = el('button', 'breadcrumb__link', 'Projects');

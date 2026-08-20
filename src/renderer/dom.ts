@@ -93,6 +93,36 @@ export const CLASSIC_ACCENTS = ['green', 'blue', 'yellow', 'amber', 'red'];
 export const ACCENTS = Array.from(new Set([...MINIMALIST_ACCENTS, ...ABLETON_ACCENTS, ...CLASSIC_ACCENTS]));
 export const SURFACES = ['dark', 'light', 'amoled'];
 
+export const ABLETON_CLIP_PALETTE = [
+  { name: 'Solar Yellow', hex: '#ffdf33', ink: '#1a1600' },
+  { name: 'Ochre Amber', hex: '#e06c1b', ink: '#ffffff' },
+  { name: 'Coral Peach', hex: '#f78c80', ink: '#240a07' },
+  { name: 'Hot Magenta', hex: '#ff2e93', ink: '#ffffff' },
+  { name: 'Neon Mint', hex: '#00d699', ink: '#001f14' },
+  { name: 'Electric Cyan', hex: '#00e5ff', ink: '#002026' },
+  { name: 'Electric Sky', hex: '#29a9ff', ink: '#001529' },
+  { name: 'Lavender Violet', hex: '#9d7aff', ink: '#110526' },
+  { name: 'Lime Track', hex: '#9be62a', ink: '#142103' },
+  { name: 'Warm Orange', hex: '#ff851b', ink: '#261100' },
+  { name: 'Bubblegum Pink', hex: '#ff66b2', ink: '#2b0015' },
+  { name: 'Deep Purple', hex: '#7952f5', ink: '#ffffff' },
+  { name: 'Seafoam Green', hex: '#2ee6a8', ink: '#002619' },
+  { name: 'Pastel Blue', hex: '#63b3ed', ink: '#081e2e' },
+  { name: 'Goldenrod', hex: '#f6ad55', ink: '#281300' },
+  { name: 'Teal Wave', hex: '#319795', ink: '#ffffff' }
+];
+
+export function getAbletonProjectColor(sessionPathOrName: string) {
+  let hash = 0;
+  const str = sessionPathOrName || 'project';
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0;
+  }
+  const idx = Math.abs(hash) % ABLETON_CLIP_PALETTE.length;
+  return ABLETON_CLIP_PALETTE[idx];
+}
+
 export function currentSurface(): 'dark' | 'light' | 'amoled' {
   if (document.body.classList.contains('theme-amoled')) return 'amoled';
   if (document.body.classList.contains('theme-light')) return 'light';

@@ -925,6 +925,7 @@ body.is-mac .topbar {
 }
 
 .row {
+  position: relative;
   min-height: 54px;
   height: auto;
   padding-top: 7px;
@@ -932,6 +933,16 @@ body.is-mac .topbar {
   border-radius: var(--r);
   cursor: pointer;
   border-bottom: 1px solid var(--line);
+}
+
+.row__ableton-tag {
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 4px;
+  border-radius: 2px;
+  box-shadow: 0 0 8px currentColor;
 }
 
 .row:hover {
