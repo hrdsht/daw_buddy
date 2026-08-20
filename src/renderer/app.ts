@@ -422,6 +422,10 @@ function applyProjectResult(result, { background = false } = {}) {
 
   renderCollections();
   render();
+
+  if (!Player.getCurrent()) {
+    preloadLatestRender({ autoplay: false });
+  }
 }
 
 /* ============================ navigation =========================== */
@@ -1092,11 +1096,66 @@ async function playNewest(entry) {
   if (decoded) analysePlayedAudio(entry, file, decoded);
 }
 
+let isPreloadingRender = false;
+
+async function preloadLatestRender({ autoplay = false } = {}) {
+  if (Player.getCurrent() || isPreloadingRender) return;
+  isPreloadingRender = true;
+
+  try {
+    // 1. If viewing a specific project, try its newest render first
+    if (view === 'project' && openProject && openProject.audioCount > 0) {
+      const result = await window.api.findRenders(
+        openProject.sessionPath,
+        openProject.root,
+        stemsFolderFor(openProject),
+        siblingsOf(openProject)
+      );
+      if (result && result.renders && result.renders.length > 0) {
+        const file = result.renders[0].primary;
+        if (file) {
+          selected = openProject.path;
+          activeAuditionPath = openProject.path;
+          const decoded = await Player.load(file, { autoplay });
+          if (decoded) analysePlayedAudio(openProject, file, decoded);
+          return;
+        }
+      }
+    }
+
+    // 2. Otherwise find the top project in the list (newest first) and load its newest render
+    const candidates = (entries || []).filter((e) => e.audioCount > 0);
+    for (const entry of candidates) {
+      if (Player.getCurrent()) return;
+      const result = await window.api.findRenders(
+        entry.sessionPath,
+        entry.root,
+        stemsFolderFor(entry),
+        siblingsOf(entry)
+      );
+      if (result && result.renders && result.renders.length > 0) {
+        const file = result.renders[0].primary;
+        if (file) {
+          selected = entry.path;
+          activeAuditionPath = entry.path;
+          const decoded = await Player.load(file, { autoplay });
+          if (decoded) analysePlayedAudio(entry, file, decoded);
+          return;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[preloadLatestRender] Error preloading render:', err);
+  } finally {
+    isPreloadingRender = false;
+  }
+}
+
 /** Other session files sitting in the same folder. */
 function siblingsOf(entry) {
   return entries
     .filter((other) => other.folder === entry.folder && other.path !== entry.path)
-.map((other) => other.name);
+    .map((other) => other.name);
 }
 
 function stemsFolderFor(entry) {

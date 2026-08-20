@@ -823,7 +823,6 @@ const Player = (() => {
     playBtn.innerHTML = '&#10074;&#10074;';
     demoStartTime = performance.now() - (demoProgress * DEMO_DURATION * 1000);
     buildChain();
-    startDemoDrone();
     demoTick();
   }
 
@@ -834,46 +833,7 @@ const Player = (() => {
       cancelAnimationFrame(demoRafId);
       demoRafId = null;
     }
-    stopDemoDrone();
     draw();
-  }
-
-  function startDemoDrone() {
-    if (!audioContext) audioContext = new AudioContext();
-    if (audioContext.state === 'suspended') audioContext.resume();
-    if (demoOsc) return;
-    try {
-      demoOsc = audioContext.createOscillator();
-      demoOsc.type = 'triangle';
-      demoOsc.frequency.setValueAtTime(220, audioContext.currentTime);
-      demoGainNode = audioContext.createGain();
-      demoGainNode.gain.setValueAtTime(0.001, audioContext.currentTime);
-      demoGainNode.gain.exponentialRampToValueAtTime(0.04 * (Number(volumeEl.value) || 0.8), audioContext.currentTime + 0.1);
-      demoOsc.connect(demoGainNode);
-      demoGainNode.connect(audioContext.destination);
-      demoOsc.start();
-    } catch (_) {}
-  }
-
-  function stopDemoDrone() {
-    if (demoGainNode && audioContext) {
-      try {
-        demoGainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.08);
-        setTimeout(() => {
-          if (demoOsc) {
-            try { demoOsc.stop(); demoOsc.disconnect(); } catch (_) {}
-            demoOsc = null;
-          }
-          demoGainNode = null;
-        }, 90);
-      } catch (_) {
-        if (demoOsc) {
-          try { demoOsc.stop(); demoOsc.disconnect(); } catch (_) {}
-          demoOsc = null;
-        }
-        demoGainNode = null;
-      }
-    }
   }
 
   function demoTick() {
