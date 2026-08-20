@@ -27,3 +27,10 @@ graphify-out/
 # Standalone product showcase website
 website/
 
+# Local sample test assets (commercial audio, stems, drumkits)
+assets/
+*.wav
+*.aif
+*.aiff
+*.flac
+
