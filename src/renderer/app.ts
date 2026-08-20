@@ -66,6 +66,187 @@ themeToggleEl.addEventListener('click', () => {
   applyAppearance(document.body.dataset.accent, next, currentThemeStyle());
 });
 
+// Topbar button: right click brings up Comic Speech Bubble Theme Lab
+themeToggleEl.addEventListener('contextmenu', (event: MouseEvent) => {
+  event.preventDefault();
+  toggleThemeComicBubble();
+});
+
+const ACCENT_COLOR_MAP: Record<string, string> = {
+  cyan: '#00e5ff',
+  mint: '#00d699',
+  lime: '#9be62a',
+  pink: '#ff66b2',
+  mono: '#e0e0e0',
+  magenta: '#ff2e93',
+  yellow: '#ffea00',
+  sky: '#29a9ff',
+  lavender: '#9d7aff',
+  amber: '#ff851b',
+  coral: '#f78c80',
+  green: '#2ee6a8',
+  blue: '#3b82f6',
+  red: '#ef4444'
+};
+
+let activeComicBubble: HTMLElement | null = null;
+
+function closeThemeComicBubble() {
+  if (activeComicBubble) {
+    activeComicBubble.remove();
+    activeComicBubble = null;
+  }
+}
+
+function toggleThemeComicBubble() {
+  if (activeComicBubble) {
+    closeThemeComicBubble();
+    return;
+  }
+
+  const bubble = el('div', 'comic-theme-bubble');
+  activeComicBubble = bubble;
+
+  const tail = el('div', 'comic-theme-bubble__tail');
+  bubble.append(tail);
+
+  // Header
+  const head = el('div', 'comic-theme-bubble__head');
+  const title = el('div', 'comic-theme-bubble__title');
+  title.innerHTML = '<span>💭</span> <span>Theme Lab</span>';
+  
+  const closeBtn = el('button', 'comic-theme-bubble__close', '✕');
+  closeBtn.title = 'Close';
+  closeBtn.type = 'button';
+  closeBtn.addEventListener('click', (e: MouseEvent) => {
+    e.stopPropagation();
+    closeThemeComicBubble();
+  });
+  head.append(title, closeBtn);
+  bubble.append(head);
+
+  // Surface Modes (Dark, Light, AMOLED)
+  const surfaceSection = el('div', 'comic-theme-bubble__section');
+  surfaceSection.append(el('div', 'comic-theme-bubble__label', 'Mode / Surface'));
+  const surfaceRow = el('div', 'comic-theme-bubble__row');
+
+  const surfaces = [
+    { key: 'dark', label: '🌙 Dark' },
+    { key: 'light', label: '☀️ Light' },
+    { key: 'amoled', label: '🖤 AMOLED' }
+  ];
+
+  surfaces.forEach((s) => {
+    const btn = el('button', `comic-bubble-pill${currentSurface() === s.key ? ' is-active' : ''}`, s.label);
+    btn.type = 'button';
+    btn.addEventListener('click', (e: MouseEvent) => {
+      e.stopPropagation();
+      applyAppearance(document.body.dataset.accent, s.key, currentThemeStyle());
+      updateBubbleStates();
+    });
+    surfaceRow.append(btn);
+  });
+  surfaceSection.append(surfaceRow);
+  bubble.append(surfaceSection);
+
+  // Theme Styles (Minimalist, Ableton, Classic)
+  const styleSection = el('div', 'comic-theme-bubble__section');
+  styleSection.append(el('div', 'comic-theme-bubble__label', 'Theme Style'));
+  const styleRow = el('div', 'comic-theme-bubble__row');
+
+  const styles = [
+    { key: 'minimalist', label: '🎛️ Minimal' },
+    { key: 'ableton', label: '🎹 Ableton' },
+    { key: 'classic', label: '🎚️ Classic' }
+  ];
+
+  styles.forEach((st) => {
+    const btn = el('button', `comic-bubble-pill${currentThemeStyle() === st.key ? ' is-active' : ''}`, st.label);
+    btn.type = 'button';
+    btn.addEventListener('click', (e: MouseEvent) => {
+      e.stopPropagation();
+      const defAccent = st.key === 'minimalist' ? 'cyan' : (st.key === 'ableton' ? 'mint' : 'green');
+      applyAppearance(defAccent, currentSurface(), st.key);
+      updateBubbleStates();
+    });
+    styleRow.append(btn);
+  });
+  styleSection.append(styleRow);
+  bubble.append(styleSection);
+
+  // Accent Swatches
+  const swatchSection = el('div', 'comic-theme-bubble__section');
+  swatchSection.append(el('div', 'comic-theme-bubble__label', 'Accent Colour'));
+  const swatchesContainer = el('div', 'comic-theme-bubble__swatches');
+  swatchSection.append(swatchesContainer);
+  bubble.append(swatchSection);
+
+  function renderSwatches() {
+    swatchesContainer.innerHTML = '';
+    const curStyle = currentThemeStyle();
+    const curAccent = document.body.dataset.accent || (curStyle === 'minimalist' ? 'cyan' : 'green');
+    const list = curStyle === 'minimalist' ? MINIMALIST_ACCENTS : (curStyle === 'ableton' ? ABLETON_ACCENTS : CLASSIC_ACCENTS);
+
+    list.forEach((acc) => {
+      const sw = el('button', `comic-bubble-swatch${curAccent === acc ? ' is-active' : ''}`);
+      sw.type = 'button';
+      sw.title = acc.charAt(0).toUpperCase() + acc.slice(1);
+      sw.style.backgroundColor = ACCENT_COLOR_MAP[acc] || '#00e5ff';
+      sw.addEventListener('click', (e: MouseEvent) => {
+        e.stopPropagation();
+        applyAppearance(acc, currentSurface(), curStyle);
+        updateBubbleStates();
+      });
+      swatchesContainer.append(sw);
+    });
+  }
+
+  function updateBubbleStates() {
+    const curSurf = currentSurface();
+    const curStyle = currentThemeStyle();
+
+    surfaceRow.childNodes.forEach((node: any, idx: number) => {
+      node.classList.toggle('is-active', surfaces[idx].key === curSurf);
+    });
+
+    styleRow.childNodes.forEach((node: any, idx: number) => {
+      node.classList.toggle('is-active', styles[idx].key === curStyle);
+    });
+
+    renderSwatches();
+  }
+
+  renderSwatches();
+
+  // Position relative to themeToggleEl
+  document.body.append(bubble);
+  const rect = themeToggleEl.getBoundingClientRect();
+  bubble.style.top = `${rect.bottom + 10}px`;
+  bubble.style.right = `${Math.max(16, window.innerWidth - rect.right - 8)}px`;
+
+  // Auto-close on click outside or escape
+  const handleOutsideClick = (e: MouseEvent) => {
+    if (!bubble.contains(e.target as Node) && e.target !== themeToggleEl) {
+      closeThemeComicBubble();
+      document.removeEventListener('pointerdown', handleOutsideClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    }
+  };
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      closeThemeComicBubble();
+      document.removeEventListener('pointerdown', handleOutsideClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    }
+  };
+
+  setTimeout(() => {
+    document.addEventListener('pointerdown', handleOutsideClick);
+    document.addEventListener('keydown', handleKeyDown);
+  }, 10);
+}
+
 // Settings — Theme style switch (Minimalist vs Studio Classic)
 if ($('themeStyles')) {
   $('themeStyles').addEventListener('click', (event: MouseEvent) => {

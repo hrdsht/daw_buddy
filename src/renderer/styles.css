@@ -5280,6 +5280,192 @@ body.multi-select-mode .filerow__select-handle {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
 }
 
+/* =========================================================================
+   Comic Speech Bubble Theme Selector
+   ========================================================================= */
+
+@keyframes comicBubbleIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.88) translateY(-8px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.comic-theme-bubble {
+  position: fixed;
+  z-index: 99999;
+  width: 320px;
+  background: var(--raised, #18181d);
+  color: var(--text, #f0f0f4);
+  border: 2.5px solid var(--text, #ffffff);
+  border-radius: 20px;
+  padding: 16px 18px 14px;
+  box-shadow: 5px 6px 0px rgba(0, 0, 0, 0.85), 0 20px 40px rgba(0, 0, 0, 0.5);
+  animation: comicBubbleIn 0.18s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  font-family: inherit;
+  user-select: none;
+}
+
+/* Comic Speech Tail (pointing up to the theme toggle button) */
+.comic-theme-bubble__tail {
+  position: absolute;
+  top: -12px;
+  right: 28px;
+  width: 0;
+  height: 0;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-bottom: 12px solid var(--text, #ffffff);
+}
+
+.comic-theme-bubble__tail::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: -8px;
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-bottom: 10px solid var(--raised, #18181d);
+}
+
+.comic-theme-bubble__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1.5px dashed color-mix(in srgb, var(--line) 80%, var(--text));
+}
+
+.comic-theme-bubble__title {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent);
+}
+
+.comic-theme-bubble__close {
+  background: transparent;
+  border: 1.5px solid var(--line);
+  color: var(--dim);
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.comic-theme-bubble__close:hover {
+  background: #ef4444;
+  color: #ffffff;
+  border-color: #ef4444;
+  transform: rotate(90deg);
+}
+
+.comic-theme-bubble__section {
+  margin-bottom: 12px;
+}
+
+.comic-theme-bubble__label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--dim);
+  margin-bottom: 6px;
+}
+
+.comic-theme-bubble__row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.comic-bubble-pill {
+  flex: 1;
+  min-width: 75px;
+  padding: 6px 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-align: center;
+  background: var(--surface, #1e1e24);
+  color: var(--text);
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.comic-bubble-pill:hover {
+  background: var(--bg);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.comic-bubble-pill.is-active {
+  background: color-mix(in srgb, var(--accent) 20%, var(--surface));
+  color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.comic-theme-bubble__swatches {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 4px 0;
+}
+
+.comic-bubble-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  position: relative;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+.comic-bubble-swatch:hover {
+  transform: scale(1.22);
+}
+
+.comic-bubble-swatch.is-active {
+  transform: scale(1.18);
+  border-color: var(--text, #ffffff);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 8px currentColor;
+}
+
+.comic-bubble-swatch.is-active::after {
+  content: '✓';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 900;
+  color: #000000;
+  text-shadow: 0 0 2px rgba(255, 255, 255, 0.8);
+}
+
+
 
 
 
