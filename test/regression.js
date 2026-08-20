@@ -357,6 +357,7 @@ async function renderFinderRecognisesProjectVersions() {
     const session = path.join(projectFolder, 'Nava bharat jodo 4.als');
     await fs.writeFile(session, 'project');
     await fs.writeFile(path.join(songFolder, 'Nava bharat jodo 3.wav'), testWav());
+    await fs.writeFile(path.join(songFolder, 'Nava bharat jodo 3.mp3'), 'mp3-data');
     await fs.writeFile(path.join(songFolder, 'Different song.wav'), testWav());
 
     const result = await renders.findRenders(
@@ -368,6 +369,11 @@ async function renderFinderRecognisesProjectVersions() {
 
     assert.equal(result.renders.length, 1);
     assert.equal(result.renders[0].primary.name, 'Nava bharat jodo 3.wav');
+    assert.ok(result.renders[0].formats.includes('wav'));
+    assert.ok(result.renders[0].formats.includes('mp3'));
+    assert.equal(result.renders[0].files.length, 2);
+    assert.ok(result.renders[0].files.some((f) => f.ext === '.wav'));
+    assert.ok(result.renders[0].files.some((f) => f.ext === '.mp3'));
   });
 }
 

@@ -2058,13 +2058,50 @@ function buildRenderRow(entry, render) {
   row.append(play);
 
   const middle = el('div');
-  middle.append(el('div', 'filerow__name', render.label));
+  const nameRow = el('div', 'filerow__name-row');
+  nameRow.append(el('span', 'filerow__name', render.label));
+
+  // Draggable format buttons (WAV, MP3, FLAC, AIFF)
+  const formatFiles = render.files && render.files.length ? render.files : [render.primary];
+  const sortedFormats = [...formatFiles].sort((a, b) => {
+    if (a.ext === '.wav') return -1;
+    if (b.ext === '.wav') return 1;
+    return (a.ext || '').localeCompare(b.ext || '');
+  });
+
+  const pillsWrap = el('span', 'format-pills');
+  sortedFormats.forEach((fmtFile) => {
+    const extClean = (fmtFile.ext || '').replace('.', '').toUpperCase();
+    const pill = el('button', `format-pill format-pill--${extClean.toLowerCase()}`, extClean);
+    pill.title = `Hold & Drag ${extClean} directly to WhatsApp, DAW, or Explorer · Click to audition ${extClean} (${formatBytes(fmtFile.size)})`;
+    pill.draggable = true;
+
+    pill.addEventListener('dragstart', async (e: DragEvent) => {
+      e.stopPropagation();
+      if (e.dataTransfer) {
+        e.dataTransfer.setData('text/plain', fmtFile.path);
+        e.dataTransfer.effectAllowed = 'copy';
+      }
+      if (window.api && window.api.dragFiles) {
+        await window.api.dragFiles([fmtFile.path]);
+      }
+    });
+
+    pill.addEventListener('click', (e: MouseEvent) => {
+      e.stopPropagation();
+      Player.load(fmtFile);
+    });
+
+    pillsWrap.append(pill);
+  });
+  nameRow.append(pillsWrap);
+  middle.append(nameRow);
+
   middle.append(
     el(
       'div',
       'filerow__meta',
       [
-        render.formats.join(' + ').toUpperCase(),
         render.part,
         formatBytes(render.size),
         timeAgo(render.modified)
@@ -2179,12 +2216,39 @@ function buildStemRow(entry, file) {
   row.append(play);
 
   const middle = el('div');
-  middle.append(el('div', 'filerow__name', file.name));
+  const nameRow = el('div', 'filerow__name-row');
+  nameRow.append(el('span', 'filerow__name', file.name));
+
+  const extClean = (file.ext || '').replace('.', '').toUpperCase();
+  if (extClean) {
+    const pill = el('button', `format-pill format-pill--${extClean.toLowerCase()}`, extClean);
+    pill.title = `Hold & Drag ${extClean} directly · Click to audition (${formatBytes(file.size)})`;
+    pill.draggable = true;
+    pill.addEventListener('dragstart', async (e: DragEvent) => {
+      e.stopPropagation();
+      if (e.dataTransfer) {
+        e.dataTransfer.setData('text/plain', file.path);
+        e.dataTransfer.effectAllowed = 'copy';
+      }
+      if (window.api && window.api.dragFiles) {
+        await window.api.dragFiles([file.path]);
+      }
+    });
+    pill.addEventListener('click', (e: MouseEvent) => {
+      e.stopPropagation();
+      Player.load(file);
+    });
+    const pillsWrap = el('span', 'format-pills');
+    pillsWrap.append(pill);
+    nameRow.append(pillsWrap);
+  }
+  middle.append(nameRow);
+
   middle.append(
     el(
       'div',
       'filerow__meta',
-      [file.ext.replace('.', '').toUpperCase(), file.folder, formatBytes(file.size), timeAgo(file.modified)]
+      [file.folder, formatBytes(file.size), timeAgo(file.modified)]
         .filter(Boolean)
         .join('  ·  ')
     )
@@ -4611,12 +4675,39 @@ function renderAllAudioTab(entry) {
           row.append(play);
 
           const middle = el('div');
-          middle.append(el('div', 'filerow__name', file.name));
+          const nameRow = el('div', 'filerow__name-row');
+          nameRow.append(el('span', 'filerow__name', file.name));
+
+          const extClean = (file.ext || '').replace('.', '').toUpperCase();
+          if (extClean) {
+            const pill = el('button', `format-pill format-pill--${extClean.toLowerCase()}`, extClean);
+            pill.title = `Hold & Drag ${extClean} directly · Click to audition (${formatBytes(file.size)})`;
+            pill.draggable = true;
+            pill.addEventListener('dragstart', async (e: DragEvent) => {
+              e.stopPropagation();
+              if (e.dataTransfer) {
+                e.dataTransfer.setData('text/plain', file.path);
+                e.dataTransfer.effectAllowed = 'copy';
+              }
+              if (window.api && window.api.dragFiles) {
+                await window.api.dragFiles([file.path]);
+              }
+            });
+            pill.addEventListener('click', (e: MouseEvent) => {
+              e.stopPropagation();
+              Player.load(file);
+            });
+            const pillsWrap = el('span', 'format-pills');
+            pillsWrap.append(pill);
+            nameRow.append(pillsWrap);
+          }
+          middle.append(nameRow);
+
           middle.append(
             el(
               'div',
               'filerow__meta',
-              `${file.ext.replace('.', '').toUpperCase()}  ·  ${formatBytes(file.size)}  ·  ${timeAgo(file.modified)}`
+              `${formatBytes(file.size)}  ·  ${timeAgo(file.modified)}`
             )
           );
           row.append(middle);
