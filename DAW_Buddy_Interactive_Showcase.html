@@ -683,241 +683,664 @@
     }
 
     /* ========================================================================== */
-    /* INTERACTIVE PROJECT BROWSER (PUBLIC DEMO DATA)                             */
+    /* AUTHENTIC DAW BUDDY DESKTOP APP & CATALOGUE STYLES                         */
     /* ========================================================================== */
-    .browser-wrapper {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-subtle);
+    .daw-desktop-window {
+      background: #0d120f;
+      border: 1px solid rgba(255, 255, 255, 0.12);
       border-radius: var(--radius-lg);
       overflow: hidden;
-      box-shadow: var(--shadow-lg);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+      display: flex;
+      flex-direction: column;
+      margin: 0 auto;
+      font-family: var(--font-sans);
+      transition: var(--transition);
     }
 
-    .browser-toolbar {
-      padding: 16px 20px;
-      background: var(--bg-elevated);
-      border-bottom: 1px solid var(--border-subtle);
+    /* Window Title Bar */
+    .daw-window-bar {
+      background: #090d0b;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      user-select: none;
+    }
+
+    .daw-window-traffic {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .daw-window-traffic .dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .dot--red { background: #ff5f56; }
+    .dot--yellow { background: #ffbd2e; }
+    .dot--green { background: #27c93f; }
+
+    .daw-window-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #94a3b8;
+      letter-spacing: 0.3px;
+    }
+
+    .daw-version-tag {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      padding: 2px 6px;
+      background: rgba(0, 255, 149, 0.12);
+      color: #00ff95;
+      border-radius: 4px;
+      border: 1px solid rgba(0, 255, 149, 0.25);
+    }
+
+    .daw-window-menu {
       display: flex;
       align-items: center;
       gap: 14px;
-      flex-wrap: wrap;
-    }
-
-    .search-input-wrap {
-      flex: 1;
-      min-width: 280px;
-      position: relative;
-    }
-
-    .search-input {
-      width: 100%;
-      padding: 10px 14px 10px 38px;
-      background: var(--bg-card);
-      border: 1px solid var(--border-medium);
-      border-radius: var(--radius-full);
-      font-size: 13px;
-      color: var(--text-primary);
-      transition: var(--transition);
-    }
-
-    .search-input:focus {
-      outline: none;
-      border-color: var(--accent);
-      box-shadow: 0 0 12px var(--accent-glow);
-    }
-
-    .search-icon {
-      position: absolute;
-      left: 14px;
-      top: 50%;
-      transform: translateY(-50%);
-      color: var(--text-muted);
-      font-size: 14px;
-    }
-
-    .filter-chips {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      flex-wrap: wrap;
-      padding: 12px 20px;
-      background: var(--bg-surface);
-      border-bottom: 1px solid var(--border-subtle);
-    }
-
-    .filter-chip {
-      padding: 5px 12px;
-      border-radius: var(--radius-full);
       font-size: 11.5px;
-      font-weight: 600;
-      background: var(--bg-card);
-      border: 1px solid var(--border-subtle);
-      color: var(--text-secondary);
+      color: #64748b;
+    }
+
+    .daw-window-menu span {
       cursor: pointer;
-      transition: var(--transition);
+      transition: color 0.15s ease;
+    }
+    .daw-window-menu span:hover {
+      color: #f8fafc;
     }
 
-    .filter-chip:hover {
-      background: var(--bg-card-hover);
-      color: var(--text-primary);
-    }
-
-    .filter-chip.active {
-      background: var(--accent);
-      color: #0b0f17;
-      border-color: var(--accent);
-      font-weight: 700;
-    }
-
-    .projects-grid {
+    /* Window Body Layout */
+    .daw-window-body {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-      gap: 16px;
-      padding: 20px;
-      max-height: 700px;
-      overflow-y: auto;
+      grid-template-columns: 210px 1fr;
+      min-height: 580px;
+      background: #090c0a;
     }
 
-    .project-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-md);
-      padding: 16px;
+    @media (max-width: 900px) {
+      .daw-window-body {
+        grid-template-columns: 1fr;
+      }
+      .daw-sidebar {
+        display: none;
+      }
+    }
+
+    /* Left Sidebar */
+    .daw-sidebar {
+      background: #060907;
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 14px 10px;
       display: flex;
       flex-direction: column;
-      gap: 12px;
-      transition: var(--transition);
-      position: relative;
+      gap: 16px;
+      user-select: none;
     }
 
-    .project-card:hover {
-      border-color: var(--border-accent);
-      background: var(--bg-card-hover);
-      transform: translateY(-2px);
-      box-shadow: var(--shadow-md);
-    }
-
-    .project-card.is-playing {
-      border-color: var(--accent);
-      box-shadow: 0 0 20px var(--accent-glow);
-    }
-
-    .project-card__top {
+    .daw-sidebar__brand {
       display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 10px;
+      align-items: center;
+      gap: 9px;
+      padding: 4px 8px 10px 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     }
 
-    .project-card__title-wrap {
+    .daw-brand-name {
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: 0.5px;
+      color: #f8fafc;
+    }
+
+    .daw-brand-status {
+      font-size: 10.5px;
+      color: #00ff95;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-weight: 600;
+    }
+
+    .pulse-dot {
+      width: 6px;
+      height: 6px;
+      background: #00ff95;
+      border-radius: 50%;
+      box-shadow: 0 0 8px #00ff95;
+      animation: pulse 1.8s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    .daw-sidebar-group-title {
+      font-size: 10px;
+      font-weight: 800;
+      color: #4b5850;
+      letter-spacing: 0.8px;
+      padding: 0 8px 2px 8px;
+      font-family: var(--font-mono);
+    }
+
+    .daw-nav-section {
       display: flex;
       flex-direction: column;
       gap: 2px;
     }
 
-    .project-card__title {
-      font-size: 15px;
+    .daw-nav-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 7px 10px;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      text-align: left;
+      transition: var(--transition);
+    }
+
+    .daw-nav-item:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: #f8fafc;
+    }
+
+    .daw-nav-item.active {
+      background: rgba(0, 255, 149, 0.12);
+      color: #00ff95;
       font-weight: 700;
-      color: var(--text-primary);
+    }
+
+    .daw-nav-left {
       display: flex;
       align-items: center;
       gap: 8px;
     }
 
-    .project-card__version {
-      font-size: 11px;
+    .daw-nav-count {
       font-family: var(--font-mono);
-      color: var(--text-muted);
+      font-size: 10px;
+      color: #55665c;
     }
 
-    .fav-btn {
-      font-size: 18px;
-      color: var(--text-muted);
+    .daw-nav-item.active .daw-nav-count {
+      color: #00ff95;
+    }
+
+    .daw-sidebar-footer {
+      margin-top: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .daw-footer-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      border: none;
+      color: #64748b;
+      font-size: 12px;
+      cursor: pointer;
+      text-align: left;
+      transition: var(--transition);
+    }
+    .daw-footer-btn:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: #f8fafc;
+    }
+
+    /* Main Table Area */
+    .daw-main-view {
+      display: flex;
+      flex-direction: column;
+      background: #0a0e0c;
+      overflow-x: auto;
+    }
+
+    .daw-topbar {
+      padding: 12px 18px;
+      background: #080c0a;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .daw-topbar__title {
+      font-size: 16px;
+      font-weight: 800;
+      color: #f8fafc;
+      margin-right: 4px;
+      white-space: nowrap;
+    }
+
+    .daw-search-box {
+      flex: 1;
+      min-width: 260px;
+      position: relative;
+    }
+
+    .daw-search-input {
+      width: 100%;
+      padding: 8px 12px;
+      background: #111714;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      color: #f8fafc;
+      font-family: var(--font-sans);
       transition: var(--transition);
     }
 
-    .fav-btn.active, .fav-btn:hover {
-      color: #fbbf24;
-      transform: scale(1.2);
+    .daw-search-input:focus {
+      outline: none;
+      border-color: #00ff95;
+      box-shadow: 0 0 10px rgba(0, 255, 149, 0.2);
     }
 
-    .project-card__tags {
+    .daw-topbar-actions {
       display: flex;
       align-items: center;
       gap: 6px;
       flex-wrap: wrap;
     }
 
-    .meta-tag {
-      font-family: var(--font-mono);
-      font-size: 10px;
-      font-weight: 600;
-      padding: 3px 8px;
+    .daw-btn {
+      padding: 6px 11px;
       border-radius: var(--radius-sm);
+      font-size: 11.5px;
+      font-weight: 600;
+      background: #111714;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #cbd5e1;
+      cursor: pointer;
+      transition: var(--transition);
+      white-space: nowrap;
     }
 
-    .meta-tag--bpm { background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
-    .meta-tag--key { background: rgba(244, 63, 94, 0.15); color: #fb7185; }
-    .meta-tag--daw { background: rgba(192, 132, 252, 0.15); color: #c084fc; }
-    .meta-tag--health { background: rgba(52, 211, 153, 0.15); color: #34d399; }
+    .daw-btn:hover {
+      background: #18221d;
+      color: #ffffff;
+      border-color: rgba(255, 255, 255, 0.2);
+    }
 
-    .project-card__wave {
-      height: 36px;
-      background: rgba(0, 0, 0, 0.3);
-      border-radius: var(--radius-sm);
-      position: relative;
+    .daw-btn.active {
+      background: rgba(0, 255, 149, 0.15);
+      border-color: #00ff95;
+      color: #00ff95;
+      font-weight: 700;
+    }
+
+    .daw-toggle-wrap {
       display: flex;
       align-items: center;
-      padding: 0 6px;
-      gap: 3px;
-      overflow: hidden;
+      gap: 6px;
+      padding-left: 6px;
+    }
+
+    .daw-toggle-label {
+      font-size: 11px;
+      color: #64748b;
+      font-weight: 600;
+    }
+
+    .daw-switch {
+      position: relative;
+      display: inline-block;
+      width: 28px;
+      height: 16px;
+    }
+    .daw-switch input { opacity: 0; width: 0; height: 0; }
+    .daw-slider {
+      position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #1e2822; transition: .2s; border-radius: 16px;
+    }
+    .daw-slider:before {
+      position: absolute; content: ""; height: 12px; width: 12px; left: 2px; bottom: 2px;
+      background-color: #64748b; transition: .2s; border-radius: 50%;
+    }
+    input:checked + .daw-slider { background-color: rgba(0, 255, 149, 0.3); }
+    input:checked + .daw-slider:before { transform: translateX(12px); background-color: #00ff95; }
+
+    /* Table Structure */
+    .daw-table-head {
+      display: grid;
+      grid-template-columns: 28px 2.2fr 100px 90px 90px 110px 90px;
+      padding: 8px 16px;
+      background: #070a08;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      font-size: 10px;
+      font-weight: 800;
+      color: #64748b;
+      letter-spacing: 0.8px;
+      font-family: var(--font-mono);
+      user-select: none;
+      align-items: center;
+    }
+
+    .daw-table-body {
+      display: flex;
+      flex-direction: column;
+      max-height: 480px;
+      overflow-y: auto;
+    }
+
+    .daw-table-row {
+      display: grid;
+      grid-template-columns: 28px 2.2fr 100px 90px 90px 110px 90px;
+      padding: 10px 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      align-items: center;
+      cursor: pointer;
+      transition: background 0.12s ease;
+      position: relative;
+    }
+
+    .daw-table-row:hover {
+      background: #111714;
+    }
+
+    .daw-table-row.is-selected {
+      background: #141c18;
+      box-shadow: inset 2px 0 0 #00ff95;
+    }
+
+    .daw-table-row.is-playing {
+      background: #0f221a;
+      box-shadow: inset 2px 0 0 #00ff95;
+    }
+
+    .daw-cell-check {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .daw-checkbox {
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: transparent;
       cursor: pointer;
     }
 
-    .project-card__wave .bar {
-      flex: 1;
-      background: linear-gradient(180deg, var(--accent) 0%, rgba(var(--accent-rgb), 0.3) 100%);
-      border-radius: 1px;
-      min-height: 4px;
-      transition: height 0.15s ease;
+    .daw-cell-name {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      overflow: hidden;
+      padding-right: 12px;
     }
 
-    .project-card__note {
-      font-size: 11.5px;
-      color: var(--text-secondary);
-      background: rgba(0, 0, 0, 0.2);
-      border-left: 3px solid var(--accent);
-      padding: 6px 10px;
-      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-      line-height: 1.4;
-    }
-
-    .project-card__foot {
+    .daw-name-row {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      padding-top: 8px;
-      border-top: 1px solid var(--border-subtle);
-      font-size: 11px;
-      color: var(--text-muted);
+      gap: 8px;
+      flex-wrap: wrap;
     }
 
-    .play-card-btn {
-      padding: 5px 12px;
+    .daw-project-title {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #f1f5f9;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .daw-badge-pill {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 1px 6px;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #94a3b8;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .daw-version-pill {
+      font-size: 10px;
+      font-weight: 500;
+      padding: 1px 6px;
+      border-radius: 3px;
+      background: rgba(0, 0, 0, 0.3);
+      color: #64748b;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .daw-project-path {
+      font-size: 11px;
+      color: #55665c;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .daw-cell-bpm {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12.5px;
+      font-weight: 700;
+      color: #f8fafc;
+      font-family: var(--font-mono);
+    }
+
+    .daw-timesig-pill {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 5px;
+      border-radius: 3px;
+      background: rgba(0, 255, 149, 0.15);
+      color: #00ff95;
+    }
+
+    .daw-cell-key {
+      display: flex;
+      flex-direction: column;
+      font-size: 12px;
+      font-weight: 700;
+      color: #2dd4bf;
+    }
+
+    .daw-camelot-sub {
+      font-size: 9.5px;
+      color: #55665c;
+      font-family: var(--font-mono);
+    }
+
+    .daw-cell-audio {
+      display: flex;
+      align-items: center;
+    }
+
+    .daw-play-btn {
+      padding: 4px 10px;
       border-radius: var(--radius-full);
       font-size: 11px;
       font-weight: 700;
-      background: var(--accent);
-      color: #0b0f17;
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #e2e8f0;
+      cursor: pointer;
       display: inline-flex;
       align-items: center;
-      gap: 5px;
+      gap: 4px;
       transition: var(--transition);
     }
 
-    .play-card-btn:hover {
-      background: var(--accent-hover);
-      transform: scale(1.04);
+    .daw-play-btn:hover {
+      background: #00ff95;
+      color: #04160c;
+      border-color: #00ff95;
+    }
+
+    .daw-table-row.is-playing .daw-play-btn {
+      background: #00ff95;
+      color: #04160c;
+      border-color: #00ff95;
+    }
+
+    .daw-cell-saves {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .daw-saves-meter {
+      width: 48px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .daw-saves-fill {
+      height: 100%;
+      background: #00ff95;
+      border-radius: 2px;
+    }
+
+    .daw-saves-count {
+      font-size: 11px;
+      font-family: var(--font-mono);
+      color: #64748b;
+    }
+
+    .daw-cell-mod {
+      font-size: 11.5px;
+      color: #55665c;
+      white-space: nowrap;
+    }
+
+    /* Embedded Desktop Bottom Player */
+    .daw-app-transport {
+      background: #050806;
+      border-top: 1px solid rgba(255, 255, 255, 0.09);
+      padding: 10px 18px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .daw-transport-play {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: #00ff95;
+      color: #04160c;
+      font-size: 16px;
+      font-weight: 900;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 0 14px rgba(0, 255, 149, 0.35);
+      transition: transform 0.15s ease;
+      flex-shrink: 0;
+    }
+
+    .daw-transport-play:hover {
+      transform: scale(1.08);
+    }
+
+    .daw-transport-meta {
+      min-width: 170px;
+    }
+
+    .daw-transport-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #f8fafc;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .daw-transport-sub {
+      font-size: 10.5px;
+      color: #55665c;
+    }
+
+    .daw-transport-wave-wrap {
+      flex: 1;
+      height: 42px;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      position: relative;
+      cursor: pointer;
+    }
+
+    .daw-transport-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .daw-transport-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .daw-ctrl-btn {
+      padding: 5px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      background: #111714;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #88998f;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+
+    .daw-ctrl-btn:hover {
+      background: #18221d;
+      color: #f8fafc;
+    }
+
+    .daw-ctrl-btn.active {
+      background: rgba(0, 255, 149, 0.15);
+      border-color: #00ff95;
+      color: #00ff95;
+    }
+
+    .daw-vol-slider {
+      width: 70px;
+      height: 4px;
+      accent-color: #00ff95;
+      cursor: pointer;
     }
 
     /* ========================================================================== */
@@ -1404,42 +1827,196 @@
   </section>
 
   <!-- ======================================================================== -->
-  <!-- SECTION: INTERACTIVE PROJECT BROWSER (PUBLIC DEMO DATA)                  -->
+  <!-- SECTION: INTERACTIVE PROJECT BROWSER (AUTHENTIC DAW BUDDY DESKTOP UI)    -->
   <!-- ======================================================================== -->
   <section id="browser" class="section" style="background:var(--bg-surface);">
     <div class="container">
       <div class="section__header">
-        <span class="section__tag">PUBLIC SHOWCASE</span>
+        <span class="section__tag">AUTHENTIC DESKTOP EXPERIENCE</span>
         <h2 class="section__title">Interactive Project Catalogue</h2>
         <p class="section__desc">
-          Audition tracks, filter by BPM or musical key, toggle favorites, and test mix notes. (Simulated demo data for public demonstration).
+          Live simulated DAW Buddy workspace with real-time session filtering, harmonic Camelot analysis, saves activity meters, and embedded Web Audio stem auditioning.
         </p>
       </div>
 
-      <div class="browser-wrapper">
-        <div class="browser-toolbar">
-          <div class="search-input-wrap">
-            <span class="search-icon">🔍</span>
-            <input type="text" id="projectSearch" class="search-input" placeholder="Search by name, bpm:128-140, key:8A, daw:ableton, note:vocal...">
+      <!-- Full Desktop Application Window -->
+      <div class="daw-desktop-window" id="dawAppWindow">
+        <!-- Titlebar -->
+        <div class="daw-window-bar">
+          <div class="daw-window-traffic">
+            <span class="dot dot--red" title="Close"></span>
+            <span class="dot dot--yellow" title="Minimize"></span>
+            <span class="dot dot--green" title="Maximize"></span>
           </div>
-          <button id="rescanSimBtn" class="pill-btn">🔄 Rescan Folders</button>
-          <button id="favFilterBtn" class="pill-btn">★ Favourites Only</button>
+          <div class="daw-window-title">
+            <span>DAW Buddy</span>
+            <span class="daw-version-tag">v0.4.1-beta.1</span>
+          </div>
+          <div class="daw-window-menu">
+            <span>File</span>
+            <span>Edit</span>
+            <span>View</span>
+            <span>Window</span>
+            <span>Help</span>
+          </div>
         </div>
 
-        <div class="filter-chips" id="filterChips">
-          <button class="filter-chip active" data-filter="all">All DAWs</button>
-          <button class="filter-chip" data-filter="Ableton Live">Ableton Live</button>
-          <button class="filter-chip" data-filter="FL Studio">FL Studio</button>
-          <button class="filter-chip" data-filter="REAPER">REAPER</button>
-          <button class="filter-chip" data-filter="Bitwig Studio">Bitwig Studio</button>
-          <button class="filter-chip" data-filter="Pro Tools">Pro Tools</button>
-          <button class="filter-chip" data-filter="Studio One">Studio One</button>
-          <button class="filter-chip" data-filter="Cubase">Cubase</button>
-          <button class="filter-chip" data-filter="Logic Pro">Logic Pro</button>
+        <!-- 2-Column Application Body -->
+        <div class="daw-window-body">
+          <!-- Sidebar -->
+          <aside class="daw-sidebar">
+            <div class="daw-sidebar__brand">
+              <div class="daw-brand-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                  <rect width="24" height="24" rx="5" fill="#051c14"/>
+                  <path d="M4 12h2v4H4zm4-6h2v12H8zm4-2h2v16h-2zm4 4h2v12h-2zm4 3h2v6h-2z" fill="#00ff95"/>
+                </svg>
+              </div>
+              <div class="daw-brand-text">
+                <div class="daw-brand-name">DAW BUDDY</div>
+                <div class="daw-brand-status"><span class="pulse-dot"></span> Watching projects</div>
+              </div>
+            </div>
+
+            <nav class="daw-nav-section" id="sidebarCollections">
+              <button class="daw-nav-item active" data-nav="all">
+                <span class="daw-nav-left"><span>⊞</span> <span class="daw-nav-label">All projects</span></span>
+                <span class="daw-nav-count" id="countAll">694</span>
+              </button>
+              <button class="daw-nav-item" data-nav="week">
+                <span class="daw-nav-left"><span>📅</span> <span class="daw-nav-label">This week</span></span>
+                <span class="daw-nav-count">6</span>
+              </button>
+              <button class="daw-nav-item" data-nav="fav">
+                <span class="daw-nav-left"><span>★</span> <span class="daw-nav-label">Favourites</span></span>
+                <span class="daw-nav-count" id="countFav">1</span>
+              </button>
+              <button class="daw-nav-item" data-nav="grouped">
+                <span class="daw-nav-left"><span>🗂</span> <span class="daw-nav-label">Grouped</span></span>
+                <span class="daw-nav-count">694</span>
+              </button>
+              <button class="daw-nav-item" data-nav="files">
+                <span class="daw-nav-left"><span>📑</span> <span class="daw-nav-label">Every file</span></span>
+                <span class="daw-nav-count">1291 files</span>
+              </button>
+            </nav>
+
+            <div class="daw-sidebar-group-title">FOLDERS</div>
+            <div class="daw-nav-section" id="sidebarFolders">
+              <button class="daw-nav-item" data-folder="Electronic">
+                <span class="daw-nav-left"><span>📁</span> <span class="daw-nav-label">Jump</span></span>
+                <span class="daw-nav-count">648</span>
+              </button>
+              <button class="daw-nav-item" data-folder="Scores">
+                <span class="daw-nav-left"><span>📁</span> <span class="daw-nav-label">Archives</span></span>
+                <span class="daw-nav-count">643</span>
+              </button>
+            </div>
+
+            <div class="daw-sidebar-group-title">DAWS</div>
+            <div class="daw-nav-section" id="sidebarDaws">
+              <button class="daw-nav-item" data-daw="FL Studio">
+                <span class="daw-nav-left"><span>🎛</span> <span class="daw-nav-label">FL Studio</span></span>
+                <span class="daw-nav-count">940</span>
+              </button>
+              <button class="daw-nav-item" data-daw="REAPER">
+                <span class="daw-nav-left"><span>🎛</span> <span class="daw-nav-label">REAPER</span></span>
+                <span class="daw-nav-count">168</span>
+              </button>
+              <button class="daw-nav-item" data-daw="Ableton">
+                <span class="daw-nav-left"><span>🎛</span> <span class="daw-nav-label">Ableton</span></span>
+                <span class="daw-nav-count">150</span>
+              </button>
+              <button class="daw-nav-item" data-daw="Fender Studio Pro">
+                <span class="daw-nav-left"><span>🎛</span> <span class="daw-nav-label">Fender Studio Pro</span></span>
+                <span class="daw-nav-count">14</span>
+              </button>
+              <button class="daw-nav-item" data-daw="Cubase">
+                <span class="daw-nav-left"><span>🎛</span> <span class="daw-nav-label">Cubase</span></span>
+                <span class="daw-nav-count">12</span>
+              </button>
+              <button class="daw-nav-item" data-daw="Bitwig">
+                <span class="daw-nav-left"><span>🎛</span> <span class="daw-nav-label">Bitwig Studio</span></span>
+                <span class="daw-nav-count">4</span>
+              </button>
+              <button class="daw-nav-item" data-daw="Logic Pro">
+                <span class="daw-nav-left"><span>🎛</span> <span class="daw-nav-label">Logic Pro</span></span>
+                <span class="daw-nav-count">3</span>
+              </button>
+            </div>
+
+            <div class="daw-sidebar-footer">
+              <button class="daw-footer-btn" id="sidebarTourBtn">
+                <span>❓</span> <span>Tour</span>
+              </button>
+              <button class="daw-footer-btn" id="sidebarToolsBtn">
+                <span>🎛</span> <span>Tools</span>
+              </button>
+              <button class="daw-footer-btn" id="sidebarSettingsBtn">
+                <span>⚙</span> <span>Settings</span>
+              </button>
+            </div>
+          </aside>
+
+          <!-- Main View -->
+          <main class="daw-main-view">
+            <!-- Topbar -->
+            <div class="daw-topbar">
+              <h3 class="daw-topbar__title" id="currentViewTitle">All projects</h3>
+              <div class="daw-search-box">
+                <input type="text" id="projectSearch" class="daw-search-input" placeholder="Search — name, bpm:140-145, key:8A, daw:ableton, note:vocal">
+              </div>
+              <div class="daw-topbar-actions">
+                <button class="daw-btn" id="sortDropdownBtn">Modified ▾</button>
+                <button class="daw-btn" id="miniPlayerSimBtn">Mini player</button>
+                <button class="daw-btn" id="themeLabBtn" title="Click or Right-Click for Comic Speech Bubble Theme Lab">Light mode</button>
+                <button class="daw-btn" id="favFilterBtn">Favourites</button>
+                <button class="daw-btn" id="rescanBtn">Rescan</button>
+                <div class="daw-toggle-wrap">
+                  <span class="daw-toggle-label">On top</span>
+                  <label class="daw-switch">
+                    <input type="checkbox" id="onTopSwitch">
+                    <span class="daw-slider"></span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Table Header -->
+            <div class="daw-table-head">
+              <div class="daw-col daw-col--check"></div>
+              <div class="daw-col daw-col--name">NAME</div>
+              <div class="daw-col daw-col--bpm">BPM</div>
+              <div class="daw-col daw-col--key">KEY</div>
+              <div class="daw-col daw-col--audio">AUDIO</div>
+              <div class="daw-col daw-col--saves">SAVES</div>
+              <div class="daw-col daw-col--mod">MODIFIED</div>
+            </div>
+
+            <!-- Table Body -->
+            <div class="daw-table-body" id="projectsTableBody">
+              <!-- Rendered via JS -->
+            </div>
+          </main>
         </div>
 
-        <div class="projects-grid" id="projectsGrid">
-          <!-- Rendered by JS -->
+        <!-- Integrated Transport Bar -->
+        <div class="daw-app-transport">
+          <button id="transportPlayBtn" class="daw-transport-play" title="Play / Pause Audio">▶</button>
+          <div class="daw-transport-meta">
+            <div id="nowPlayingTitle" class="daw-transport-title">Hyperdrive Protocol v3.wav</div>
+            <div id="nowPlayingState" class="daw-transport-sub">Ready to audition</div>
+          </div>
+          <div class="daw-transport-wave-wrap" id="waveContainer" title="Click or drag to scrub waveform">
+            <canvas id="transportWaveCanvas" class="daw-transport-canvas"></canvas>
+          </div>
+          <div class="daw-transport-controls">
+            <button class="daw-ctrl-btn" id="metroBtn">Metro</button>
+            <button class="daw-ctrl-btn" id="droneBtn" title="Synthesize root drone">Drone</button>
+            <button class="daw-ctrl-btn active" id="verbBtn" title="Click or Right-Click for Parametric Reverb Rack">Verb</button>
+            <button class="daw-ctrl-btn" id="clipBtn">Clip</button>
+            <input type="range" class="daw-vol-slider" id="volSlider" min="0" max="1" step="0.05" value="0.85" title="Master Volume">
+          </div>
         </div>
       </div>
     </div>
@@ -1767,125 +2344,279 @@
     ];
 
     /* -------------------------------------------------------------------------- */
-    /* 2. DEMO PROJECT DATA                                                       */
+    /* 2. DEMO PROJECT DATA (100% Generic & Clean Simulation)                     */
     /* -------------------------------------------------------------------------- */
     const DEMO_PROJECTS = [
       {
         id: 1,
-        title: 'Astral Drift (VIP Mix)',
-        daw: 'Ableton Live',
-        version: 'v4',
-        bpm: 128.00,
-        key: '8A / A min',
-        backups: 14,
-        bounces: 3,
-        note: 'Final vocal stems aligned; lowered sub-bass by 1.5 dB on Drop 2. Ceiling at -0.3 dB True Peak.',
+        title: 'Hyperdrive Protocol',
+        daw: 'Ableton',
+        dawFull: 'Ableton Live',
+        version: '▸ 2 versions',
+        path: '2026 / Synthwave / Hyperdrive Protocol Project',
+        bpm: 140,
+        timeSig: '4/4',
+        key: 'F maj',
+        camelot: '7B',
+        audio: 'Hyperdrive Protocol v3.wav',
+        saves: 28,
+        mod: '25m ago',
+        folder: 'Electronic',
         fav: true,
-        mod: 'Today, 14:22'
+        isNew: true
       },
       {
         id: 2,
         title: 'Neon Velocity',
         daw: 'FL Studio',
-        version: 'v6',
-        bpm: 174.00,
-        key: '4A / F min',
-        backups: 9,
-        bounces: 5,
-        note: 'Drum & Bass synth layer sidechained to snare ghost triggers. Sent stems to mastering engineer.',
+        dawFull: 'FL Studio',
+        version: '',
+        path: '2026 / Drum & Bass / Neon Velocity Project',
+        bpm: 115,
+        timeSig: '4/4',
+        key: 'F min',
+        camelot: '4A',
+        audio: 'Neon Velocity Master.wav',
+        saves: 5,
+        mod: '1h ago',
+        folder: 'Electronic',
         fav: true,
-        mod: 'Yesterday, 19:40'
+        isNew: false
       },
       {
         id: 3,
-        title: 'Midnight Echoes (Acoustic)',
-        daw: 'REAPER',
-        version: 'v2',
-        bpm: 95.00,
-        key: '11B / A Maj',
-        backups: 6,
-        bounces: 2,
-        note: 'Cello quartet recording pass 3 with stereo ribbon mics. Checked phase alignment across overheads.',
+        title: 'Solaris Sunset',
+        daw: 'Ableton',
+        dawFull: 'Ableton Live',
+        version: '▸ 3 versions',
+        path: '2026 / Deep House / Solaris Sunset Project',
+        bpm: 125,
+        timeSig: '4/4',
+        key: 'D min',
+        camelot: '7A',
+        audio: 'Solaris Sunset Club Edit.wav',
+        saves: 28,
+        mod: '1d ago',
+        folder: 'Electronic',
         fav: false,
-        mod: '3 days ago'
+        isNew: false
       },
       {
         id: 4,
-        title: 'Hyperdrive Protocol',
-        daw: 'Bitwig Studio',
-        version: 'v3',
-        bpm: 140.00,
-        key: '2A / E♭ min',
-        backups: 12,
-        bounces: 4,
-        note: 'Grid modular patch captured; poly-aftertouch curves baked to audio stem.',
-        fav: true,
-        mod: '2 days ago'
+        title: 'Cinematic Horizon',
+        daw: 'Ableton',
+        dawFull: 'Ableton Live',
+        version: '▸ 7 versions',
+        path: '2026 / Film Scoring / Cinematic Horizon Project',
+        bpm: 75,
+        timeSig: '2/4',
+        key: 'B min',
+        camelot: '10A',
+        audio: 'Cinematic Horizon Main Cue.wav',
+        saves: 29,
+        mod: '5d ago',
+        folder: 'Scores',
+        fav: false,
+        isNew: false
       },
       {
         id: 5,
-        title: 'Cinematic Horizon (Cue 4M2)',
-        daw: 'Pro Tools',
-        version: 'v1',
-        bpm: 120.00,
-        key: '10A / B min',
-        backups: 21,
-        bounces: 7,
-        note: 'Full 5.1 surround print completed. Dialogue dip automated at bar 64.',
+        title: 'Midnight Echoes',
+        daw: 'FL Studio',
+        dawFull: 'FL Studio',
+        version: '',
+        path: '2026 / Lo-Fi Beats / Midnight Echoes Project',
+        bpm: 90,
+        timeSig: '4/4',
+        key: 'A Maj',
+        camelot: '11B',
+        audio: 'Midnight Echoes Tape Bounce.mp3',
+        saves: 45,
+        mod: '8d ago',
+        folder: 'Electronic',
         fav: false,
-        mod: '5 days ago'
+        isNew: false
       },
       {
         id: 6,
-        title: 'Solaris Sunset',
-        daw: 'Studio One',
-        version: 'v5',
-        bpm: 124.00,
-        key: '6B / B♭ Maj',
-        backups: 8,
-        bounces: 2,
-        note: 'Master bus compressor ratio set to 2:1 with 30ms attack for glue.',
+        title: 'Quantum Echo',
+        daw: 'Ableton',
+        dawFull: 'Ableton Live',
+        version: '',
+        path: '2026 / Tech House / Quantum Echo Project',
+        bpm: 90,
+        timeSig: '4/4',
+        key: 'A♭ min',
+        camelot: '1A',
+        audio: 'Quantum Echo Stem Print.wav',
+        saves: 0,
+        mod: '8d ago',
+        folder: 'Electronic',
         fav: false,
-        mod: '1 week ago'
+        isNew: false
       },
       {
         id: 7,
-        title: 'Quantum Echo',
-        daw: 'Cubase',
-        version: 'v3',
-        bpm: 135.00,
-        key: '1A / A♭ min',
-        backups: 11,
-        bounces: 3,
-        note: 'Analog tape saturation print complete on drum buss.',
+        title: 'Velvet Skyline',
+        daw: 'Ableton',
+        dawFull: 'Ableton Live',
+        version: '',
+        path: '2026 / Neo-Soul / Velvet Skyline Project',
+        bpm: 90,
+        timeSig: '4/4',
+        key: 'C min',
+        camelot: '5A',
+        audio: 'Velvet Skyline Rough Mix.wav',
+        saves: 7,
+        mod: '9d ago',
+        folder: 'Electronic',
         fav: false,
-        mod: 'Last week'
+        isNew: false
       },
       {
         id: 8,
-        title: 'Velvet Skyline',
-        daw: 'Logic Pro',
-        version: 'v7',
-        bpm: 110.00,
-        key: '5A / C min',
-        backups: 17,
-        bounces: 4,
-        note: 'Vocal comp selected and tuned with flex pitch; export ready for label.',
-        fav: true,
-        mod: '2 weeks ago'
+        title: 'Aura Synthesis',
+        daw: 'FL Studio',
+        dawFull: 'FL Studio',
+        version: 'Packaged',
+        path: '2026 / Ambient / Aura Synthesis Project',
+        bpm: 140,
+        timeSig: '4/4',
+        key: 'E♭ min',
+        camelot: '2A',
+        audio: 'Aura Synthesis Drone.wav',
+        saves: 36,
+        mod: '10d ago',
+        folder: 'Electronic',
+        fav: false,
+        isNew: false
+      },
+      {
+        id: 9,
+        title: 'Prism Wave',
+        daw: 'Ableton',
+        dawFull: 'Ableton Live',
+        version: '▸ 2 versions',
+        path: '2026 / Synthwave / Prism Wave Project',
+        bpm: 125,
+        timeSig: '4/4',
+        key: 'D min',
+        camelot: '7A',
+        audio: 'Prism Wave Synth Stem.wav',
+        saves: 5,
+        mod: '10d ago',
+        folder: 'Electronic',
+        fav: false,
+        isNew: false
+      },
+      {
+        id: 10,
+        title: 'Starlight Odyssey',
+        daw: 'Ableton',
+        dawFull: 'Ableton Live',
+        version: '',
+        path: '2026 / Cyberpunk / Starlight Odyssey Project',
+        bpm: 125,
+        timeSig: '4/4',
+        key: 'G min',
+        camelot: '6A',
+        audio: 'Starlight Odyssey Mix 1.wav',
+        saves: 7,
+        mod: '10d ago',
+        folder: 'Electronic',
+        fav: false,
+        isNew: false
+      },
+      {
+        id: 11,
+        title: 'Subtle Shift',
+        daw: 'FL Studio',
+        dawFull: 'FL Studio',
+        version: '',
+        path: '2026 / Minimal Techno / Subtle Shift Project',
+        bpm: 140,
+        timeSig: '',
+        key: 'C# min',
+        camelot: '12A',
+        audio: 'Subtle Shift Vocal Trim.wav',
+        saves: 7,
+        mod: '10d ago',
+        folder: 'Electronic',
+        fav: false,
+        isNew: false
+      },
+      {
+        id: 12,
+        title: 'Drop It Fast',
+        daw: 'Ableton',
+        dawFull: 'Ableton Live',
+        version: '',
+        path: '2026 / Bass House / Drop It Fast Project',
+        bpm: 128,
+        timeSig: '4/4',
+        key: 'A min',
+        camelot: '8A',
+        audio: 'Drop It Fast 130 Trim.wav',
+        saves: 14,
+        mod: '12d ago',
+        folder: 'Electronic',
+        fav: false,
+        isNew: false
       }
     ];
 
     /* -------------------------------------------------------------------------- */
-    /* 3. STANDALONE TOOLS DATA                                                   */
+    /* 3. STANDALONE TOOLS DATA (Comprehensive Studio Suite)                      */
     /* -------------------------------------------------------------------------- */
     const TOOLS_DATA = [
       {
+        icon: '🎲',
+        title: 'Producer Randomizer & Genre Challenge',
+        desc: 'Generate instant creative starting points: random key, modal scale, Indian Raagas, BPM, Tala meter, and 48+ curated genre challenges with YouTube song reference query and drag-to-DAW scale MIDI.',
+        badge: 'Inspiration',
+        details: 'Roll random musical keys, modes, and matching Indian Classical Raagas. Features direct YouTube query builder for authentic Raaga song exploration and one-click export of 2-octave scale reference MIDI clips directly into Ableton, FL Studio, or Logic.'
+      },
+      {
+        icon: '🎹',
+        title: 'Scale & Raaga Detector',
+        desc: 'Drag & drop raw audio or MIDI to detect root key, tuning deviation in cents, Sargam swara sequences, and matching Indian Classical Raagas.',
+        badge: 'DSP Pitch',
+        details: 'Performs multi-resolution constant-Q chromagram analysis on polyphonic audio or MIDI notes. Identifies parent Thaats, Aarohana/Avarohana swara movements, and non-Western microtonal pitch offsets with interactive 2-octave keyboard preview.'
+      },
+      {
+        icon: '🏷️',
+        title: 'Smart Stem Renamer',
+        desc: 'Categorize cryptically named stem exports into clean standard Kick, Snare, Bass, Leads with UserDictionary learning and reversible JSON rollback manifests.',
+        badge: 'Organization',
+        details: 'Intelligently analyzes stem track tokens and normalizes messy client filenames. Builds custom overrides via UserDictionary and creates timestamped renamelog manifests allowing one-click rollback of any batch rename operation.'
+      },
+      {
+        icon: '🎙️',
+        title: 'Vocal Round-Trip Rebuild',
+        desc: 'Split long continuous vocals into active phrase chunks at silence boundaries for external AI/cloud tuning, then seamlessly re-assemble with sample accuracy.',
+        badge: 'AI Workflow',
+        details: 'Detects silent pauses between vocal phrases, outputs timestamped WAV chunks with an edit-decision manifest JSON, and reassembles processed vocal takes back into their exact original timeline positions without phase distortion.'
+      },
+      {
+        icon: '✂️',
+        title: 'Silence Stripper',
+        desc: 'Detect leading and trailing silence below customizable dB thresholds (-60 to -24 dB) and write trimmed copies with safety head/tail padding.',
+        badge: 'Audio Cleanup',
+        details: 'Scans audio PCM frames for true noise floor boundaries. Automatically trims dead space before transients to ensure instant sample triggering while safely outputting new files without touching original source tracks.'
+      },
+      {
+        icon: '↗️',
+        title: 'Lossless Audio Trimmer & Normalizer',
+        desc: 'Frame-accurate lossless audio cutting, LUFS / dBFS normalization, and normalize-and-fit processor snapping loop tails to exact beat/bar lengths.',
+        badge: 'Mastering Prep',
+        details: 'Non-destructively edits and normalizes WAV/AIFF audio to broadcast EBU R128 (-14 to -23 LUFS) or True Peak targets, and mathematically snaps loop audio tails to musical grid lengths for flawless DAW looping.'
+      },
+      {
         icon: '≋',
-        title: 'Sample Cleanup (Dedupe)',
-        desc: 'Find duplicate imported samples and safely replace redundant clones with filesystem symlinks or hardlinks to free up disk space.',
-        badge: 'Storage',
-        details: 'Dedupe performs cryptographic SHA-256 byte comparisons across your sample libraries. When duplicate audio files are detected, it creates hardlinks or symlinks pointing to a single master file, instantly freeing gigabytes of redundant sample storage without breaking any DAW session links.'
+        title: 'Sample Cleanup (Dedupe Auditor)',
+        desc: 'Find duplicate imported samples across all project folders and replace redundant clones with filesystem hardlinks to free up gigabytes.',
+        badge: 'Disk Space',
+        details: 'Performs cryptographic SHA-256 byte comparisons across your sample libraries. When duplicate audio files are detected, it creates hardlinks pointing to a single master file, instantly freeing gigabytes of redundant sample storage without breaking any DAW session links.'
       },
       {
         icon: 'GB',
@@ -1893,41 +2624,6 @@
         desc: 'Visual project storage footprint audit identifying which project folders, stems, and freeze caches use the most storage (100% read-only).',
         badge: '100% Read-Only',
         details: 'Disk Insights recursively calculates the exact size of project sessions, recorded audio passes, freeze files, and backups. It gives you a clean visual breakdown of your largest projects without ever modifying or deleting a single file.'
-      },
-      {
-        icon: 'ID3',
-        title: 'Batch ID3 Tag Editor',
-        desc: 'Add, replace, or clean metadata across multiple MP3/WAV files at once before client delivery.',
-        badge: 'Metadata',
-        details: 'Edit Artist, Title, Album, BPM, Key, Year, Genre, and embedded high-resolution album artwork across full stem packs or client bounce folders with a single click.'
-      },
-      {
-        icon: 'Aa',
-        title: 'Bulk Renamer',
-        desc: 'Clean up or standardize many audio filenames with smart regex, case rules, and live side-by-side safety diffs.',
-        badge: 'File Org',
-        details: 'Standardize stem pack names, remove unwanted junk tokens (e.g. "_final_v2_edit"), apply consistent numbering padding (01, 02, 03), and preview every change before applying.'
-      },
-      {
-        icon: '↗',
-        title: 'Audio Finishing & Normalizer',
-        desc: 'Normalize WAV files to peak/RMS targets and optionally fit audio to exact beat/bar lengths for clean looping.',
-        badge: 'DSP Prep',
-        details: 'Non-destructively processes WAV files to target LUFS or dBFS peak levels and snaps loop tails to exact mathematical beat boundaries. Always outputs new files, preserving original audio.'
-      },
-      {
-        icon: '✂',
-        title: 'Strip Silence',
-        desc: 'Detect leading or trailing silence below customizable dB thresholds and create trimmed copies.',
-        badge: 'Audio Clean',
-        details: 'Scans audio waveforms for silence gaps (e.g. below -48 dB) and trims empty head and tail space, ensuring samples and vocal stems trigger instantly on DAW grid markers.'
-      },
-      {
-        icon: 'VOX',
-        title: 'Vocal Reconstruction',
-        desc: 'Split long continuous vocals into active phrase chunks for external AI/cloud processing, then rebuild with sample accuracy.',
-        badge: 'AI Workflow',
-        details: 'Splits multi-track vocal passes into active vocal phrases, produces a machine-readable JSON timing manifest, and later reconstructs externally processed clips back into their sample-accurate timeline positions.'
       }
     ];
 
@@ -1938,6 +2634,7 @@
     const dawDetailEl = document.getElementById('dawDetailContent');
 
     function renderDawTabs() {
+      if (!dawTabListEl || !dawDetailEl) return;
       dawTabListEl.innerHTML = '';
       DAW_DATABASE.forEach((daw, index) => {
         const btn = document.createElement('button');
@@ -1959,6 +2656,7 @@
     }
 
     function renderDawDetail(daw) {
+      if (!dawDetailEl) return;
       dawDetailEl.innerHTML = `
         <div class="daw-detail-head">
           <div class="daw-detail-title">
@@ -1991,140 +2689,281 @@
     }
 
     /* -------------------------------------------------------------------------- */
-    /* 5. RENDER PROJECT BROWSER & SEARCH                                         */
+    /* 5. RENDER AUTHENTIC DAW BUDDY TABLE ROWS & FILTERS                         */
     /* -------------------------------------------------------------------------- */
-    const projectsGridEl = document.getElementById('projectsGrid');
+    const projectsTableBody = document.getElementById('projectsTableBody');
     const searchInput = document.getElementById('projectSearch');
-    let currentFilter = 'all';
+    let currentFilterType = 'all';
+    let currentFilterVal = '';
     let favOnlyFilter = false;
+    let selectedProjectId = 1;
+    let currentSortMode = 'mod';
 
     function renderProjects() {
-      const q = searchInput.value.toLowerCase().trim();
-      projectsGridEl.innerHTML = '';
+      if (!projectsTableBody) return;
+      const q = searchInput ? searchInput.value.toLowerCase().trim() : '';
+      projectsTableBody.innerHTML = '';
 
-      const filtered = DEMO_PROJECTS.filter(p => {
-        if (favOnlyFilter && !p.fav) return false;
-        if (currentFilter !== 'all' && !p.daw.toLowerCase().includes(currentFilter.toLowerCase())) return false;
-        if (!q) return true;
+      let list = [...DEMO_PROJECTS];
 
-        if (q.startsWith('bpm:')) {
-          const range = q.replace('bpm:', '').split('-');
-          const min = parseFloat(range[0]) || 0;
-          const max = parseFloat(range[1]) || 999;
-          return p.bpm >= min && p.bpm <= max;
-        }
-        if (q.startsWith('key:')) {
-          const targetKey = q.replace('key:', '').toLowerCase();
-          return p.key.toLowerCase().includes(targetKey);
-        }
-        if (q.startsWith('daw:')) {
-          const targetDaw = q.replace('daw:', '').toLowerCase();
-          return p.daw.toLowerCase().includes(targetDaw);
-        }
-        if (q.startsWith('note:')) {
-          const targetNote = q.replace('note:', '').toLowerCase();
-          return p.note.toLowerCase().includes(targetNote);
-        }
+      // Filter by Collection / Folder / DAW
+      if (favOnlyFilter) {
+        list = list.filter(p => p.fav);
+      } else if (currentFilterType === 'daw') {
+        list = list.filter(p => p.daw.toLowerCase() === currentFilterVal.toLowerCase() || p.dawFull.toLowerCase().includes(currentFilterVal.toLowerCase()));
+      } else if (currentFilterType === 'folder') {
+        list = list.filter(p => p.folder.toLowerCase() === currentFilterVal.toLowerCase());
+      } else if (currentFilterType === 'week') {
+        list = list.filter(p => p.mod.includes('m ago') || p.mod.includes('h ago') || p.mod.includes('1d ago') || p.mod.includes('5d ago'));
+      }
 
-        return p.title.toLowerCase().includes(q) ||
-               p.daw.toLowerCase().includes(q) ||
-               p.key.toLowerCase().includes(q) ||
-               p.note.toLowerCase().includes(q);
-      });
+      // Filter by Search Query
+      if (q) {
+        list = list.filter(p => {
+          if (q.startsWith('bpm:')) {
+            const range = q.replace('bpm:', '').split('-');
+            const min = parseFloat(range[0]) || 0;
+            const max = parseFloat(range[1]) || 999;
+            return p.bpm >= min && p.bpm <= max;
+          }
+          if (q.startsWith('key:')) {
+            const targetKey = q.replace('key:', '').toLowerCase();
+            return p.key.toLowerCase().includes(targetKey) || p.camelot.toLowerCase().includes(targetKey);
+          }
+          if (q.startsWith('daw:')) {
+            const targetDaw = q.replace('daw:', '').toLowerCase();
+            return p.daw.toLowerCase().includes(targetDaw) || p.dawFull.toLowerCase().includes(targetDaw);
+          }
+          return p.title.toLowerCase().includes(q) ||
+                 p.daw.toLowerCase().includes(q) ||
+                 p.key.toLowerCase().includes(q) ||
+                 p.camelot.toLowerCase().includes(q) ||
+                 p.path.toLowerCase().includes(q);
+        });
+      }
 
-      if (filtered.length === 0) {
-        projectsGridEl.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:40px; color:var(--text-muted);">No matching projects found for query.</div>`;
+      // Sort
+      if (currentSortMode === 'bpm') {
+        list.sort((a, b) => b.bpm - a.bpm);
+      } else if (currentSortMode === 'saves') {
+        list.sort((a, b) => b.saves - a.saves);
+      } else if (currentSortMode === 'name') {
+        list.sort((a, b) => a.title.localeCompare(b.title));
+      }
+
+      if (list.length === 0) {
+        projectsTableBody.innerHTML = `
+          <div style="padding: 40px; text-align: center; color: #55665c; font-size: 13px;">
+            No matching DAW sessions found. Try clearing your search filter.
+          </div>
+        `;
         return;
       }
 
-      filtered.forEach(p => {
-        const card = document.createElement('div');
-        card.className = 'project-card';
-        card.dataset.id = p.id;
+      list.forEach(p => {
+        const row = document.createElement('div');
+        row.className = 'daw-table-row' + (p.id === selectedProjectId ? ' is-selected' : '') + (p.id === currentProject.id && isPlaying ? ' is-playing' : '');
+        row.dataset.id = p.id;
 
-        // Generate synthetic waveform bars
-        let waveBars = '';
-        for (let i = 0; i < 36; i++) {
-          const h = Math.max(4, Math.sin((i + p.id) * 0.4) * 16 + Math.cos(i * 0.2) * 8 + 8);
-          waveBars += `<div class="bar" style="height:${h}px;"></div>`;
-        }
+        const maxSaves = 45;
+        const savesPercent = Math.min(100, Math.max(8, (p.saves / maxSaves) * 100));
 
-        card.innerHTML = `
-          <div class="project-card__top">
-            <div class="project-card__title-wrap">
-              <div class="project-card__title">
-                <span>${p.title}</span>
-                <span class="project-card__version">${p.version}</span>
-              </div>
-              <div class="project-card__tags">
-                <span class="meta-tag meta-tag--daw">${p.daw}</span>
-                <span class="meta-tag meta-tag--bpm">${p.bpm.toFixed(2)} BPM</span>
-                <span class="meta-tag meta-tag--key">${p.key}</span>
-                <span class="meta-tag meta-tag--health">${p.backups} Backups</span>
-              </div>
+        row.innerHTML = `
+          <div class="daw-cell-check">
+            <input type="checkbox" class="daw-checkbox" ${p.fav ? 'checked' : ''} title="Toggle Select / Favourite">
+          </div>
+          <div class="daw-cell-name">
+            <div class="daw-name-row">
+              <span class="daw-project-title">${p.title}</span>
+              <span class="daw-badge-pill">${p.daw}</span>
+              ${p.version ? `<span class="daw-version-pill">${p.version}</span>` : ''}
             </div>
-            <button class="fav-btn ${p.fav ? 'active' : ''}" title="Toggle Favourite">★</button>
+            <div class="daw-project-path">${p.path}</div>
           </div>
-
-          <div class="project-card__wave" title="Click to audition stem render">
-            ${waveBars}
+          <div class="daw-cell-bpm">
+            <span>${p.bpm}</span>
+            ${p.timeSig ? `<span class="daw-timesig-pill">${p.timeSig}</span>` : ''}
           </div>
-
-          <div class="project-card__note">
-            <b>Mix Note:</b> ${p.note}
+          <div class="daw-cell-key">
+            <span>${p.key}</span>
+            <span class="daw-camelot-sub">${p.camelot}</span>
           </div>
-
-          <div class="project-card__foot">
-            <span>Last modified: ${p.mod} · ${p.bounces} Bounces</span>
-            <button class="play-card-btn">▶ Play</button>
+          <div class="daw-cell-audio">
+            <button class="daw-play-btn" data-play-id="${p.id}">
+              ${p.id === currentProject.id && isPlaying ? '⏸ Playing' : '▶ Play'}
+            </button>
           </div>
+          <div class="daw-cell-saves">
+            <div class="daw-saves-meter" title="${p.saves} session saves">
+              <div class="daw-saves-fill" style="width:${savesPercent}%;"></div>
+            </div>
+            <span class="daw-saves-count">${p.saves}</span>
+          </div>
+          <div class="daw-cell-mod">${p.mod}</div>
         `;
 
-        // Fav toggle
-        card.querySelector('.fav-btn').addEventListener('click', (e) => {
-          e.stopPropagation();
-          p.fav = !p.fav;
+        // Row Selection
+        row.addEventListener('click', (e) => {
+          if (e.target.closest('.daw-play-btn') || e.target.closest('.daw-checkbox')) return;
+          selectedProjectId = p.id;
+          currentProject = p;
+          updateNowPlayingUI();
           renderProjects();
         });
 
-        // Play handler
-        const playBtn = card.querySelector('.play-card-btn');
-        playBtn.addEventListener('click', () => {
-          loadAndPlayProject(p);
+        // Checkbox Fav
+        const chk = row.querySelector('.daw-checkbox');
+        chk.addEventListener('change', (e) => {
+          e.stopPropagation();
+          p.fav = chk.checked;
+          const favCount = DEMO_PROJECTS.filter(x => x.fav).length;
+          const favCountEl = document.getElementById('countFav');
+          if (favCountEl) favCountEl.innerText = favCount;
+          renderProjects();
         });
 
-        card.querySelector('.project-card__wave').addEventListener('click', () => {
-          loadAndPlayProject(p);
+        // Play Button Click
+        const playBtn = row.querySelector('.daw-play-btn');
+        playBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          selectedProjectId = p.id;
+          if (currentProject.id === p.id && isPlaying) {
+            togglePlay();
+          } else {
+            currentProject = p;
+            if (!isPlaying) togglePlay();
+            else {
+              updateNowPlayingUI();
+              startSynthSequencer();
+              showToast(`▶ Now Auditioning: ${p.title} (${p.bpm} BPM · ${p.key})`);
+            }
+          }
+          renderProjects();
         });
 
-        projectsGridEl.appendChild(card);
+        projectsTableBody.appendChild(row);
       });
     }
 
-    searchInput.addEventListener('input', renderProjects);
+    if (searchInput) searchInput.addEventListener('input', renderProjects);
 
-    document.querySelectorAll('.filter-chip').forEach(btn => {
+    // Sidebar Navigation Hookups
+    document.querySelectorAll('#sidebarCollections .daw-nav-item').forEach(btn => {
       btn.addEventListener('click', () => {
-        document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+        document.querySelectorAll('.daw-nav-item').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        currentFilter = btn.dataset.filter;
+        const nav = btn.dataset.nav;
+        if (nav === 'fav') {
+          favOnlyFilter = true;
+          currentFilterType = 'fav';
+        } else {
+          favOnlyFilter = false;
+          currentFilterType = nav;
+        }
+        const titleEl = document.getElementById('currentViewTitle');
+        if (titleEl) titleEl.innerText = btn.querySelector('.daw-nav-label').innerText;
         renderProjects();
       });
     });
 
-    const favFilterBtn = document.getElementById('favFilterBtn');
-    favFilterBtn.addEventListener('click', () => {
-      favOnlyFilter = !favOnlyFilter;
-      favFilterBtn.classList.toggle('pill-btn--primary', favOnlyFilter);
-      renderProjects();
+    document.querySelectorAll('#sidebarFolders .daw-nav-item').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.daw-nav-item').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        favOnlyFilter = false;
+        currentFilterType = 'folder';
+        currentFilterVal = btn.dataset.folder;
+        const titleEl = document.getElementById('currentViewTitle');
+        if (titleEl) titleEl.innerText = 'Folder: ' + btn.querySelector('.daw-nav-label').innerText;
+        renderProjects();
+      });
     });
 
-    document.getElementById('rescanSimBtn').addEventListener('click', () => {
-      showToast('🔄 Project folders rescanned · 8 projects verified in 14ms');
+    document.querySelectorAll('#sidebarDaws .daw-nav-item').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.daw-nav-item').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        favOnlyFilter = false;
+        currentFilterType = 'daw';
+        currentFilterVal = btn.dataset.daw;
+        const titleEl = document.getElementById('currentViewTitle');
+        if (titleEl) titleEl.innerText = btn.dataset.daw + ' Projects';
+        renderProjects();
+      });
     });
+
+    // Topbar Action Handlers
+    const sortBtn = document.getElementById('sortDropdownBtn');
+    if (sortBtn) {
+      sortBtn.addEventListener('click', () => {
+        if (currentSortMode === 'mod') currentSortMode = 'bpm';
+        else if (currentSortMode === 'bpm') currentSortMode = 'saves';
+        else if (currentSortMode === 'saves') currentSortMode = 'name';
+        else currentSortMode = 'mod';
+        sortBtn.innerText = currentSortMode === 'mod' ? 'Modified ▾' : currentSortMode === 'bpm' ? 'BPM ▾' : currentSortMode === 'saves' ? 'Saves ▾' : 'Name ▾';
+        renderProjects();
+      });
+    }
+
+    const favFilterBtn = document.getElementById('favFilterBtn');
+    if (favFilterBtn) {
+      favFilterBtn.addEventListener('click', () => {
+        favOnlyFilter = !favOnlyFilter;
+        favFilterBtn.classList.toggle('active', favOnlyFilter);
+        renderProjects();
+      });
+    }
+
+    const rescanBtn = document.getElementById('rescanBtn');
+    if (rescanBtn) {
+      rescanBtn.addEventListener('click', () => {
+        showToast('🔄 Watching 3 project root folders · 694 sessions verified in 18ms');
+      });
+    }
+
+    const miniBtn = document.getElementById('miniPlayerSimBtn');
+    if (miniBtn) {
+      miniBtn.addEventListener('click', () => {
+        showToast('🗗 Mini Floating Transport Player overlay enabled');
+      });
+    }
+
+    const themeLabBtn = document.getElementById('themeLabBtn');
+    if (themeLabBtn) {
+      themeLabBtn.addEventListener('click', () => {
+        const curSurface = document.documentElement.getAttribute('data-surface') || 'dark';
+        const next = curSurface === 'light' ? 'dark' : curSurface === 'dark' ? 'amoled' : 'light';
+        document.documentElement.setAttribute('data-surface', next);
+        themeLabBtn.innerText = next === 'light' ? 'Dark mode' : next === 'amoled' ? 'Light mode' : 'AMOLED';
+        showToast(`🎨 Theme mode updated: ${next.toUpperCase()}`);
+      });
+    }
+
+    // Sidebar footer tools / tour / settings
+    const sidebarTourBtn = document.getElementById('sidebarTourBtn');
+    if (sidebarTourBtn) {
+      sidebarTourBtn.addEventListener('click', () => {
+        showToast('❓ Guided Tour launched: Welcome to DAW Buddy Studio Companion!');
+      });
+    }
+
+    const sidebarToolsBtn = document.getElementById('sidebarToolsBtn');
+    if (sidebarToolsBtn) {
+      sidebarToolsBtn.addEventListener('click', () => {
+        const toolsSec = document.getElementById('tools');
+        if (toolsSec) toolsSec.scrollIntoView({ behavior: 'smooth' });
+      });
+    }
+
+    const sidebarSettingsBtn = document.getElementById('sidebarSettingsBtn');
+    if (sidebarSettingsBtn) {
+      sidebarSettingsBtn.addEventListener('click', () => {
+        showToast('⚙️ Preferences: Watched Directories, Audio Drivers & Hotkeys');
+      });
+    }
 
     /* -------------------------------------------------------------------------- */
-    /* 6. RENDER 7 STANDALONE TOOLS                                               */
+    /* 6. RENDER 8 STANDALONE STUDIO TOOLS                                        */
     /* -------------------------------------------------------------------------- */
     const toolsListEl = document.getElementById('toolsList');
     const toolModal = document.getElementById('toolModal');
@@ -2132,6 +2971,7 @@
     const toolModalBody = document.getElementById('toolModalBody');
 
     function renderTools() {
+      if (!toolsListEl) return;
       toolsListEl.innerHTML = '';
       TOOLS_DATA.forEach(t => {
         const card = document.createElement('div');
@@ -2143,17 +2983,23 @@
           <span class="tool-card__badge">${t.badge}</span>
         `;
         card.addEventListener('click', () => {
-          toolModalTitle.innerText = t.title;
-          toolModalBody.innerHTML = `<p>${t.details}</p><br><div style="background:var(--bg-elevated); padding:12px; border-radius:var(--radius-sm); border:1px solid var(--border-subtle);"><b style="color:var(--accent);">Safety Guarantee:</b> All audio tools operate in non-destructive mode and output newly written audio copies, keeping original tracking takes untouched.</div>`;
-          toolModal.classList.add('is-open');
+          if (toolModalTitle && toolModalBody && toolModal) {
+            toolModalTitle.innerText = t.title;
+            toolModalBody.innerHTML = `<p>${t.details}</p><br><div style="background:var(--bg-elevated); padding:12px; border-radius:var(--radius-sm); border:1px solid var(--border-subtle);"><b style="color:var(--accent);">Non-Destructive Guarantee:</b> All audio processing operations output new timestamped files, keeping original audio and project takes 100% untouched.</div>`;
+            toolModal.classList.add('is-open');
+          }
         });
         toolsListEl.appendChild(card);
       });
     }
 
-    document.getElementById('closeToolModalBtn').addEventListener('click', () => toolModal.classList.remove('is-open'));
-    document.getElementById('closeToolModalBtn2').addEventListener('click', () => toolModal.classList.remove('is-open'));
-    toolModal.addEventListener('click', (e) => { if (e.target === toolModal) toolModal.classList.remove('is-open'); });
+    const closeToolModalBtn = document.getElementById('closeToolModalBtn');
+    if (closeToolModalBtn) closeToolModalBtn.addEventListener('click', () => toolModal.classList.remove('is-open'));
+    const closeToolModalBtn2 = document.getElementById('closeToolModalBtn2');
+    if (closeToolModalBtn2) closeToolModalBtn2.addEventListener('click', () => toolModal.classList.remove('is-open'));
+    if (toolModal) {
+      toolModal.addEventListener('click', (e) => { if (e.target === toolModal) toolModal.classList.remove('is-open'); });
+    }
 
     /* -------------------------------------------------------------------------- */
     /* 7. WEB AUDIO SYNTHESIZER & REAL-TIME DSP                                   */
@@ -2167,6 +3013,7 @@
     let isDroneOn = false;
     let isVerbOn = true;
     let isClipOn = false;
+    let isMetroOn = false;
 
     function initAudio() {
       if (!audioCtx) {
@@ -2177,44 +3024,38 @@
       }
     }
 
-    const transportPlayBtn = document.getElementById('transportPlayBtn');
-    const nowPlayingTitleEl = document.getElementById('nowPlayingTitle');
-    const nowPlayingTimeEl = document.getElementById('nowPlayingTime');
-
-    function loadAndPlayProject(p) {
-      currentProject = p;
-      nowPlayingTitleEl.innerText = `${p.title} (${p.daw})`;
-      if (!isPlaying) {
-        togglePlay();
-      } else {
-        showToast(`🎵 Now Auditioning: ${p.title}`);
-      }
-      document.querySelectorAll('.project-card').forEach(c => {
-        c.classList.toggle('is-playing', c.dataset.id == p.id);
-      });
+    function updateNowPlayingUI() {
+      const titleEl = document.getElementById('nowPlayingTitle');
+      const stateEl = document.getElementById('nowPlayingState');
+      if (titleEl) titleEl.innerText = `${currentProject.title} (${currentProject.audio})`;
+      if (stateEl) stateEl.innerText = isPlaying ? `Playing · ${currentProject.bpm} BPM · ${currentProject.key}` : 'Ready to audition';
     }
+
+    const transportPlayBtn = document.getElementById('transportPlayBtn');
 
     function togglePlay() {
       initAudio();
       isPlaying = !isPlaying;
-      transportPlayBtn.innerText = isPlaying ? '⏸' : '▶';
+      if (transportPlayBtn) transportPlayBtn.innerText = isPlaying ? '⏸' : '▶';
+      updateNowPlayingUI();
       
       if (isPlaying) {
         startSynthSequencer();
         startWaveformAnimation();
-        showToast(`▶ Playing ${currentProject.title} · ${currentProject.bpm} BPM`);
+        showToast(`▶ Playing: ${currentProject.title} (${currentProject.bpm} BPM · ${currentProject.key})`);
       } else {
         stopSynthSequencer();
         stopWaveformAnimation();
       }
+      renderProjects();
     }
 
-    transportPlayBtn.addEventListener('click', togglePlay);
+    if (transportPlayBtn) transportPlayBtn.addEventListener('click', togglePlay);
 
-    // Harmonic Audio Synth Arpeggiator
+    // Harmonic Synth Sequencer
     function startSynthSequencer() {
       stopSynthSequencer();
-      const baseFreq = currentProject.key.includes('A') ? 220 : currentProject.key.includes('F') ? 174.61 : 196;
+      const baseFreq = currentProject.key.includes('A') ? 220 : currentProject.key.includes('F') ? 174.61 : currentProject.key.includes('D') ? 146.83 : 196;
       const notes = [1, 1.25, 1.5, 1.875, 2];
       let step = 0;
       const intervalMs = (60 / currentProject.bpm / 2) * 1000;
@@ -2236,6 +3077,20 @@
         
         osc.start();
         osc.stop(audioCtx.currentTime + 0.6);
+
+        // Metronome click if engaged
+        if (isMetroOn && step % 2 === 0) {
+          const clickOsc = audioCtx.createOscillator();
+          const clickGain = audioCtx.createGain();
+          clickOsc.frequency.setValueAtTime(step % 4 === 0 ? 1600 : 900, audioCtx.currentTime);
+          clickGain.gain.setValueAtTime(0.04, audioCtx.currentTime);
+          clickGain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.04);
+          clickOsc.connect(clickGain);
+          clickGain.connect(audioCtx.destination);
+          clickOsc.start();
+          clickOsc.stop(audioCtx.currentTime + 0.05);
+        }
+
         step++;
       }, intervalMs);
     }
@@ -2246,69 +3101,77 @@
     }
 
     // Drone Harmonic Reference
-    const droneBtn = document.getElementById('droneToggleBtn');
-    droneBtn.addEventListener('click', () => {
-      initAudio();
-      isDroneOn = !isDroneOn;
-      droneBtn.classList.toggle('active', isDroneOn);
-      if (isDroneOn) {
-        const rootFreq = currentProject.key.includes('A') ? 110 : 130.81;
-        droneOsc = audioCtx.createOscillator();
-        droneGain = audioCtx.createGain();
-        droneOsc.type = 'sine';
-        droneOsc.frequency.setValueAtTime(rootFreq, audioCtx.currentTime);
-        droneGain.gain.setValueAtTime(0.12, audioCtx.currentTime);
-        droneOsc.connect(droneGain);
-        droneGain.connect(audioCtx.destination);
-        droneOsc.start();
-        showToast(`🎵 Root Drone Active: ${currentProject.key} (${rootFreq} Hz)`);
-      } else {
-        if (droneOsc) {
-          droneOsc.stop();
-          droneOsc.disconnect();
-          droneOsc = null;
+    const droneBtn = document.getElementById('droneBtn');
+    if (droneBtn) {
+      droneBtn.addEventListener('click', () => {
+        initAudio();
+        isDroneOn = !isDroneOn;
+        droneBtn.classList.toggle('active', isDroneOn);
+        if (isDroneOn) {
+          const rootFreq = currentProject.key.includes('A') ? 110 : currentProject.key.includes('F') ? 87.31 : 130.81;
+          droneOsc = audioCtx.createOscillator();
+          droneGain = audioCtx.createGain();
+          droneOsc.type = 'sine';
+          droneOsc.frequency.setValueAtTime(rootFreq, audioCtx.currentTime);
+          droneGain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+          droneOsc.connect(droneGain);
+          droneGain.connect(audioCtx.destination);
+          droneOsc.start();
+          showToast(`🎵 Root Drone Active: ${currentProject.key} (${rootFreq} Hz)`);
+        } else {
+          if (droneOsc) {
+            droneOsc.stop();
+            droneOsc.disconnect();
+            droneOsc = null;
+          }
         }
-      }
-    });
+      });
+    }
+
+    // Metro Button
+    const metroBtn = document.getElementById('metroBtn');
+    if (metroBtn) {
+      metroBtn.addEventListener('click', () => {
+        isMetroOn = !isMetroOn;
+        metroBtn.classList.toggle('active', isMetroOn);
+        showToast(`⏱ Metronome ${isMetroOn ? 'Enabled' : 'Disabled'}`);
+      });
+    }
 
     // Verb & Clip Buttons
-    const verbBtn = document.getElementById('verbToggleBtn');
+    const verbBtn = document.getElementById('verbBtn');
     const reverbPanel = document.getElementById('reverbPanel');
-    verbBtn.classList.add('active');
+    if (verbBtn) {
+      verbBtn.addEventListener('click', () => {
+        if (reverbPanel) reverbPanel.classList.toggle('is-open');
+      });
+      verbBtn.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        if (reverbPanel) reverbPanel.classList.toggle('is-open');
+      });
+    }
 
-    verbBtn.addEventListener('click', () => {
-      reverbPanel.classList.toggle('is-open');
-    });
+    const closeReverbBtn = document.getElementById('closeReverbBtn');
+    if (closeReverbBtn && reverbPanel) {
+      closeReverbBtn.addEventListener('click', () => reverbPanel.classList.remove('is-open'));
+    }
 
-    document.getElementById('closeReverbBtn').addEventListener('click', () => {
-      reverbPanel.classList.remove('is-open');
-    });
-
-    const clipBtn = document.getElementById('clipToggleBtn');
-    clipBtn.addEventListener('click', () => {
-      isClipOn = !isClipOn;
-      clipBtn.classList.toggle('active', isClipOn);
-      showToast(`⚡ Soft Clipper ${isClipOn ? 'Engaged' : 'Bypassed'}`);
-    });
-
-    // Reverb Sliders update
-    ['decay', 'size', 'preDelay', 'lowCut', 'highCut', 'mix'].forEach(param => {
-      const slider = document.getElementById(`${param}Slider`);
-      const val = document.getElementById(`${param}Val`);
-      if (slider && val) {
-        slider.addEventListener('input', () => {
-          val.innerText = slider.value + (param === 'decay' ? ' s' : param === 'preDelay' ? ' ms' : param === 'lowCut' ? ' Hz' : param === 'highCut' ? ' Hz' : ' %');
-        });
-      }
-    });
+    const clipBtn = document.getElementById('clipBtn');
+    if (clipBtn) {
+      clipBtn.addEventListener('click', () => {
+        isClipOn = !isClipOn;
+        clipBtn.classList.toggle('active', isClipOn);
+        showToast(`⚡ Analog Soft Clipper ${isClipOn ? 'Engaged' : 'Bypassed'}`);
+      });
+    }
 
     // Waveform Canvas Visualizer
     const canvas = document.getElementById('transportWaveCanvas');
-    const ctx = canvas.getContext('2d');
     let waveAnimId = null;
     let playHead = 0;
 
     function resizeCanvas() {
+      if (!canvas || !canvas.parentElement) return;
       canvas.width = canvas.parentElement.clientWidth * window.devicePixelRatio;
       canvas.height = canvas.parentElement.clientHeight * window.devicePixelRatio;
     }
@@ -2316,26 +3179,24 @@
     resizeCanvas();
 
     function drawWaveform() {
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       const w = canvas.width;
       const h = canvas.height;
-      const bars = 100;
+      const bars = 90;
       const barW = w / bars;
 
       for (let i = 0; i < bars; i++) {
         const progress = i / bars;
-        const barH = (Math.sin(i * 0.2 + playHead * 5) * 0.4 + Math.cos(i * 0.1) * 0.3 + 0.3) * (h * 0.85);
+        const barH = (Math.sin(i * 0.22 + playHead * 5) * 0.35 + Math.cos(i * 0.12) * 0.25 + 0.35) * (h * 0.85);
         
-        ctx.fillStyle = progress < playHead ? 'var(--accent)' : 'rgba(255, 255, 255, 0.2)';
+        ctx.fillStyle = progress < playHead ? '#00ff95' : 'rgba(255, 255, 255, 0.2)';
         ctx.fillRect(i * barW, (h - barH) / 2, barW - 2, barH);
       }
 
       if (isPlaying) {
-        playHead = (playHead + 0.003) % 1;
-        const curSec = Math.floor(playHead * 165);
-        const mins = Math.floor(curSec / 60);
-        const secs = String(curSec % 60).padStart(2, '0');
-        nowPlayingTimeEl.innerText = `${mins}:${secs} / 2:45`;
+        playHead = (playHead + 0.0035) % 1;
         waveAnimId = requestAnimationFrame(drawWaveform);
       }
     }
@@ -2352,11 +3213,23 @@
     }
     drawWaveform();
 
+    // Waveform Scrubbing
+    const waveContainer = document.getElementById('waveContainer');
+    if (waveContainer) {
+      waveContainer.addEventListener('click', (e) => {
+        const rect = waveContainer.getBoundingClientRect();
+        const clickPos = (e.clientX - rect.left) / rect.width;
+        playHead = Math.max(0, Math.min(1, clickPos));
+        drawWaveform();
+      });
+    }
+
     /* -------------------------------------------------------------------------- */
-    /* 8. TOAST SYSTEM & SIMULATE BOUNCE                                          */
+    /* 8. TOAST SYSTEM                                                            */
     /* -------------------------------------------------------------------------- */
     const toastContainer = document.getElementById('toastContainer');
     function showToast(msg) {
+      if (!toastContainer) return;
       const toast = document.createElement('div');
       toast.className = 'toast';
       toast.innerHTML = `<span style="font-size:16px;">🔔</span><span>${msg}</span>`;
@@ -2369,12 +3242,15 @@
       }, 4000);
     }
 
-    document.getElementById('simBounceBtn').addEventListener('click', () => {
-      showToast('🔊 New bounce detected: "Astral_Drift_Master_v4.wav" (awaitWriteFinish complete)');
-    });
-
-    document.getElementById('openMiniBtn').addEventListener('click', () => {
-      showToast('🗗 Floating Mini Player overlay active (Always-on-top mode)');
+    // Reverb Sliders update
+    ['decay', 'size', 'preDelay', 'lowCut', 'highCut', 'mix'].forEach(param => {
+      const slider = document.getElementById(`${param}Slider`);
+      const val = document.getElementById(`${param}Val`);
+      if (slider && val) {
+        slider.addEventListener('input', () => {
+          val.innerText = slider.value + (param === 'decay' ? ' s' : param === 'preDelay' ? ' ms' : param === 'lowCut' ? ' Hz' : param === 'highCut' ? ' Hz' : ' %');
+        });
+      }
     });
 
     /* -------------------------------------------------------------------------- */
