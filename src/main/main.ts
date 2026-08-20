@@ -745,7 +745,8 @@ ipcMain.handle('records:set', (event, key, patch) => {
   const allowed: Record<string, any> = {};
   [
     'key', 'camelot', 'keyConfidence', 'keyAlternate', 'detectedBpm',
-    'analysedFrom', 'favourite'
+    'analysedFrom', 'favourite', 'customColor', 'tonic', 'scale',
+    'modal', 'scaleConfidence', 'tuningA4', 'ragas', 'stemsPath', 'note'
   ].forEach((field) => {
     if (Object.prototype.hasOwnProperty.call(patch, field)) allowed[field] = patch[field];
   });

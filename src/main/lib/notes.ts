@@ -31,6 +31,9 @@ const EMPTY = {
   detectedBpm: null,
   analysedFrom: null,
   favourite: false,
+  customColor: null,
+  tuningA4: 440,
+  ragas: null,
   updatedAt: null
 };
 
@@ -79,7 +82,7 @@ class ProjectStore {
     next.updatedAt = new Date().toISOString();
 
     const isEmpty =
-      !next.note && !next.stemsPath && !next.key && !next.favourite;
+      !next.note && !next.stemsPath && !next.key && !next.favourite && !next.customColor && !next.tonic;
 
     if (isEmpty) delete this.data[key];
     else this.data[key] = next;

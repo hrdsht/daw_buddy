@@ -1908,6 +1908,17 @@ function renderProjectPage() {
     document.documentElement.style.setProperty('--sage', projColor.hex);
     document.documentElement.style.setProperty('--accent-glow', `0 0 18px ${projColor.hex}66`);
     Player.draw();
+  } else {
+    document.body.style.removeProperty('--amber');
+    document.body.style.removeProperty('--amber-ink');
+    document.body.style.removeProperty('--sage');
+    document.body.style.removeProperty('--accent-glow');
+    document.documentElement.style.removeProperty('--amber');
+    document.documentElement.style.removeProperty('--amber-ink');
+    document.documentElement.style.removeProperty('--sage');
+    document.documentElement.style.removeProperty('--accent-glow');
+    applyAppearance();
+    Player.draw();
   }
 
   let tonic = rec.tonic;
