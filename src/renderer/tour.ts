@@ -11,6 +11,7 @@ export interface TourStep {
   title: string;
   description: string;
   position?: 'top' | 'bottom' | 'left' | 'right';
+  beforeStep?: () => void | Promise<void>;
 }
 
 export const TOUR_STEPS: TourStep[] = [
@@ -32,7 +33,7 @@ export const TOUR_STEPS: TourStep[] = [
     target: '#openTools',
     title: 'Integrated Audio Tools Suite',
     description:
-      'Access the Smart Stem Renamer, Vocal Round-Trip Analyzer, Silence Stripper, Sample Auditor, Audio Finisher, and Lossless Trimmer.',
+      'Access the Scale & Raaga Detector, Smart Stem Renamer, Vocal Round-Trip Analyzer, Silence Stripper, Sample Auditor, Audio Finisher, and Lossless Trimmer.',
     position: 'top'
   },
   {
@@ -58,9 +59,81 @@ export const TOUR_STEPS: TourStep[] = [
   }
 ];
 
-const TOUR_VERSION = '0.3.0-beta.1';
+export const PROJECT_TOUR_STEPS: TourStep[] = [
+  {
+    target: '.page__headmain, .page__head',
+    title: 'Project Overview & DAW Fast Launch',
+    description:
+      'View project tempo (BPM), detected musical scale, track counts, and save history. Click "Open project" to launch directly into Ableton, FL Studio, or Logic.',
+    position: 'bottom'
+  },
+  {
+    target: '.page__harmony, .harmony__kb-col',
+    title: 'Interactive Scale & Raaga Inspector',
+    description:
+      'Interactive 1-octave scale keyboard showing detected tonic and scale notes. Click any key to hear notes in concert tuning (432Hz/440Hz), or click the Camelot wheel to inspect harmonic DJ mixing keys.',
+    position: 'bottom'
+  },
+  {
+    target: '.harmony__ragas-box',
+    title: 'Indian Raagas (Aarohana & Avarohana) & DAW Drag',
+    description:
+      'Displays matching Indian Classical Raagas with full ascending (Aarohana) and descending (Avarohana) swara sequences. Drag any Raaga chip directly onto an instrument track in your DAW to generate the melody phrase!',
+    position: 'top'
+  },
+  {
+    target: '.project-tabs',
+    title: 'Populated Renders & Bounces',
+    description:
+      'All exported mixdowns, master bounces, and audio renders for this project are automatically discovered and populated here.',
+    position: 'bottom',
+    beforeStep: () => {
+      const rendersBtn = Array.from(document.querySelectorAll('.project-tabs button')).find((b) =>
+        b.textContent?.trim().toLowerCase().includes('renders')
+      ) as HTMLButtonElement;
+      if (rendersBtn) rendersBtn.click();
+    }
+  },
+  {
+    target: '.format-pills, .filerow',
+    title: 'Drag & Drop Audio Formats (WAV, MP3, FLAC)',
+    description:
+      'Grab any [ WAV ], [ MP3 ], or [ FLAC ] pill and drag it straight into your DAW, Discord, or WhatsApp without digging through Windows Explorer.',
+    position: 'top'
+  },
+  {
+    target: '.filerow__actions, .filerow .pill--sm',
+    title: 'On-Demand Audio & Stem Analysis',
+    description:
+      'Click "Analyse" on any render or audio file to detect its exact tempo (BPM), musical key, Camelot code, and Indian Raagas in the background.',
+    position: 'top'
+  },
+  {
+    target: '.project-tabs',
+    title: 'Multitrack Stems Management',
+    description:
+      'Switch to the Stems tab to preview and manage all isolated track stems. You can play stems, drag them to your DAW, or use the Smart Renamer tool to organize cryptic stem names.',
+    position: 'bottom',
+    beforeStep: () => {
+      const stemsBtn = Array.from(document.querySelectorAll('.project-tabs button')).find((b) =>
+        b.textContent?.trim().toLowerCase().includes('stems')
+      ) as HTMLButtonElement;
+      if (stemsBtn) stemsBtn.click();
+    }
+  },
+  {
+    target: '.player',
+    title: 'Real-Time Audio Player & Space Reverb',
+    description:
+      'Audition mixdowns without launching heavy DAW software. Scrub the interactive waveform, adjust listening volume, or engage the space reverb simulator.',
+    position: 'top'
+  }
+];
+
+export const TOUR_VERSION = '0.3.1-beta.1';
 let activeStepIndex = 0;
 let overlayEl: HTMLElement | null = null;
+let currentTourMode: 'home' | 'project' = 'home';
 
 export function isTourActive(): boolean {
   return Boolean(overlayEl);
@@ -72,13 +145,30 @@ export function startFeatureWalkthrough(force = false) {
     return;
   }
 
+  currentTourMode = 'home';
+  activeStepIndex = 0;
+  cleanupTour();
+  renderTourStep(activeStepIndex);
+}
+
+export function startProjectWalkthrough(force = false) {
+  const lastSeen = localStorage.getItem('dawBuddyProjectTourSeenVersion');
+  if (!force && lastSeen === TOUR_VERSION) {
+    return;
+  }
+
+  currentTourMode = 'project';
   activeStepIndex = 0;
   cleanupTour();
   renderTourStep(activeStepIndex);
 }
 
 export function completeTour() {
-  localStorage.setItem('dawBuddyTourSeenVersion', TOUR_VERSION);
+  if (currentTourMode === 'project') {
+    localStorage.setItem('dawBuddyProjectTourSeenVersion', TOUR_VERSION);
+  } else {
+    localStorage.setItem('dawBuddyTourSeenVersion', TOUR_VERSION);
+  }
   cleanupTour();
 }
 
@@ -111,8 +201,13 @@ function handleResize() {
   }
 }
 
+function getSteps(): TourStep[] {
+  return currentTourMode === 'project' ? PROJECT_TOUR_STEPS : TOUR_STEPS;
+}
+
 function nextStep() {
-  if (activeStepIndex < TOUR_STEPS.length - 1) {
+  const steps = getSteps();
+  if (activeStepIndex < steps.length - 1) {
     activeStepIndex++;
     renderTourStep(activeStepIndex);
   } else {
@@ -127,22 +222,37 @@ function prevStep() {
   }
 }
 
-function renderTourStep(index: number) {
+async function renderTourStep(index: number) {
   cleanupTour();
 
-  const step = TOUR_STEPS[index];
+  const steps = getSteps();
+  const step = steps[index];
   if (!step) return;
+
+  if (step.beforeStep) {
+    try {
+      await step.beforeStep();
+    } catch (err) {
+      console.warn('Tour beforeStep error:', err);
+    }
+    await new Promise((r) => setTimeout(r, 60));
+  }
 
   const targetEl = document.querySelector(step.target) as HTMLElement;
   if (!targetEl) {
     // If target not in current view, advance or finish
-    if (index < TOUR_STEPS.length - 1) {
+    if (index < steps.length - 1) {
       renderTourStep(index + 1);
+    } else {
+      completeTour();
     }
     return;
   }
 
   targetEl.classList.add('tour-highlight-active');
+  try {
+    targetEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } catch (_) {}
 
   overlayEl = document.createElement('div');
   overlayEl.className = 'tour-overlay';
@@ -218,7 +328,7 @@ function renderTourStep(index: number) {
 
   const badge = document.createElement('span');
   badge.className = 'tour-card__badge';
-  badge.textContent = `Step ${index + 1} of ${TOUR_STEPS.length}`;
+  badge.textContent = `Step ${index + 1} of ${steps.length}`;
   head.appendChild(badge);
 
   const skipBtn = document.createElement('button');
@@ -247,7 +357,7 @@ function renderTourStep(index: number) {
 
   const dots = document.createElement('div');
   dots.className = 'tour-card__dots';
-  TOUR_STEPS.forEach((_, i) => {
+  steps.forEach((_, i) => {
     const dot = document.createElement('span');
     dot.className = `tour-card__dot ${i === index ? 'is-active' : ''}`;
     dots.appendChild(dot);
@@ -267,7 +377,7 @@ function renderTourStep(index: number) {
 
   const nextBtn = document.createElement('button');
   nextBtn.className = 'tour-btn tour-btn--primary';
-  nextBtn.textContent = index === TOUR_STEPS.length - 1 ? 'Got it! Finish' : 'Next →';
+  nextBtn.textContent = index === steps.length - 1 ? 'Got it! Finish' : 'Next →';
   nextBtn.addEventListener('click', nextStep);
   navBtns.appendChild(nextBtn);
 
@@ -299,7 +409,6 @@ function positionTourCard(
   let top = 0;
   let left = 0;
 
-  // Measure card height
   const cardH = card.offsetHeight || 200;
 
   if (pos === 'bottom') {
@@ -339,7 +448,6 @@ function positionTourCard(
     }
   }
 
-  // Constrain inside viewport
   left = Math.max(16, Math.min(viewportW - cardW - 16, left));
   top = Math.max(16, Math.min(viewportH - cardH - 16, top));
 
@@ -347,7 +455,6 @@ function positionTourCard(
   card.style.left = `${left}px`;
   card.setAttribute('data-position', pos);
 
-  // Position arrow toward target center
   const targetCenterX = targetRect.left + targetRect.width / 2;
   const arrowX = Math.max(20, Math.min(cardW - 20, targetCenterX - left));
   arrow.style.setProperty('--arrow-x', `${arrowX}px`);

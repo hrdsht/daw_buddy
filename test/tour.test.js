@@ -1,7 +1,7 @@
 'use strict';
 
 const assert = require('assert/strict');
-const { TOUR_STEPS } = require('../src/renderer/tour');
+const { TOUR_STEPS, PROJECT_TOUR_STEPS } = require('../src/renderer/tour');
 
 function testTourStepsIntegrity() {
   assert.ok(Array.isArray(TOUR_STEPS), 'TOUR_STEPS must be an array');
@@ -22,5 +22,17 @@ function testTourStepsIntegrity() {
   });
 }
 
+function testProjectTourStepsIntegrity() {
+  assert.ok(Array.isArray(PROJECT_TOUR_STEPS), 'PROJECT_TOUR_STEPS must be an array');
+  assert.ok(PROJECT_TOUR_STEPS.length >= 6, 'Project tour must feature at least 6 key walkthrough steps');
+
+  PROJECT_TOUR_STEPS.forEach((step, idx) => {
+    assert.ok(step.title && step.title.length > 0, `Project step ${idx} must have a title`);
+    assert.ok(step.description && step.description.length > 0, `Project step ${idx} must have an explanation`);
+    assert.ok(['top', 'bottom', 'left', 'right'].includes(step.position || 'bottom'), `Project step ${idx} has valid position`);
+  });
+}
+
 testTourStepsIntegrity();
+testProjectTourStepsIntegrity();
 console.log('ok - testTourStepsIntegrity');

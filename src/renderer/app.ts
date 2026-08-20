@@ -49,7 +49,7 @@ import {
   ABLETON_PALETTE_GRID,
   getAbletonProjectColor
 } from './dom';
-import { startFeatureWalkthrough } from './tour';
+import { startFeatureWalkthrough, startProjectWalkthrough } from './tour';
 
 // Initialize saved appearance (Default: Minimalist, Dark, Cyan)
 const savedStyle = localStorage.getItem('dawBuddyThemeStyle') || 'minimalist';
@@ -2108,6 +2108,12 @@ function renderProjectPage() {
     tabs.append(tab);
   });
   viewEl.append(tabs);
+
+  setTimeout(() => {
+    if (view === 'project' && openProject) {
+      startProjectWalkthrough();
+    }
+  }, 300);
 
   if (projectTab === 'projectfiles') return renderProjectFilesTab(entry);
   if (projectTab === 'videos') return renderVideosTab(entry);
