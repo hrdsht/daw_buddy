@@ -426,7 +426,7 @@ function renderCollections() {
   // changed to "Every file" when grouping was off, which made the grouping
   // feature look as though it had disappeared.
   const grouped = collButton(
-    'Grouping versions',
+    'Grouped',
     groupedRows.length || entries.length,
     'layers'
   );
@@ -1656,38 +1656,38 @@ function renderProjectToolsTab(entry) {
   [
     {
       key: 'smart-rename',
-      icon: '🏷',
+      icon: 'sparkles',
       title: 'Smart renamer',
       text: 'Classify and rename cryptic stem exports into mix-ready instrument categories.'
     },
     {
       key: 'rename',
-      icon: 'Aa',
+      icon: 'type',
       title: 'Batch renamer',
       text: 'Clean up prefixes/suffixes or apply token templates across audio files.'
     },
     {
       key: 'silence',
-      icon: '✂',
+      icon: 'scissors',
       title: 'Strip silence',
       text: 'Find trailing silence in WAV files and make trimmed copies without touching the originals.'
     },
     {
       key: 'trim',
-      icon: '⇥',
+      icon: 'crop',
       title: 'Trim audio',
       text: 'Drag handles on the waveform to crop a WAV to a chosen region, audition it, and save a copy.'
     },
     {
       key: 'qc',
-      icon: '✓',
+      icon: 'check',
       title: 'Check audio',
       text: 'Flag quiet files, silent files and loops that may drift or click when repeated.'
     }
   ].forEach((tool) => {
     const card = el('button', 'tool-card');
     card.type = 'button';
-    card.append(el('span', 'tool-card__icon', tool.icon));
+    card.append(svgIcon(tool.icon, 'tool-card__icon', 20));
     const copy = el('span', 'tool-card__copy');
     copy.append(el('b', 'tool-card__title', tool.title));
     copy.append(el('span', 'tool-card__text', tool.text));
@@ -5314,50 +5314,50 @@ function renderStandaloneTools() {
   [
     {
       view: 'dedupe',
-      icon: '≋',
+      icon: 'copy',
       title: 'Sample cleanup',
       text: 'Find duplicate imported samples and safely replace extra copies with links.'
     },
     {
       view: 'disk',
-      icon: 'GB',
+      icon: 'harddrive',
       title: 'Disk insights',
       text: 'See which project folders use the most storage without changing or deleting anything.'
     },
     {
       view: 'id3',
-      icon: 'ID3',
+      icon: 'tag',
       title: 'ID3 editor',
       text: 'Add, replace or remove metadata across many MP3 files at once.'
     },
     {
       view: 'rename',
-      icon: 'Aa',
+      icon: 'type',
       title: 'Bulk renamer',
       text: 'Clean up or standardise many filenames with a preview before anything changes.'
     },
     {
       view: 'finish',
-      icon: '↗',
+      icon: 'activity',
       title: 'Audio finishing',
       text: 'Normalise WAV files and optionally fit long audio to an exact beat or bar length.'
     },
     {
       view: 'silence',
-      icon: '✂',
+      icon: 'scissors',
       title: 'Strip silence',
       text: 'Detect leading or trailing silence and create trimmed copies while preserving originals.'
     },
     {
       view: 'vocal',
-      icon: 'VOX',
+      icon: 'mic',
       title: 'Vocal reconstruction',
       text: 'Split long vocals for external processing, then rebuild them at their exact original timing.'
     }
   ].forEach((tool) => {
     const card = el('button', 'tool-card');
     card.type = 'button';
-    card.append(el('span', 'tool-card__icon', tool.icon));
+    card.append(svgIcon(tool.icon, 'tool-card__icon', 20));
     const copy = el('span', 'tool-card__copy');
     copy.append(el('b', 'tool-card__title', tool.title));
     copy.append(el('span', 'tool-card__text', tool.text));
@@ -5569,12 +5569,23 @@ const ICONS: Record<string, string> = {
   folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
   disc: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/>',
   sliders: '<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>',
+  // tool-card icons
+  sparkles: '<path d="M12 3l1.9 4.8L18 9.7l-4.1 1.9L12 16l-1.9-4.4L6 9.7l4.1-1.9z"/><path d="M19 14l.8 1.9L22 16.6l-2.2.9L19 20l-.8-2.5L16 16.6l2.2-.7z"/>',
+  type: '<polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>',
+  scissors: '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/>',
+  crop: '<path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/>',
+  check: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+  copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  harddrive: '<line x1="22" y1="12" x2="2" y2="12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" y1="16" x2="6.01" y2="16"/><line x1="10" y1="16" x2="10.01" y2="16"/>',
+  tag: '<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
+  activity: '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
+  mic: '<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>',
   settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 13.5a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-2.87 1.2V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 6 19.4l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 3.4 13.5H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.6 6l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 10.5 3.4V3a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 2.87 1.2l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.88z"/>'
 };
 
-function svgIcon(name: string, cls = 'coll__icon'): any {
+function svgIcon(name: string, cls = 'coll__icon', size = 16): any {
   const span = el('span', cls);
-  span.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true">${ICONS[name] || ''}</svg>`;
+  span.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" width="${size}" height="${size}" aria-hidden="true">${ICONS[name] || ''}</svg>`;
   return span;
 }
 

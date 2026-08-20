@@ -1866,11 +1866,8 @@ body.is-mac .topbar {
   place-items: center;
   margin-bottom: 14px;
   border-radius: 11px;
-  background: rgba(157, 222, 100, 0.13);
+  background: color-mix(in srgb, var(--amber) 14%, transparent);
   color: var(--amber);
-  font-family: var(--mono);
-  font-size: 15px;
-  font-weight: 600;
 }
 
 .tool-card__copy {
