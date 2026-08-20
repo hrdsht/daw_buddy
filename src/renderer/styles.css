@@ -1834,16 +1834,16 @@ body.is-mac .topbar {
 
 .tool-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
   gap: 12px;
 }
 
 .tool-card {
   display: flex;
-  min-height: 210px;
+  min-height: 148px;
   flex-direction: column;
   align-items: flex-start;
-  padding: 20px;
+  padding: 18px;
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
   background: var(--raised);
@@ -1861,10 +1861,10 @@ body.is-mac .topbar {
 
 .tool-card__icon {
   display: grid;
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
   place-items: center;
-  margin-bottom: 28px;
+  margin-bottom: 14px;
   border-radius: 11px;
   background: rgba(157, 222, 100, 0.13);
   color: var(--amber);
@@ -2539,10 +2539,6 @@ body.theme-light .toast {
   .theme-toggle,
   #favFilter {
     display: none;
-  }
-
-  .tool-grid {
-    grid-template-columns: 1fr;
   }
 
   .tool-card {
