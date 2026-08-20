@@ -1,9 +1,7 @@
-appId: com.hrdsht.daw-buddy
+appId: com.ba55ick.daw-buddy
 productName: DAW Buddy
+copyright: Copyright © 2026 ba55ick
 
-# The app runs the compiled output in dist/, plus package.json (for "main")
-# and its production dependencies (chokidar). Everything else — src, tests,
-# docs — is left out of the installer.
 directories:
   output: release
   buildResources: build
@@ -12,27 +10,30 @@ files:
   - dist/**/*
   - package.json
 
-# Windows: a normal NSIS installer.
 win:
   target:
-    - nsis
+    - target: nsis
+      arch:
+        - x64
+
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
+  shortcutName: DAW Buddy
+  uninstallDisplayName: DAW Buddy
 
-# macOS: a .dmg for both Intel and Apple Silicon. The CI runner is arm64, so
-# without an explicit arch list Intel Macs would get no build at all. Both are
-# pure-JS packaging (no native cross-compile), so one runner produces both.
-# Unsigned for now — see docs/proposals/0003 for the signing plan.
 mac:
   target:
     - target: dmg
       arch:
         - x64
         - arm64
+    - target: zip
+      arch:
+        - x64
+        - arm64
   category: public.app-category.music
 
-# Bonus: a Linux AppImage from the same source.
 linux:
   target:
     - AppImage
