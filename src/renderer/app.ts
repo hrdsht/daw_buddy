@@ -2347,42 +2347,31 @@ function renderProjectToolsTab(entry) {
     viewEl.append(backBar);
 
     if (projectTool === 'randomizer') return renderRandomizerTool(entry);
-    if (projectTool === 'rename' || projectTool === 'batch-rename') return renderRenameTab(entry);
-    if (projectTool === 'smart-rename') return renderSmartRenameTab(entry);
+    if (projectTool === 'rename' || projectTool === 'batch-rename' || projectTool === 'smart-rename') {
+      if (renamerSubMode === 'smart') return renderSmartRenameTab(entry);
+      return renderRenameTab(entry);
+    }
     if (projectTool === 'silence') return renderSilenceTab(entry);
     if (projectTool === 'trim') return renderTrimTab(entry);
     if (projectTool === 'qc') return renderQcTab(entry);
   }
 
   const section = el('div', 'section');
-  section.append(headRow('Tools'));
-  section.append(
-    el(
-      'div',
-      'callout',
-      'Choose a job when you need it. Keeping these utilities together leaves the project page focused on the music, files and versions.'
-    )
-  );
+  section.append(headRow('Tools', 'Choose a job when you need it. Keeping these utilities together leaves the project page focused on the music, files and versions.', 'tools'));
 
   const grid = el('div', 'tool-grid');
   [
     {
       key: 'randomizer',
       icon: 'dice',
-      title: 'Music Randomizer',
-      text: 'Generate random musical ideas: key, scale, matching Indian Raagas, BPM, and suggested time signatures.'
-    },
-    {
-      key: 'smart-rename',
-      icon: 'sparkles',
-      title: 'Smart renamer',
-      text: 'Classify and rename cryptic stem exports into mix-ready instrument categories.'
+      title: 'Producer Randomizer & Genre Challenge',
+      text: 'Generate random musical ideas: key, scale, matching Indian Raagas, BPM, Tala meter, and 48+ genre challenges.'
     },
     {
       key: 'rename',
-      icon: 'type',
-      title: 'Batch renamer',
-      text: 'Clean up prefixes/suffixes or apply token templates across audio files.'
+      icon: 'sparkles',
+      title: 'Renamer',
+      text: 'AI-assisted Smart stem classifier and bulk batch filename pattern tool.'
     },
     {
       key: 'silence',
@@ -3124,22 +3113,62 @@ function renderNotesTab(entry) {
 
 /* ------------------------------ rename ---------------------------- */
 
-let renameFolder = null;
+let renameFolder: string | null = null;
 let renameMode = 'simple';
+let renamerSubMode: 'smart' | 'bulk' = 'smart';
+
+function renderRenamerSwitcher(entry: any = null, activeMode: 'smart' | 'bulk' = 'smart') {
+  const switcher = el('div', 'renamer-mode-switcher');
+  
+  const smartBtn = el(
+    'button',
+    `renamer-mode-btn ${activeMode === 'smart' ? 'is-active' : ''}`,
+    '✨ Smart renamer'
+  );
+  smartBtn.type = 'button';
+  smartBtn.title = 'AI-assisted instrument classification for stems';
+  smartBtn.addEventListener('click', () => {
+    renamerSubMode = 'smart';
+    if (renameFolder && !smartRenameFolder) smartRenameFolder = renameFolder;
+    render();
+  });
+
+  const bulkBtn = el(
+    'button',
+    `renamer-mode-btn ${activeMode === 'bulk' ? 'is-active' : ''}`,
+    '📝 Bulk renamer'
+  );
+  bulkBtn.type = 'button';
+  bulkBtn.title = 'Batch pattern replace, numbering & templates';
+  bulkBtn.addEventListener('click', () => {
+    renamerSubMode = 'bulk';
+    if (smartRenameFolder && !renameFolder) renameFolder = smartRenameFolder;
+    render();
+  });
+
+  switcher.append(smartBtn, bulkBtn);
+  return switcher;
+}
 
 function renderStandaloneRename() {
   viewEl.innerHTML = '';
-  renderRenameTab(null);
+  if (renamerSubMode === 'smart') {
+    renderSmartRenameTab(null);
+  } else {
+    renderRenameTab(null);
+  }
 }
 
 function renderRenameTab(entry = null) {
   if (!renameFolder && entry) renameFolder = entry.folder;
+  if (!renameFolder && smartRenameFolder) renameFolder = smartRenameFolder;
   const projectName = entry ? entry.name : renameFolder ? basename(renameFolder) : 'chosen folder';
   const projectBpm = entry ? bpmFor(entry) : null;
   const projectRecord = entry ? record(entry.path) : {};
 
   const section = el('div', 'section');
-  section.append(headRow(entry ? 'Rename files' : 'Batch renamer'));
+  section.append(headRow('Renamer', 'Clean up prefixes/suffixes or apply token templates across audio files', 'rename'));
+  section.append(renderRenamerSwitcher(entry, 'bulk'));
 
   /* which folder */
   const folderBar = el('div', 'callout');
@@ -3411,7 +3440,8 @@ async function renderSmartRenameTab(entry: any = null) {
   if (!smartRenameFolder && renameFolder) smartRenameFolder = renameFolder;
 
   const section = el('div', 'section');
-  section.append(headRow('Smart renamer'));
+  section.append(headRow('Renamer', 'Classify & rename cryptic stems into mix-ready instrument categories', 'smart-rename'));
+  section.append(renderRenamerSwitcher(entry, 'smart'));
 
   /* which folder */
   const folderBar = el('div', 'callout');
@@ -7630,9 +7660,9 @@ function renderStandaloneTools() {
     },
     {
       view: 'rename',
-      icon: 'type',
-      title: 'Bulk renamer',
-      text: 'Clean up or standardise many filenames with a preview before anything changes.'
+      icon: 'sparkles',
+      title: 'Renamer',
+      text: 'AI-assisted Smart stem classifier and bulk batch filename pattern tool.'
     },
     {
       view: 'finish',

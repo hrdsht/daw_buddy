@@ -5246,5 +5246,40 @@ body.multi-select-mode .filerow__select-handle {
   transform: translateY(-1px);
 }
 
+/* Renamer Mode Switcher */
+.renamer-mode-switcher {
+  display: inline-flex;
+  gap: 6px;
+  background: var(--surface, #1e1e24);
+  padding: 4px;
+  border-radius: var(--r);
+  border: 1px solid var(--line);
+  margin-bottom: 14px;
+}
+
+.renamer-mode-btn {
+  padding: 6px 14px;
+  border-radius: calc(var(--r) - 2px);
+  font-size: 12.5px;
+  font-weight: 600;
+  background: transparent;
+  color: var(--dim);
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.renamer-mode-btn:hover {
+  color: var(--text);
+  background: var(--raised);
+}
+
+.renamer-mode-btn.is-active {
+  background: var(--raised);
+  color: var(--accent);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+
 
 
