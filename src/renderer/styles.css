@@ -236,7 +236,7 @@ select {
 
 .app {
   display: grid;
-  grid-template-columns: 218px minmax(0, 1fr);
+  grid-template-columns: 236px minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) var(--player-h);
   grid-template-areas:
     "sidebar main"
@@ -321,16 +321,16 @@ body.is-mac .sidebar {
 .coll {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 9px;
   width: 100%;
-  padding: 9px 12px;
+  padding: 8px 11px;
   background: none;
   border: none;
   border-radius: var(--r);
   text-align: left;
   cursor: pointer;
   color: var(--muted);
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 500;
 }
 
@@ -342,6 +342,23 @@ body.is-mac .sidebar {
 .coll.is-on {
   background: var(--raised);
   color: var(--text);
+}
+
+.coll__icon,
+.side-action__icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  color: var(--dim);
+}
+
+.coll:hover .coll__icon,
+.side-action:hover .side-action__icon {
+  color: var(--muted);
+}
+
+.coll.is-on .coll__icon {
+  color: var(--amber);
 }
 
 .coll__name {
@@ -376,6 +393,9 @@ body.is-mac .sidebar {
 }
 
 .side-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   width: 100%;
   padding: 9px 12px;
   background: none;
@@ -384,6 +404,7 @@ body.is-mac .sidebar {
   text-align: left;
   color: var(--muted);
   font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -418,6 +439,16 @@ body.is-mac .sidebar {
 
 body.is-mac .topbar {
   padding-top: 26px;
+}
+
+.topbar__title {
+  flex: 0 0 auto;
+  margin-right: 4px;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  white-space: nowrap;
 }
 
 .round {
@@ -806,6 +837,15 @@ body.is-mac .topbar {
 .badge--fav {
   background: rgba(127, 201, 168, 0.16);
   color: var(--sage);
+}
+
+/* DAW label as a quiet neutral pill on each row — the reference "type" badge. */
+.badge--daw {
+  background: var(--raised);
+  color: var(--muted);
+  border: 1px solid var(--line);
+  font-weight: 500;
+  letter-spacing: 0;
 }
 
 .cell {
