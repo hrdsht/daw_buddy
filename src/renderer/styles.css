@@ -1230,6 +1230,35 @@ body.is-mac .topbar {
   border: 1px solid var(--line);
 }
 
+.page__harmony--demo {
+  border-style: dashed;
+  border-color: rgba(255, 180, 0, 0.45);
+}
+
+.harmony__demo-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  margin-bottom: 3px;
+}
+
+.harmony__demo-pill {
+  background: rgba(255, 180, 0, 0.15);
+  color: #ffb400;
+  border: 1px solid rgba(255, 180, 0, 0.35);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.harmony__demo-note {
+  color: var(--dim);
+  font-size: 10px;
+}
+
 .harmony__keyboard-col {
   display: flex;
   flex-direction: column;

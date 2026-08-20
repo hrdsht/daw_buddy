@@ -68,10 +68,10 @@ export const PROJECT_TOUR_STEPS: TourStep[] = [
     position: 'bottom'
   },
   {
-    target: '.page__harmony, .harmony__kb-col',
-    title: 'Interactive Scale & Raaga Inspector',
+    target: '.page__harmony, .harmony__keyboard-col',
+    title: 'Interactive Scale & Raaga Keyboard',
     description:
-      'Interactive 1-octave scale keyboard showing detected tonic and scale notes. Click any key to hear notes in concert tuning (432Hz/440Hz), or click the Camelot wheel to inspect harmonic DJ mixing keys.',
+      'Displays the active musical scale and root note. If not yet analysed, this shows an interactive Demo Preview (A Minor · 8A) so you can audition notes. Analysing any audio file or render will automatically populate your authentic key and scale!',
     position: 'bottom'
   },
   {

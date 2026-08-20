@@ -1493,17 +1493,25 @@ function renderProjectHarmony(entry, rec, projectBpm) {
     else if (rec.key.includes('maj')) scale = scale || 'major';
   }
 
-  const tonicPc = tonic ? DSP.NOTES.indexOf(tonic) : -1;
-  const degrees = (scale && DSP.SCALES[scale]) || (rec.key?.includes('min') ? DSP.SCALES.minor : DSP.SCALES.major);
+  const isDemo = !tonic || !scale || DSP.NOTES.indexOf(tonic) === -1;
+  const effectiveTonic = isDemo ? 'A' : tonic;
+  const effectiveScale = isDemo ? 'minor' : scale;
+  const effectiveCamelot = isDemo ? '8A' : (camelot || '8A');
+  const tonicPc = DSP.NOTES.indexOf(effectiveTonic);
+  const degrees = (effectiveScale && DSP.SCALES[effectiveScale]) || DSP.SCALES.minor;
 
-  if (tonicPc === -1 || !degrees) {
-    return null;
-  }
-
-  const container = el('div', 'page__harmony');
+  const container = el('div', `page__harmony ${isDemo ? 'page__harmony--demo' : ''}`);
 
   // Left column: Keyboard + Drag MIDI button
   const kbCol = el('div', 'harmony__keyboard-col');
+
+  if (isDemo) {
+    const demoBanner = el('div', 'harmony__demo-banner');
+    demoBanner.append(el('span', 'harmony__demo-pill', 'Demo Preview · A min (8A)'));
+    demoBanner.append(el('span', 'harmony__demo-note', 'Analyse audio to detect real key'));
+    demoBanner.title = "Audition / Demo scale (A Minor 8A). Analysing any render or audio file will automatically detect and populate your project's authentic key & Raagas.";
+    kbCol.append(demoBanner);
+  }
 
   // Keyboard
   const kb = kbLayoutFn(2, 13, 50);
@@ -1548,7 +1556,7 @@ function renderProjectHarmony(entry, rec, projectBpm) {
   svgKb.setAttribute('title', 'Click to open Camelot Harmonic Wheel & Scale Inspector');
   svgKb.addEventListener('click', (e: MouseEvent) => {
     e.stopPropagation();
-    openCamelotModal(entry, rec, projectBpm);
+    openCamelotModal(entry, { ...rec, tonic: effectiveTonic, scale: effectiveScale, camelot: effectiveCamelot, key: isDemo ? 'A min' : rec.key }, projectBpm);
   });
 
   kbCol.append(svgKb);
@@ -1560,7 +1568,7 @@ function renderProjectHarmony(entry, rec, projectBpm) {
 
   const midiNotes = notesFor(tonicPc, degrees, 3);
   const midiBytes = scaleMidi(midiNotes, { bpm: projectBpm || 120, bars: 4 });
-  const midiFileName = `${entry.name.replace(/[^a-zA-Z0-9_-]/g, '_')}_${tonic}_${scale || 'scale'}.mid`;
+  const midiFileName = `${entry.name.replace(/[^a-zA-Z0-9_-]/g, '_')}_${effectiveTonic}_${effectiveScale || 'scale'}.mid`;
 
   midiBtn.addEventListener('dragstart', async (e: DragEvent) => {
     if (e.dataTransfer) {
@@ -1620,7 +1628,7 @@ function renderProjectHarmony(entry, rec, projectBpm) {
       const avaroh = raga.avarohanaDegrees || [...aaroh].reverse();
       const rMidiBytes = ragaMidi(tonicPc, aaroh, avaroh, { bpm: projectBpm || 120 });
       const cleanRagaName = raga.name.replace(/[^a-zA-Z0-9_-]/g, '_');
-      const rMidiFileName = `${entry.name.replace(/[^a-zA-Z0-9_-]/g, '_')}_Raga_${cleanRagaName}_${tonic || 'C'}.mid`;
+      const rMidiFileName = `${entry.name.replace(/[^a-zA-Z0-9_-]/g, '_')}_Raga_${cleanRagaName}_${effectiveTonic || 'C'}.mid`;
 
       chip.draggable = true;
       chip.addEventListener('dragstart', async (e: DragEvent) => {
@@ -1637,7 +1645,7 @@ function renderProjectHarmony(entry, rec, projectBpm) {
 
       chip.addEventListener('click', (e) => {
         e.stopPropagation();
-        openCamelotModal(entry, { ...rec, scale: raga.name.toLowerCase() }, projectBpm);
+        openCamelotModal(entry, { ...rec, tonic: effectiveTonic, camelot: effectiveCamelot, scale: raga.name.toLowerCase() }, projectBpm);
       });
       ragasList.append(chip);
     });
@@ -1651,11 +1659,11 @@ function renderProjectHarmony(entry, rec, projectBpm) {
   const wheelCol = el('div', 'harmony__wheel-col');
   wheelCol.title = 'Click to expand Camelot wheel & inspect all scales';
   wheelCol.style.cursor = 'pointer';
-  wheelCol.addEventListener('click', () => openCamelotModal(entry, rec, projectBpm));
+  wheelCol.addEventListener('click', () => openCamelotModal(entry, { ...rec, tonic: effectiveTonic, scale: effectiveScale, camelot: effectiveCamelot, key: isDemo ? 'A min' : rec.key }, projectBpm));
 
   const wheelRadius = 40;
   const wheel = wheelLayoutFn(wheelRadius);
-  const comp = camelot ? camelotCompatible(camelot) : null;
+  const comp = effectiveCamelot ? camelotCompatible(effectiveCamelot) : null;
 
   const svgWheel = document.createElementNS(svgNS, 'svg');
   const wheelSize = wheelRadius * 2 + 12;
@@ -1665,7 +1673,7 @@ function renderProjectHarmony(entry, rec, projectBpm) {
   svgWheel.setAttribute('height', String(wheelSize));
 
   wheel.segments.forEach((seg) => {
-    const isCurrent = camelot && seg.code === camelot;
+    const isCurrent = effectiveCamelot && seg.code === effectiveCamelot;
     const isRelative = comp && seg.code === comp.relative;
     const isNeighbor = comp && (seg.code === comp.up || seg.code === comp.down);
 
