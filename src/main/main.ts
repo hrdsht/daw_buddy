@@ -991,6 +991,19 @@ ipcMain.handle('tools:renameApply', async (event, planned, meta) => {
 
 ipcMain.handle('tools:renameUndo', () => renamer.undo(undoLog()));
 
+function getDragIcon(customIcon?: string) {
+  try {
+    const iconPath = customIcon || path.join(__dirname, '..', 'renderer', 'assets', 'dawbuddy-logo-v2.png');
+    const img = nativeImage.createFromPath(iconPath);
+    if (!img.isEmpty()) {
+      return img.resize({ width: 32, height: 32 });
+    }
+  } catch (err: any) {
+    console.error('[getDragIcon] Failed to load drag icon:', err?.message);
+  }
+  return nativeImage.createEmpty();
+}
+
 ipcMain.handle('tools:dragFiles', async (event, { filePaths, icon }: any) => {
   try {
     if (!filePaths || !Array.isArray(filePaths) || filePaths.length === 0) {
@@ -1011,16 +1024,16 @@ ipcMain.handle('tools:dragFiles', async (event, { filePaths, icon }: any) => {
       return { success: false, error: 'No valid files to drag' };
     }
 
-    const iconPath = icon || path.join(__dirname, '..', 'renderer', 'assets', 'dawbuddy-logo-v2.png');
+    const dragIcon = getDragIcon(icon);
     if (validFiles.length === 1) {
       event.sender.startDrag({
         file: validFiles[0],
-        icon: iconPath
+        icon: dragIcon
       });
     } else {
       event.sender.startDrag({
         files: validFiles,
-        icon: iconPath
+        icon: dragIcon
       });
     }
     return { success: true, count: validFiles.length, files: validFiles };
@@ -1037,10 +1050,10 @@ ipcMain.handle('tools:dragMidi', async (event, { filename, data }: any) => {
     const safeName = (filename || 'scale.mid').replace(/[^a-zA-Z0-9_#.-]/g, '_');
     const filePath = path.join(tempDir, safeName);
     await fsp.writeFile(filePath, Buffer.from(data));
-    const iconPath = path.join(__dirname, '..', 'renderer', 'assets', 'dawbuddy-logo-v2.png');
+    const dragIcon = getDragIcon();
     event.sender.startDrag({
       file: filePath,
-      icon: iconPath
+      icon: dragIcon
     });
     return { success: true, filePath };
   } catch (err: any) {

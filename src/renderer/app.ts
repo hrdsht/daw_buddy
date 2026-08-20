@@ -985,7 +985,15 @@ function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
     const midiBytes = scaleMidi(midiNotes, { bpm: projectBpm || 120, bars: 4 });
     const midiFileName = `${entry.name.replace(/[^a-zA-Z0-9_-]/g, '_')}_${selectedTonic}_${selectedScale}.mid`;
     midiBtn.draggable = true;
-    midiBtn.addEventListener('dragstart', async () => {
+    midiBtn.addEventListener('dragstart', async (e: DragEvent) => {
+      if (e.dataTransfer) {
+        e.dataTransfer.setData('text/plain', midiFileName);
+        e.dataTransfer.effectAllowed = 'copy';
+        const canvas = document.createElement('canvas');
+        canvas.width = 1;
+        canvas.height = 1;
+        e.dataTransfer.setDragImage(canvas, 0, 0);
+      }
       if (window.api.dragMidi) await window.api.dragMidi(midiFileName, Array.from(midiBytes));
     });
     midiBtn.addEventListener('click', async () => {
@@ -1258,7 +1266,15 @@ function renderProjectHarmony(entry, rec, projectBpm) {
   const midiBytes = scaleMidi(midiNotes, { bpm: projectBpm || 120, bars: 4 });
   const midiFileName = `${entry.name.replace(/[^a-zA-Z0-9_-]/g, '_')}_${tonic}_${scale || 'scale'}.mid`;
 
-  midiBtn.addEventListener('dragstart', async () => {
+  midiBtn.addEventListener('dragstart', async (e: DragEvent) => {
+    if (e.dataTransfer) {
+      e.dataTransfer.setData('text/plain', midiFileName);
+      e.dataTransfer.effectAllowed = 'copy';
+      const canvas = document.createElement('canvas');
+      canvas.width = 1;
+      canvas.height = 1;
+      e.dataTransfer.setDragImage(canvas, 0, 0);
+    }
     if (window.api.dragMidi) {
       await window.api.dragMidi(midiFileName, Array.from(midiBytes));
     }
@@ -5726,10 +5742,14 @@ function updateSelectionBar() {
   const dragBtn = el('button', 'pill pill--solid selection-bar__drag-btn', `⤓ Drag ${count} to DAW`);
   dragBtn.title = 'Click or drag this button directly into your DAW or a folder!';
   dragBtn.draggable = true;
-  dragBtn.addEventListener('dragstart', async (e) => {
+  dragBtn.addEventListener('dragstart', async (e: DragEvent) => {
     if (e.dataTransfer) {
       e.dataTransfer.setData('text/plain', filePaths.join('\n'));
       e.dataTransfer.effectAllowed = 'copy';
+      const canvas = document.createElement('canvas');
+      canvas.width = 1;
+      canvas.height = 1;
+      e.dataTransfer.setDragImage(canvas, 0, 0);
     }
     if (window.api.dragFiles) {
       await window.api.dragFiles(filePaths);
@@ -5800,7 +5820,7 @@ function attachDraggableAndSelectable(rowElement: HTMLElement, item: SelectedIte
   }
 
   // Native File Dragging
-  rowElement.addEventListener('dragstart', async (e) => {
+  rowElement.addEventListener('dragstart', async (e: DragEvent) => {
     let pathsToDrag = [item.path];
     if (SelectionState.active && SelectionState.isSelected(item.id)) {
       pathsToDrag = SelectionState.getFilePaths();
@@ -5809,6 +5829,10 @@ function attachDraggableAndSelectable(rowElement: HTMLElement, item: SelectedIte
     if (e.dataTransfer) {
       e.dataTransfer.setData('text/plain', pathsToDrag.join('\n'));
       e.dataTransfer.effectAllowed = 'copy';
+      const canvas = document.createElement('canvas');
+      canvas.width = 1;
+      canvas.height = 1;
+      e.dataTransfer.setDragImage(canvas, 0, 0);
     }
 
     if (window.api.dragFiles) {

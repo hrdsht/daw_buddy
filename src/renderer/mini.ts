@@ -170,6 +170,10 @@ dragBtn.addEventListener('dragstart', async (e: DragEvent) => {
   if (e.dataTransfer) {
     e.dataTransfer.setData('text/plain', currentTrackPath);
     e.dataTransfer.effectAllowed = 'copy';
+    const canvas = document.createElement('canvas');
+    canvas.width = 1;
+    canvas.height = 1;
+    e.dataTransfer.setDragImage(canvas, 0, 0);
   }
   if (window.api && window.api.dragFiles) {
     await window.api.dragFiles([currentTrackPath]);

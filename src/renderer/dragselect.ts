@@ -148,6 +148,10 @@ export function updateSelectionBar() {
     if (e.dataTransfer) {
       e.dataTransfer.setData('text/plain', filePaths.join('\n'));
       e.dataTransfer.effectAllowed = 'copy';
+      const canvas = document.createElement('canvas');
+      canvas.width = 1;
+      canvas.height = 1;
+      e.dataTransfer.setDragImage(canvas, 0, 0);
     }
     if (window.api && window.api.dragFiles) {
       await window.api.dragFiles(filePaths);
@@ -232,6 +236,10 @@ export function attachDraggableAndSelectable(rowElement: HTMLElement, item: Sele
     if (e.dataTransfer) {
       e.dataTransfer.setData('text/plain', pathsToDrag.join('\n'));
       e.dataTransfer.effectAllowed = 'copy';
+      const canvas = document.createElement('canvas');
+      canvas.width = 1;
+      canvas.height = 1;
+      e.dataTransfer.setDragImage(canvas, 0, 0);
     }
 
     if (window.api && window.api.dragFiles) {
