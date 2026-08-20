@@ -36,5 +36,23 @@ mac:
 
 linux:
   target:
-    - AppImage
+    - target: AppImage
+      arch:
+        - x64
+        - arm64
+    - target: deb
+      arch:
+        - x64
+        - arm64
+    - target: rpm
+      arch:
+        - x64
+    - target: tar.gz
+      arch:
+        - x64
+        - arm64
   category: Audio
+  desktop:
+    Name: DAW Buddy
+    Comment: Browse, analyse and tidy your music production sessions
+    Categories: AudioVideo;Audio;Music;

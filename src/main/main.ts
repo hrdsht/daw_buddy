@@ -530,7 +530,7 @@ function guard(target) {
 const platformInfo = () => ({
   platform: process.platform,
   isMac,
-  fileManager: isMac ? 'Finder' : 'File Explorer'
+  fileManager: isMac ? 'Finder' : (process.platform === 'linux' ? 'File Manager' : 'File Explorer')
 });
 
 const fullSettings = () => ({

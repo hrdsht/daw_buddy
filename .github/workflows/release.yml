@@ -56,7 +56,7 @@ jobs:
         shell: bash
         run: |
           shopt -s nullglob
-          files=(release/*.dmg release/*.exe release/*.AppImage)
+          files=(release/*.dmg release/*.exe release/*.AppImage release/*.deb release/*.rpm release/*.tar.gz release/*.zip)
           echo "Uploading: ${files[*]}"
           gh release upload "$TAG" "${files[@]}" --clobber
         env:
@@ -72,4 +72,8 @@ jobs:
             release/*.exe
             release/*.dmg
             release/*.AppImage
+            release/*.deb
+            release/*.rpm
+            release/*.tar.gz
+            release/*.zip
           if-no-files-found: warn
