@@ -54,10 +54,8 @@ linux:
   category: Audio
   synopsis: Fast project browser, key/scale analyzer, stem manager and audio organizer for music producers
   desktop:
-    Name: DAW Buddy
-    Comment: Browse, analyse and tidy your music production sessions
-    Categories: AudioVideo;Audio;Music;
-    StartupWMClass: daw-buddy
-    Terminal: false
-    MimeType: application/x-ableton-live-set;application/x-fl-studio-project;audio/x-wav;audio/mpeg;
+    entry:
+      StartupWMClass: daw-buddy
+      Categories: AudioVideo;Audio;Music;
+      MimeType: application/x-ableton-live-set;application/x-fl-studio-project;audio/x-wav;audio/mpeg;
 
