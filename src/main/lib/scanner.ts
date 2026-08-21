@@ -538,6 +538,9 @@ function describeReadError(err) {
     if (process.platform === 'darwin') {
       return 'macOS is blocking access. Open System Settings, then Privacy & Security, and give this app permission to the folder.';
     }
+    if (process.platform === 'linux') {
+      return 'Permission denied. Check Linux file read permissions (chmod/chown) or group access for this mount point.';
+    }
     return 'Permission denied. Check the folder is not read-only or in use.';
   }
   if (err.code === 'ENOENT') {

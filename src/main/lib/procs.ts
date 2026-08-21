@@ -29,9 +29,17 @@ const DAWS = [
   { match: /^nuendo/i, name: 'Nuendo' },
   { match: /^studio ?one/i, name: 'Fender Studio Pro' },
   { match: /^fender ?studio/i, name: 'Fender Studio Pro' },
+  { match: /^studioapp/i, name: 'Studio One' },
   { match: /^logic ?pro/i, name: 'Logic Pro' },
   { match: /^pro ?tools/i, name: 'Pro Tools' },
-  { match: /^bitwig/i, name: 'Bitwig' }
+  { match: /^bitwig/i, name: 'Bitwig Studio' },
+  { match: /^ardour/i, name: 'Ardour' },
+  { match: /^lmms$/i, name: 'LMMS' },
+  { match: /^renoise/i, name: 'Renoise' },
+  { match: /^waveform/i, name: 'Waveform' },
+  { match: /^tracktion/i, name: 'Tracktion' },
+  { match: /^mixbus/i, name: 'Harrison Mixbus' },
+  { match: /^audacity$/i, name: 'Audacity' }
 ];
 
 // Cache briefly: clicking down a list shouldn't spawn a process listing per
@@ -42,7 +50,9 @@ const CACHE_MS = 4000;
 function listProcesses() {
   return new Promise((resolve) => {
     const command =
-      process.platform === 'win32' ? 'tasklist /fo csv /nh' : 'ps -Ao comm=';
+      process.platform === 'win32'
+        ? 'tasklist /fo csv /nh'
+        : 'ps -Ao comm= 2>/dev/null || ps -eo comm 2>/dev/null || ps ax -o comm= 2>/dev/null';
 
     exec(command, { timeout: 4000, maxBuffer: 4 * 1024 * 1024 }, (err, stdout) => {
       resolve(err || !stdout ? '' : stdout);

@@ -16,7 +16,7 @@ are tracked one at a time instead of buried in a single lab notebook.
 | # | Title | Status |
 |---|---|---|
 | [0001](0001-renderer-module-split.md) | Split the renderer into modules | Proposed |
-| [0002](0002-linux-support.md) | Linux cross-platform support | Proposed |
+| [0002](0002-linux-support.md) | Linux cross-platform support | Implemented |
 | [0003](0003-android-remote-companion.md) | Android remote companion (E2EE) | Proposed |
 | [0004](0004-code-signing.md) | Code signing & notarization | Planned |
 | [0005](0005-scale-change-detector.md) | Musical scale change & key modulation detector | Proposed |

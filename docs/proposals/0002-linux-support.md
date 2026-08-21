@@ -1,8 +1,8 @@
 # 0002 — Linux support
 
-**Status:** Proposed  
-**Author:** Drafted for review  
-**Date:** 2026-08-17  
+**Status:** Implemented  
+**Author:** ba55ick  
+**Date:** 2026-08-21  
 
 ---
 
