@@ -7,6 +7,10 @@
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 [![Version](https://img.shields.io/badge/version-v0.4.2--beta.1-orange.svg)]()
 
+<p align="center">
+  <img src="docs/assets/daw-buddy-dashboard.png" alt="DAW Buddy Studio Dashboard" width="100%" />
+</p>
+
 ---
 
 ## 🎯 Why DAW Buddy Was Created
@@ -33,6 +37,10 @@ Whether you are mixing a multi-platinum album or producing your very first beat,
 - 💾 **Duplicate Sample Auditor & Disk Insights**: Identifies duplicate sample copies across projects and reclaims gigabytes of disk space using safe filesystem hard links without breaking session references.
 - 🌐 **Cross-Platform Parity**: Full native support across **Windows, macOS (Apple Silicon & Intel), and Linux**.
 
+<p align="center">
+  <img src="docs/assets/daw-buddy-tools.png" alt="Integrated Audio Tools Suite" width="90%" />
+</p>
+
 ### 🎓 For Beginners, Arrangers & Songwriters:
 - 🎲 **Producer Randomizer & Genre Challenge**: Beat creative block instantly with one-click idea generation: random key, scale, tempo, time signatures, and 48+ curated genre challenges across 9 categories (*Afro House, Organic & Botanica, Bollywood Fusion, Dubstep, Drum & Bass, Melodic Techno*, etc.) with YouTube reference search.
 - 🌍 **Interactive 3D Globe & World Scales**: An interactive 3D globe with authentic scale traditions across **Western & Jazz Modes, Indian Classical Raagas & Thaats (with Sargam swaras & Prahar times), Arabic Maqamat, Chinese Pentatonic Modes, Mediterranean & Spanish Flamenco, and Celtic Folk**.
@@ -40,6 +48,11 @@ Whether you are mixing a multi-platinum album or producing your very first beat,
 - 🎼 **Live Phrase Audition & Drag-to-DAW MIDI**: Audition authentic ascending (*Aaroh*) and descending (*Avaroh*) melodic phrases in real-time, and drag SMF MIDI guide tracks directly into your DAW's piano roll.
 - ❓ **Interactive Tool Tutorials**: Built-in non-intrusive step-by-step interactive walkthrough tours for every studio tool, re-playable anytime with one click.
 - 🎨 **Comic Speech Bubble Theme Lab**: Right-click the theme button to choose from Dark, Light, AMOLED, Minimalist, Ableton-style, and Studio Classic surfaces with 14+ accent colors.
+
+<p align="center">
+  <img src="docs/assets/daw-buddy-randomizer.png" alt="Producer Randomizer & Genre Challenge" width="48%" />
+  <img src="docs/assets/daw-buddy-globe.png" alt="3D World Globe & Scale Traditions" width="48%" />
+</p>
 
 ---
 

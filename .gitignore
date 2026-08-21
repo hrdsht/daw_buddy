@@ -28,7 +28,7 @@ graphify-out/
 website/
 
 # Local sample test assets (commercial audio, stems, drumkits)
-assets/
+/assets/
 *.wav
 *.aif
 *.aiff
