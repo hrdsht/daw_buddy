@@ -1334,9 +1334,14 @@ body.theme-light .thead {
 
 .scale-midi-btn {
   font-size: 11px;
+  font-weight: 700;
   padding: 4px 10px;
   cursor: grab;
   user-select: none;
+  color: #ffffff;
+  -webkit-text-stroke: 0.6px #000000;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9), 0 0 1px #000000, 0 0 2px #000000;
+  letter-spacing: 0.3px;
 }
 
 .scale-midi-btn:active {
@@ -1709,6 +1714,7 @@ body.theme-light .page__sticky-bar {
 .camelot-modal__body {
   display: grid;
   grid-template-columns: 370px 1fr;
+  align-items: start;
   gap: 24px;
   padding: 24px;
   overflow-y: auto;
@@ -1725,8 +1731,11 @@ body.theme-light .page__sticky-bar {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 12px;
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
 }
 
 .camelot-wheel-modal {
@@ -4196,9 +4205,14 @@ body.multi-select-mode .filerow__select-handle {
 .raga-btn--midi {
   flex: 1;
   font-size: 11px;
+  font-weight: 700;
   padding: 4px 8px;
   cursor: grab;
   user-select: none;
+  color: #ffffff;
+  -webkit-text-stroke: 0.6px #000000;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9), 0 0 1px #000000, 0 0 2px #000000;
+  letter-spacing: 0.3px;
 }
 
 .raga-btn--midi:active {
