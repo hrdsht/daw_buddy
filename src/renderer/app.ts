@@ -1246,10 +1246,47 @@ function getAudioContext(): AudioContext | null {
   return _audioCtx;
 }
 
-function playSynthNote(pc: number, octave = 4, a4 = 440, duration = 0.85) {
+interface ScalePlaybackSession {
+  id: string;
+  timers: ReturnType<typeof setTimeout>[];
+  nodes: Array<{ osc: OscillatorNode; gain: GainNode }>;
+  onStop: (() => void) | null;
+}
+
+let currentScaleSession: ScalePlaybackSession | null = null;
+
+function isScalePlaying(id?: string): boolean {
+  if (!currentScaleSession) return false;
+  if (id !== undefined) return currentScaleSession.id === id;
+  return true;
+}
+
+function stopScalePlayback() {
+  if (!currentScaleSession) return;
+  const sess = currentScaleSession;
+  currentScaleSession = null;
+  sess.timers.forEach((t) => clearTimeout(t));
+  sess.timers = [];
+  const ctx = getAudioContext();
+  const now = ctx ? ctx.currentTime : 0;
+  sess.nodes.forEach(({ osc, gain }) => {
+    try {
+      gain.gain.cancelScheduledValues(now);
+      gain.gain.setValueAtTime(gain.gain.value, now);
+      gain.gain.linearRampToValueAtTime(0.0001, now + 0.04);
+      osc.stop(now + 0.05);
+    } catch (_) {}
+  });
+  sess.nodes = [];
+  if (sess.onStop) {
+    try { sess.onStop(); } catch (_) {}
+  }
+}
+
+function playSynthNote(pc: number, octave = 4, a4 = 440, duration = 0.85): { osc: OscillatorNode; gain: GainNode } | null {
   try {
     const ctx = getAudioContext();
-    if (!ctx) return;
+    if (!ctx) return null;
     if (ctx.state === 'suspended') {
       ctx.resume().catch(() => {});
     }
@@ -1271,41 +1308,94 @@ function playSynthNote(pc: number, octave = 4, a4 = 440, duration = 0.85) {
     gain.connect(ctx.destination);
     osc.start(now);
     osc.stop(now + duration + 0.05);
+    return { osc, gain };
   } catch (err) {
     console.error('Audio synth error:', err);
+    return null;
   }
 }
 
-function playFullScale(tonicPc: number, degrees: number[], a4 = 440) {
+function playFullScale(tonicPc: number, degrees: number[], a4 = 440, id = 'full-scale', onDone?: () => void): boolean {
+  if (isScalePlaying(id)) {
+    stopScalePlayback();
+    return false;
+  }
+  stopScalePlayback();
   const ctx = getAudioContext();
   if (ctx && ctx.state === 'suspended') {
     ctx.resume().catch(() => {});
   }
+  const session: ScalePlaybackSession = {
+    id,
+    timers: [],
+    nodes: [],
+    onStop: onDone || null
+  };
+  currentScaleSession = session;
+
   degrees.forEach((interval, idx) => {
     const notePc = (tonicPc + interval) % 12;
     const octave = interval < 12 ? (notePc < tonicPc ? 5 : 4) : (4 + Math.floor(interval / 12));
-    setTimeout(() => {
-      playSynthNote(notePc, octave, a4, 0.75);
+    const t = setTimeout(() => {
+      if (currentScaleSession !== session) return;
+      const noteResult = playSynthNote(notePc, octave, a4, 0.75);
+      if (noteResult) session.nodes.push(noteResult);
     }, idx * 440);
+    session.timers.push(t);
   });
-  setTimeout(() => {
-    playSynthNote(tonicPc, 5, a4, 1.2);
+
+  const finalT = setTimeout(() => {
+    if (currentScaleSession !== session) return;
+    const noteResult = playSynthNote(tonicPc, 5, a4, 1.2);
+    if (noteResult) session.nodes.push(noteResult);
+    const finishT = setTimeout(() => {
+      if (currentScaleSession === session) {
+        stopScalePlayback();
+      }
+    }, 1250);
+    session.timers.push(finishT);
   }, degrees.length * 440);
+  session.timers.push(finalT);
+  return true;
 }
 
-function playRagaSequence(tonicPc: number, aarohanaDegrees: number[], avarohanaDegrees: number[], a4 = 440) {
+function playRagaSequence(tonicPc: number, aarohanaDegrees: number[], avarohanaDegrees: number[], a4 = 440, id = 'raga-seq', onDone?: () => void): boolean {
+  if (isScalePlaying(id)) {
+    stopScalePlayback();
+    return false;
+  }
+  stopScalePlayback();
   const ctx = getAudioContext();
   if (ctx && ctx.state === 'suspended') {
     ctx.resume().catch(() => {});
   }
   const fullSeq = [...aarohanaDegrees, ...avarohanaDegrees];
+  const session: ScalePlaybackSession = {
+    id,
+    timers: [],
+    nodes: [],
+    onStop: onDone || null
+  };
+  currentScaleSession = session;
+
   fullSeq.forEach((deg, idx) => {
     const notePc = (tonicPc + deg) % 12;
     const octave = 4 + Math.floor((tonicPc + deg) / 12);
-    setTimeout(() => {
-      playSynthNote(notePc, octave, a4, 0.65);
+    const t = setTimeout(() => {
+      if (currentScaleSession !== session) return;
+      const noteResult = playSynthNote(notePc, octave, a4, 0.65);
+      if (noteResult) session.nodes.push(noteResult);
     }, idx * 360);
+    session.timers.push(t);
   });
+
+  const finishT = setTimeout(() => {
+    if (currentScaleSession === session) {
+      stopScalePlayback();
+    }
+  }, fullSeq.length * 360 + 700);
+  session.timers.push(finishT);
+  return true;
 }
 
 function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
@@ -1507,13 +1597,31 @@ function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
         // Actions: Audition & Drag MIDI
         const actions = el('div', 'raga-card__actions');
 
+        const cardSessionId = `camelot-world-card-${scaleMatch.id || scaleMatch.name}`;
+        const resetPreviewBtn = () => {
+          previewBtn.textContent = '▶ Audition';
+          previewBtn.classList.remove('pill--solid');
+        };
+
         const previewBtn = el('button', 'pill pill--sm raga-btn--preview', '▶ Audition');
-        previewBtn.title = 'Audition authentic ascending & descending melodic phrasing';
+        previewBtn.title = 'Audition authentic ascending & descending melodic phrasing (Click to stop)';
         previewBtn.addEventListener('click', (e) => {
           e.stopPropagation();
+          if (isScalePlaying(cardSessionId)) {
+            stopScalePlayback();
+            resetPreviewBtn();
+            return;
+          }
+          document.querySelectorAll('.raga-btn--preview').forEach((b: any) => {
+            b.textContent = '▶ Audition';
+            b.classList.remove('pill--solid');
+          });
+          resetModalScaleUi();
+          previewBtn.textContent = '⏹ Stop';
+          previewBtn.classList.add('pill--solid');
           const asc = scaleMatch.ascendingPhrase || scaleMatch.degrees;
           const desc = scaleMatch.descendingPhrase || [...asc].reverse();
-          playRagaSequence(tonicPc, asc, desc, selectedTuningA4);
+          playRagaSequence(tonicPc, asc, desc, selectedTuningA4, cardSessionId, resetPreviewBtn);
         });
         actions.append(previewBtn);
 
@@ -1558,6 +1666,7 @@ function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
 
         card.title = `Click to load ${scaleMatch.name} on the keyboard`;
         card.addEventListener('click', () => {
+          stopScalePlayback();
           selectedScale = scaleMatch.id || scaleMatch.name.toLowerCase();
           if (scaleMatch.degrees) {
             DSP.SCALES[scaleMatch.id] = scaleMatch.degrees;
@@ -1616,7 +1725,21 @@ function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
     // Action buttons (Audition scale & Drag MIDI)
     const actionsRow = el('div', 'scale-modal-actions');
     const playScaleBtn = el('button', 'pill pill--solid scale-action-btn', '▶ Play Scale Preview');
-    playScaleBtn.addEventListener('click', () => playFullScale(tonicPc, degrees, selectedTuningA4));
+    const modalScaleSessionId = 'camelot-modal-scale';
+    const resetModalScaleUi = () => {
+      playScaleBtn.textContent = '▶ Play Scale Preview';
+      playScaleBtn.classList.remove('pill--active');
+    };
+    playScaleBtn.addEventListener('click', () => {
+      if (isScalePlaying(modalScaleSessionId)) {
+        stopScalePlayback();
+        resetModalScaleUi();
+        return;
+      }
+      playScaleBtn.textContent = '⏹ Stop Scale';
+      playScaleBtn.classList.add('pill--active');
+      playFullScale(tonicPc, degrees, selectedTuningA4, modalScaleSessionId, resetModalScaleUi);
+    });
     actionsRow.append(playScaleBtn);
 
     const midiBtn = el('button', 'pill scale-midi-btn scale-action-btn', '⤓ Export Scale MIDI');
@@ -7253,7 +7376,21 @@ function renderScaleMidiTool() {
     const scaleActions = el('div', 'scale-modal-actions');
     
     const playScaleBtn = el('button', 'pill pill--solid scale-action-btn', '▶ Play Scale');
-    playScaleBtn.addEventListener('click', () => playFullScale(tonicPc, degrees, tuningA4));
+    const toolScaleSessionId = 'world-tool-scale';
+    const resetToolScaleUi = () => {
+      playScaleBtn.textContent = '▶ Play Scale';
+      playScaleBtn.classList.remove('pill--active');
+    };
+    playScaleBtn.addEventListener('click', () => {
+      if (isScalePlaying(toolScaleSessionId)) {
+        stopScalePlayback();
+        resetToolScaleUi();
+        return;
+      }
+      playScaleBtn.textContent = '⏹ Stop Scale';
+      playScaleBtn.classList.add('pill--active');
+      playFullScale(tonicPc, degrees, tuningA4, toolScaleSessionId, resetToolScaleUi);
+    });
     scaleActions.append(playScaleBtn);
 
     const droneBtn = el('button', 'pill scale-action-btn', `🔊 Root Drone (${selectedTonic})`);
@@ -7364,13 +7501,31 @@ function renderScaleMidiTool() {
 
         const actions = el('div', 'raga-card__actions');
 
+        const cardSessionId = `tool-world-card-${scaleMatch.id || scaleMatch.name}`;
+        const resetPreviewBtn = () => {
+          previewBtn.textContent = '▶ Audition';
+          previewBtn.classList.remove('pill--solid');
+        };
+
         const previewBtn = el('button', 'pill pill--sm raga-btn--preview', '▶ Audition');
-        previewBtn.title = 'Audition authentic ascending & descending melodic phrasing';
+        previewBtn.title = 'Audition authentic ascending & descending melodic phrasing (Click to stop)';
         previewBtn.addEventListener('click', (e) => {
           e.stopPropagation();
+          if (isScalePlaying(cardSessionId)) {
+            stopScalePlayback();
+            resetPreviewBtn();
+            return;
+          }
+          document.querySelectorAll('.raga-btn--preview').forEach((b: any) => {
+            b.textContent = '▶ Audition';
+            b.classList.remove('pill--solid');
+          });
+          resetToolScaleUi();
+          previewBtn.textContent = '⏹ Stop';
+          previewBtn.classList.add('pill--solid');
           const asc = scaleMatch.ascendingPhrase || scaleMatch.degrees;
           const desc = scaleMatch.descendingPhrase || [...asc].reverse();
-          playRagaSequence(tonicPc, asc, desc, tuningA4);
+          playRagaSequence(tonicPc, asc, desc, tuningA4, cardSessionId, resetPreviewBtn);
         });
         actions.append(previewBtn);
 
@@ -7415,6 +7570,7 @@ function renderScaleMidiTool() {
 
         card.title = `Click to select ${scaleMatch.name}`;
         card.addEventListener('click', () => {
+          stopScalePlayback();
           scaleToolState.activeScale = scaleMatch.id || scaleMatch.name.toLowerCase();
           if (scaleMatch.degrees) {
             DSP.SCALES[scaleMatch.id] = scaleMatch.degrees;
@@ -7757,43 +7913,57 @@ function renderRandomizerTool(entry: any = null) {
   keyCard.append(keyHtml);
   keyCard.append(el('div', 'scale-metric__sub', `${subCategoryText}${currentWorldDef?.nativeName ? ` · ${currentWorldDef.nativeName}` : ''}`));
 
+  const playKeyBtn = el('button', 'pill pill--sm', '▶ Audition Scale');
+  playKeyBtn.style.marginTop = '8px';
+  playKeyBtn.title = 'Play full scale notes and tonic tone (Click to stop)';
+
+  const playScaleBtn = el('button', 'pill pill--solid scale-action-btn', '▶ Play Scale');
+  playScaleBtn.title = 'Play full scale notes (Click to stop)';
+
+  const playScaleSessionId = 'randomizer-main-scale';
+  const resetScaleUi = () => {
+    playKeyBtn.textContent = '▶ Audition Scale';
+    playKeyBtn.classList.remove('pill--solid');
+    playScaleBtn.textContent = '▶ Play Scale';
+    playScaleBtn.classList.remove('pill--active');
+  };
+
   const playScaleAction = () => {
+    if (isScalePlaying(playScaleSessionId)) {
+      stopScalePlayback();
+      resetScaleUi();
+      return;
+    }
+    document.querySelectorAll('.raga-btn--preview').forEach((b: any) => {
+      b.textContent = '▶ Audition';
+      b.classList.remove('pill--solid');
+    });
+    playKeyBtn.textContent = '⏹ Stop Scale';
+    playKeyBtn.classList.add('pill--solid');
+    playScaleBtn.textContent = '⏹ Stop Scale';
+    playScaleBtn.classList.add('pill--active');
+
     if (currentWorldDef && (currentWorldDef.ascendingPhrase || currentWorldDef.degrees)) {
       const asc = currentWorldDef.ascendingPhrase || currentWorldDef.degrees;
       const desc = currentWorldDef.descendingPhrase || [...asc].reverse();
-      playRagaSequence(state.tonicPc, asc, desc, state.tuningA4);
+      playRagaSequence(state.tonicPc, asc, desc, state.tuningA4, playScaleSessionId, resetScaleUi);
     } else if (state.raga && (state.raga.aarohanaDegrees || state.raga.degrees)) {
       const aaroh = state.raga.aarohanaDegrees || state.raga.degrees;
       const avaroh = state.raga.avarohanaDegrees || [...aaroh].reverse();
-      playRagaSequence(state.tonicPc, aaroh, avaroh, state.tuningA4);
+      playRagaSequence(state.tonicPc, aaroh, avaroh, state.tuningA4, playScaleSessionId, resetScaleUi);
     } else {
-      playFullScale(state.tonicPc, state.degrees, state.tuningA4);
+      playFullScale(state.tonicPc, state.degrees, state.tuningA4, playScaleSessionId, resetScaleUi);
     }
   };
 
-  const playKeyBtn = el('button', 'pill pill--sm', '▶ Audition Scale');
-  playKeyBtn.style.marginTop = '8px';
-  playKeyBtn.title = 'Play full scale notes and tonic tone';
   playKeyBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     playScaleAction();
-    playKeyBtn.textContent = '🔊 Playing Scale…';
-    playKeyBtn.classList.add('pill--solid');
-    setTimeout(() => {
-      playKeyBtn.textContent = '▶ Audition Scale';
-      playKeyBtn.classList.remove('pill--solid');
-    }, Math.max(2200, (state.degrees.length + 2) * 440));
   });
   keyCard.append(playKeyBtn);
-  keyCard.title = 'Click to audition scale & root tone';
+  keyCard.title = 'Click to audition scale & root tone (Click again to stop)';
   keyCard.addEventListener('click', () => {
     playScaleAction();
-    playKeyBtn.textContent = '🔊 Playing Scale…';
-    playKeyBtn.classList.add('pill--solid');
-    setTimeout(() => {
-      playKeyBtn.textContent = '▶ Audition Scale';
-      playKeyBtn.classList.remove('pill--solid');
-    }, Math.max(2200, (state.degrees.length + 2) * 440));
   });
   metricsGrid.append(keyCard);
 
@@ -7903,8 +8073,9 @@ function renderRandomizerTool(entry: any = null) {
   // Scale Action buttons
   const scaleActions = el('div', 'scale-modal-actions');
   
-  const playScaleBtn = el('button', 'pill pill--solid scale-action-btn', '▶ Play Scale');
-  playScaleBtn.addEventListener('click', () => playFullScale(state.tonicPc, state.degrees, state.tuningA4));
+  playScaleBtn.addEventListener('click', () => {
+    playScaleAction();
+  });
   scaleActions.append(playScaleBtn);
 
   const droneBtn = el('button', 'pill scale-action-btn', `🔊 Root Drone (${state.tonic})`);
@@ -8034,13 +8205,31 @@ function renderRandomizerTool(entry: any = null) {
 
       const actions = el('div', 'raga-card__actions');
 
+      const cardSessionId = `randomizer-world-card-${scaleMatch.id || scaleMatch.name}`;
+      const resetPreviewBtn = () => {
+        previewBtn.textContent = '▶ Audition';
+        previewBtn.classList.remove('pill--solid');
+      };
+
       const previewBtn = el('button', 'pill pill--sm raga-btn--preview', '▶ Audition');
-      previewBtn.title = 'Audition authentic ascending & descending melodic phrasing';
+      previewBtn.title = 'Audition authentic ascending & descending melodic phrasing (Click to stop)';
       previewBtn.addEventListener('click', (e) => {
         e.stopPropagation();
+        if (isScalePlaying(cardSessionId)) {
+          stopScalePlayback();
+          resetPreviewBtn();
+          return;
+        }
+        document.querySelectorAll('.raga-btn--preview').forEach((b: any) => {
+          b.textContent = '▶ Audition';
+          b.classList.remove('pill--solid');
+        });
+        resetScaleUi();
+        previewBtn.textContent = '⏹ Stop';
+        previewBtn.classList.add('pill--solid');
         const asc = scaleMatch.ascendingPhrase || scaleMatch.degrees;
         const desc = scaleMatch.descendingPhrase || [...asc].reverse();
-        playRagaSequence(state.tonicPc, asc, desc, state.tuningA4);
+        playRagaSequence(state.tonicPc, asc, desc, state.tuningA4, cardSessionId, resetPreviewBtn);
       });
       actions.append(previewBtn);
 
@@ -8085,6 +8274,7 @@ function renderRandomizerTool(entry: any = null) {
 
       card.title = `Click to load ${scaleMatch.name} into Randomizer`;
       card.addEventListener('click', () => {
+        stopScalePlayback();
         state.scaleName = scaleMatch.name;
         state.degrees = scaleMatch.degrees;
         state.thaat = scaleMatch.subCategory || scaleMatch.tradition;
