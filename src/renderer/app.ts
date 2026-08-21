@@ -361,7 +361,7 @@ async function boot() {
   await refresh();
 
   // If user hasn't configured region & world scales yet, display the interactive 3D Globe wizard on first run or after update!
-  const APP_VERSION = '0.4.2-beta.1';
+  const APP_VERSION = '0.4.3';
   const seenSetupVersion = localStorage.getItem('dawBuddyRegionSetupVersion');
   const isSetupDone = Boolean(settings.regionSetupComplete) || localStorage.getItem('dawBuddyRegionSetupComplete') === 'true';
 
