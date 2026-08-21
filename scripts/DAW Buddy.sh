@@ -16,7 +16,9 @@
 
 set -u
 
-cd "$(dirname "$(readlink -f "$0")")" || exit 1
+# This launcher lives in scripts/; cd to the project root (one level up) so npm
+# runs from where package.json is, no matter where it's launched from.
+cd "$(dirname "$(readlink -f "$0")")/.." || exit 1
 
 echo
 echo "  DAW BUDDY"
