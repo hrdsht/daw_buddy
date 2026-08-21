@@ -37,6 +37,10 @@ const DEFAULTS = {
   // project root, and added to the skip list so the app never scans its own
   // output back in as renders.
   outputFolder: null,
+  // Regional and World Scales preferences
+  region: 'indian',
+  scaleTraditions: ['all'],
+  regionSetupComplete: false,
   // Folder names that are never a project, and are never descended into.
   ignore: [
     'Backup',

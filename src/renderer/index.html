@@ -233,6 +233,46 @@
       </section>
 
       <section class="field">
+        <h3>Musical Traditions & Regional Scales</h3>
+        <p class="muted">Customize scale suggestions (Indian Raagas, Arabic Maqamat, Chinese Pentatonics, Western Modes, or Global).</p>
+        
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-top: 10px; margin-bottom: 12px;">
+          <div>
+            <label for="settingRegionSelect" class="muted" style="display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Primary Music Region</label>
+            <select id="settingRegionSelect" class="input" style="width: 100%; cursor: pointer;">
+              <option value="indian">🇮🇳 India & South Asia (Indian Classical)</option>
+              <option value="arabic">🇪🇬 Arabia & Egypt (Middle Eastern Maqamat)</option>
+              <option value="chinese">🇨🇳 China & East Asia (Pentatonic Modes)</option>
+              <option value="western">🌐 Western / Americas & Europe (Modes & Jazz)</option>
+              <option value="mediterranean">🇪🇸 Mediterranean & Spain (Flamenco & Gypsy)</option>
+              <option value="celtic">🇮🇪 Celtic & Nordic (Gaelic Folk)</option>
+            </select>
+          </div>
+          <div>
+            <label for="settingScaleTraditionSelect" class="muted" style="display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Scale Suggestions in DAW</label>
+            <select id="settingScaleTraditionSelect" class="input" style="width: 100%; cursor: pointer;">
+              <option value="all">✨ All World Traditions (Global suggestions)</option>
+              <option value="western">🌐 Western Only (Major, Minor, Modes, Blues)</option>
+              <option value="indian">🇮🇳 Indian Classical Only (Raagas & Thaats)</option>
+              <option value="arabic">🇪🇬 Arabic & Egyptian Only (Maqamat)</option>
+              <option value="chinese">🇨🇳 Chinese & East Asian Only</option>
+              <option value="mediterranean">🇪🇸 Mediterranean & Flamenco Only</option>
+              <option value="celtic">🇮🇪 Celtic & Nordic Only</option>
+              <option value="custom">🎛️ Custom Multi-Tradition Selection</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="appearance-row" style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
+          <div id="currentRegionSummary" class="region-summary-badge">
+            <span id="regionSummaryFlag" class="region-summary-flag">🇮🇳</span>
+            <span id="regionSummaryText" class="region-summary-text"><strong>India & South Asia</strong> (All World Traditions)</span>
+          </div>
+          <button id="openRegionGlobeSetup" class="pill pill--solid">🌐 3D Globe & Scale Setup</button>
+        </div>
+      </section>
+
+      <section class="field">
         <h3>Project folders</h3>
         <p class="muted">
           Only these are read. The scan goes as deep as your folders go.

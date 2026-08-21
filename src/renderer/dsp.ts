@@ -392,7 +392,28 @@ export const SCALES: Record<string, number[]> = {
   bhupali: [0, 2, 4, 7, 9],
   pentatonicMajor: [0, 2, 4, 7, 9],
   pentatonicMinor: [0, 3, 5, 7, 10],
-  blues: [0, 3, 5, 6, 7, 10]
+  blues: [0, 3, 5, 6, 7, 10],
+  // Arabic / Egyptian
+  maqam_hijaz: [0, 1, 4, 5, 7, 8, 10],
+  maqam_bayati: [0, 1, 3, 5, 7, 8, 10],
+  maqam_kurd: [0, 1, 3, 5, 7, 8, 10],
+  maqam_nahawand: [0, 2, 3, 5, 7, 8, 11],
+  maqam_rast: [0, 2, 4, 5, 7, 9, 10],
+  egyptian_suspended: [0, 2, 5, 7, 10],
+  double_harmonic_arabic: [0, 1, 4, 5, 7, 8, 11],
+  // Chinese & East Asian
+  gong_diao: [0, 2, 4, 7, 9],
+  shang_diao: [0, 2, 5, 7, 10],
+  jiao_diao: [0, 3, 5, 8, 10],
+  zhi_diao: [0, 2, 5, 7, 9],
+  yu_diao: [0, 3, 5, 7, 10],
+  hirajoshi_japan: [0, 2, 3, 7, 8],
+  insen_japan: [0, 1, 5, 7, 10],
+  // Mediterranean & Latin
+  flamenco_mode: [0, 1, 4, 5, 7, 8, 10],
+  hungarian_gypsy_minor: [0, 2, 3, 6, 7, 8, 11],
+  // Celtic
+  celtic_pentatonic: [0, 2, 4, 7, 9]
 };
 
 export const THAAT_MAP: Record<string, string> = {
@@ -409,7 +430,24 @@ export const THAAT_MAP: Record<string, string> = {
   charukesi: 'Charukesi',
   shivaranjani: 'Shivaranjani',
   malkauns: 'Malkauns',
-  bhupali: 'Bhoop / Bhupali'
+  bhupali: 'Bhoop / Bhupali',
+  maqam_hijaz: 'Hijaz (Maqam)',
+  maqam_bayati: 'Bayati (Maqam)',
+  maqam_kurd: 'Kurd (Maqam)',
+  maqam_nahawand: 'Nahawand (Maqam)',
+  maqam_rast: 'Rast (Maqam)',
+  egyptian_suspended: 'Egyptian Pentatonic',
+  double_harmonic_arabic: 'Hijaz Kar (Double Harmonic)',
+  gong_diao: 'Gong 宫 (Palace Mode)',
+  shang_diao: 'Shang 商 (Merchant Mode)',
+  jiao_diao: 'Jiao 角 (Horn Mode)',
+  zhi_diao: 'Zhi 徵 (Feather Mode)',
+  yu_diao: 'Yu 羽 (Wings Mode)',
+  hirajoshi_japan: 'Hirajōshi (Koto)',
+  insen_japan: 'Insen (Shakuhachi)',
+  flamenco_mode: 'Modo Flamenco',
+  hungarian_gypsy_minor: 'Gypsy Minor',
+  celtic_pentatonic: 'Gaelic Folk'
 };
 
 export interface RagaSuggestion {

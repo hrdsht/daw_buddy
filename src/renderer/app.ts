@@ -22,6 +22,15 @@ import {
   SARGAM_NAMES
 } from './scaleview';
 import { scaleMidi, notesFor, ragaMidi } from './midiwrite';
+import {
+  ScaleTraditionId,
+  WORLD_REGIONS,
+  WORLD_SCALES_DATABASE,
+  findMatchingWorldScales,
+  generateWorldScaleMidi,
+  ScoredWorldScale
+} from './world-scales';
+import { showRegionOnboardingModal } from './onboarding';
 
 const $ = (id: string): any => document.getElementById(id);
 
@@ -351,10 +360,31 @@ async function boot() {
   applySettings();
   await refresh();
 
-  // Auto-launch walkthrough on first start or after version updates
-  setTimeout(() => {
-    startFeatureWalkthrough(false);
-  }, 750);
+  // If user hasn't configured region & world scales yet, display the interactive 3D Globe wizard!
+  if (!settings.regionSetupComplete) {
+    setTimeout(() => {
+      showRegionOnboardingModal({
+        currentRegion: settings.region || 'indian',
+        currentTraditions: settings.scaleTraditions || ['all'],
+        isUpdateOrSettings: false,
+        onSave: async (result) => {
+          settings = await window.api.updateSettings({
+            region: result.region,
+            scaleTraditions: result.scaleTraditions,
+            regionSetupComplete: true
+          });
+          applySettings();
+          render();
+        },
+        playSynthNote: (pc, oct, a4) => playSynthNote(pc, oct, a4 || 440)
+      });
+    }, 450);
+  } else {
+    // Auto-launch walkthrough on first start or after version updates
+    setTimeout(() => {
+      startFeatureWalkthrough(false);
+    }, 750);
+  }
 }
 
 function applySettings() {
@@ -372,6 +402,43 @@ function applySettings() {
   if ($('webhookInput')) $('webhookInput').value = settings.webhookUrl || '';
   $('dataDir').textContent = settings.dataDir;
   document.body.classList.toggle('is-mac', Boolean(settings.isMac));
+
+  const regSelect = $('settingRegionSelect') as HTMLSelectElement | null;
+  if (regSelect) {
+    regSelect.value = settings.region || 'indian';
+  }
+
+  const scaleSelect = $('settingScaleTraditionSelect') as HTMLSelectElement | null;
+  if (scaleSelect) {
+    const trads = settings.scaleTraditions || ['all'];
+    if (trads.includes('all')) {
+      scaleSelect.value = 'all';
+    } else if (trads.length === 1) {
+      scaleSelect.value = trads[0];
+    } else {
+      scaleSelect.value = 'custom';
+    }
+  }
+
+  const regFlag = $('regionSummaryFlag');
+  const regText = $('regionSummaryText');
+  if (regFlag && regText) {
+    const regObj = WORLD_REGIONS.find((r) => r.id === (settings.region || 'indian')) || WORLD_REGIONS[0];
+    regFlag.textContent = regObj.flag;
+    const isAll = !settings.scaleTraditions || settings.scaleTraditions.includes('all');
+    let tradDesc = 'All World Traditions';
+    if (!isAll) {
+      if (settings.scaleTraditions.length === 1 && settings.scaleTraditions[0] === 'western') {
+        tradDesc = 'Western Scales Only';
+      } else if (settings.scaleTraditions.length === 1) {
+        tradDesc = `${settings.scaleTraditions[0]} only`;
+      } else {
+        tradDesc = `${settings.scaleTraditions.length} traditions`;
+      }
+    }
+    regText.innerHTML = `<strong>${regObj.name}</strong> (${tradDesc})`;
+  }
+
   renderRootList();
 }
 
@@ -1368,76 +1435,98 @@ function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
     notesSection.append(notesGrid);
     inspectorCol.append(notesSection);
 
-    // Suggested Indian Raagas & Thaats Box
+    // World Musical Traditions & Scales Explorer Box
     const ragaChroma = new Float64Array(12);
     degrees.forEach((d) => {
       ragaChroma[(tonicPc + d) % 12] = 1.0;
     });
-    const suggestedRagas = rec.ragas && rec.tonic === selectedTonic && rec.scale === selectedScale
-      ? rec.ragas
-      : DSP.findMatchingRagas(ragaChroma, tonicPc, 6);
 
-    if (suggestedRagas && suggestedRagas.length > 0) {
-      const ragasSection = el('div', 'scale-ragas-section');
-      ragasSection.append(el('h4', 'scale-notes__title', 'Matching Indian Raagas (Aarohana & Avarohana)'));
+    const userPrefTradition: ScaleTraditionId = (settings && settings.region) || 'indian';
+    let activeTraditionTab: ScaleTraditionId = userPrefTradition === 'indian' ? 'all' : userPrefTradition;
 
-      const ragasGrid = el('div', 'scale-ragas-grid');
-      suggestedRagas.forEach((raga: any) => {
-        const isCurrentRaga = selectedScale === raga.name.toLowerCase() || (selectedScale === 'bhairav' && raga.name === 'Bhairav');
-        const card = el('div', `raga-card ${isCurrentRaga ? 'raga-card--active' : ''}`);
+    const worldSection = el('div', 'scale-ragas-section scale-world-section');
+    
+    // Header row with tabs
+    const worldHeader = el('div', 'scale-world-header');
+    worldHeader.append(el('h4', 'scale-notes__title', 'World Musical Traditions & Scale Suggestions'));
+
+    const tabsRow = el('div', 'scale-tradition-tabs');
+    const tabOptions: { id: ScaleTraditionId; label: string }[] = [
+      { id: 'all', label: '✨ All Traditions' },
+      { id: 'indian', label: '🇮🇳 Indian Raagas' },
+      { id: 'arabic', label: '🇪🇬 Arabic Maqamat' },
+      { id: 'chinese', label: '🇨🇳 Chinese & East Asian' },
+      { id: 'western', label: '🌐 Western & Jazz' },
+      { id: 'mediterranean', label: '🇪🇸 Mediterranean' }
+    ];
+
+    const ragasGrid = el('div', 'scale-ragas-grid scale-world-grid');
+
+    function renderWorldCards(tabId: ScaleTraditionId) {
+      ragasGrid.innerHTML = '';
+      const matchedScales = findMatchingWorldScales(ragaChroma, tonicPc, tabId, 12);
+
+      matchedScales.forEach((scaleMatch: ScoredWorldScale) => {
+        const isCurrent = selectedScale === scaleMatch.id || selectedScale === scaleMatch.name.toLowerCase();
+        const card = el('div', `raga-card ${isCurrent ? 'raga-card--active' : ''}`);
 
         const top = el('div', 'raga-card__header');
-        top.append(el('span', 'raga-card__name', raga.name));
-        top.append(el('span', 'raga-card__pct', `${raga.matchPercent}% Match`));
+        const regionMeta = WORLD_REGIONS.find((r) => r.id === scaleMatch.tradition);
+        const flagStr = regionMeta ? regionMeta.flag : '🌐';
+
+        top.append(el('span', 'raga-card__name', `${flagStr} ${scaleMatch.name}`));
+        top.append(el('span', 'raga-card__pct', `${scaleMatch.matchPercent}% Match`));
         card.append(top);
 
-        const sub = el('div', 'raga-card__thaat', `${raga.thaat} Thaat`);
+        const sub = el('div', 'raga-card__thaat', `${scaleMatch.subCategory || scaleMatch.tradition}${scaleMatch.nativeName ? ` · ${scaleMatch.nativeName}` : ''}`);
         card.append(sub);
 
-        // Display Aarohana (Ascending) & Avarohana (Descending) swara phrases
-        if (raga.aarohana) {
-          const aarohRow = el('div', 'raga-card__phrase raga-card__phrase--aaroh');
-          aarohRow.append(el('span', 'raga-phrase__tag', '▲ Aaroh:'));
-          aarohRow.append(el('span', 'raga-phrase__notes', raga.aarohana));
-          card.append(aarohRow);
-        }
-        if (raga.avarohana) {
-          const avarohRow = el('div', 'raga-card__phrase raga-card__phrase--avaroh');
-          avarohRow.append(el('span', 'raga-phrase__tag', '▼ Avaroh:'));
-          avarohRow.append(el('span', 'raga-phrase__notes', raga.avarohana));
-          card.append(avarohRow);
+        if (scaleMatch.phraseNotation) {
+          if (scaleMatch.phraseNotation.ascending) {
+            const ascRow = el('div', 'raga-card__phrase raga-card__phrase--aaroh');
+            ascRow.append(el('span', 'raga-phrase__tag', '▲ Asc:'));
+            ascRow.append(el('span', 'raga-phrase__notes', scaleMatch.phraseNotation.ascending));
+            card.append(ascRow);
+          }
+          if (scaleMatch.phraseNotation.descending) {
+            const descRow = el('div', 'raga-card__phrase raga-card__phrase--avaroh');
+            descRow.append(el('span', 'raga-phrase__tag', '▼ Desc:'));
+            descRow.append(el('span', 'raga-phrase__notes', scaleMatch.phraseNotation.descending));
+            card.append(descRow);
+          }
         }
 
-        if (raga.time || raga.mood) {
+        if (scaleMatch.mood || scaleMatch.timeOfDay || scaleMatch.suggestedRhythm) {
           const metaRow = el('div', 'raga-card__meta');
-          if (raga.time) metaRow.append(el('span', 'raga-card__time', `🕒 ${raga.time}`));
-          if (raga.mood) metaRow.append(el('span', 'raga-card__mood', `✨ ${raga.mood}`));
+          if (scaleMatch.timeOfDay) metaRow.append(el('span', 'raga-card__time', `🕒 ${scaleMatch.timeOfDay}`));
+          if (scaleMatch.mood) metaRow.append(el('span', 'raga-card__mood', `✨ ${scaleMatch.mood}`));
+          if (scaleMatch.suggestedRhythm) metaRow.append(el('span', 'raga-card__rhythm', `🥁 ${scaleMatch.suggestedRhythm.split('/')[0]}`));
           card.append(metaRow);
         }
 
-        // Raga Actions: Audition (plays Aarohana + Avarohana sequence) & Drag MIDI to DAW
-        const ragaActions = el('div', 'raga-card__actions');
+        // Actions: Audition & Drag MIDI
+        const actions = el('div', 'raga-card__actions');
 
         const previewBtn = el('button', 'pill pill--sm raga-btn--preview', '▶ Audition');
-        previewBtn.title = 'Audition Aarohana (ascending) & Avarohana (descending)';
+        previewBtn.title = 'Audition authentic ascending & descending melodic phrasing';
         previewBtn.addEventListener('click', (e) => {
           e.stopPropagation();
-          const aaroh = raga.aarohanaDegrees || raga.degrees;
-          const avaroh = raga.avarohanaDegrees || [...aaroh].reverse();
-          playRagaSequence(tonicPc, aaroh, avaroh, selectedTuningA4);
+          const asc = scaleMatch.ascendingPhrase || scaleMatch.degrees;
+          const desc = scaleMatch.descendingPhrase || [...asc].reverse();
+          playRagaSequence(tonicPc, asc, desc, selectedTuningA4);
         });
-        ragaActions.append(previewBtn);
+        actions.append(previewBtn);
 
-        const ragaMidiBtn = el('button', 'pill pill--sm pill--solid raga-btn--midi', '⤓ Drag to DAW');
-        ragaMidiBtn.title = 'Drag onto any DAW track or click to export MIDI containing Aarohana & Avarohana phrases';
-        const aaroh = raga.aarohanaDegrees || raga.degrees;
-        const avaroh = raga.avarohanaDegrees || [...aaroh].reverse();
-        const rMidiBytes = ragaMidi(tonicPc, aaroh, avaroh, { bpm: projectBpm || 120 });
-        const cleanRagaName = raga.name.replace(/[^a-zA-Z0-9_-]/g, '_');
-        const rMidiFileName = `${entry.name.replace(/[^a-zA-Z0-9_-]/g, '_')}_Raga_${cleanRagaName}_${selectedTonic}.mid`;
+        const midiBtn = el('button', 'pill pill--sm pill--solid raga-btn--midi', '⤓ Drag to DAW');
+        midiBtn.title = 'Drag onto any DAW track or click to export MIDI containing scale phrasing';
+        const asc = scaleMatch.ascendingPhrase || scaleMatch.degrees;
+        const desc = scaleMatch.descendingPhrase || [...asc].reverse();
+        const rMidiBytes = generateWorldScaleMidi(tonicPc, asc, desc, { bpm: projectBpm || 120 });
+        const cleanName = scaleMatch.name.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const rMidiFileName = `${entry.name.replace(/[^a-zA-Z0-9_-]/g, '_')}_Scale_${cleanName}_${selectedTonic}.mid`;
 
-        ragaMidiBtn.draggable = true;
-        ragaMidiBtn.addEventListener('dragstart', async (e: DragEvent) => {
+        midiBtn.draggable = true;
+        midiBtn.addEventListener('dragstart', async (e: DragEvent) => {
           if (e.dataTransfer) {
             e.dataTransfer.setData('text/plain', rMidiFileName);
             e.dataTransfer.effectAllowed = 'copy';
@@ -1448,11 +1537,11 @@ function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
           }
           if (window.api.dragMidi) await window.api.dragMidi(rMidiFileName, Array.from(rMidiBytes));
         });
-        ragaMidiBtn.addEventListener('click', async (e) => {
+        midiBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
           if (window.api.saveMidi) {
             const saved = await window.api.saveMidi(rMidiFileName, Array.from(rMidiBytes));
-            if (saved) toast('Raga MIDI exported', saved);
+            if (saved) toast('Scale MIDI exported', saved);
           } else {
             const blob = new Blob([rMidiBytes.buffer as ArrayBuffer], { type: 'audio/midi' });
             const url = URL.createObjectURL(blob);
@@ -1461,30 +1550,46 @@ function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
             a.download = rMidiFileName;
             a.click();
             URL.revokeObjectURL(url);
-            toast('Raga MIDI exported', rMidiFileName);
+            toast('Scale MIDI exported', rMidiFileName);
           }
         });
-        ragaActions.append(ragaMidiBtn);
-        card.append(ragaActions);
+        actions.append(midiBtn);
+        card.append(actions);
 
-        card.title = `Click to load Raaga ${raga.name} on the keyboard`;
+        card.title = `Click to load ${scaleMatch.name} on the keyboard`;
         card.addEventListener('click', () => {
-          selectedScale = raga.degrees ? raga.name.toLowerCase() : selectedScale;
-          if (raga.degrees) {
-            DSP.SCALES[raga.name.toLowerCase()] = raga.degrees;
-            DSP.THAAT_MAP[raga.name.toLowerCase()] = `${raga.thaat} (${raga.name})`;
+          selectedScale = scaleMatch.id || scaleMatch.name.toLowerCase();
+          if (scaleMatch.degrees) {
+            DSP.SCALES[scaleMatch.id] = scaleMatch.degrees;
+            DSP.SCALES[scaleMatch.name.toLowerCase()] = scaleMatch.degrees;
+            DSP.THAAT_MAP[scaleMatch.id] = `${scaleMatch.subCategory || scaleMatch.tradition} (${scaleMatch.name})`;
           }
           updateInspector();
-          const aaroh = raga.aarohanaDegrees || raga.degrees;
-          const avaroh = raga.avarohanaDegrees || [...aaroh].reverse();
-          playRagaSequence(tonicPc, aaroh, avaroh, selectedTuningA4);
+          const ascP = scaleMatch.ascendingPhrase || scaleMatch.degrees;
+          const descP = scaleMatch.descendingPhrase || [...ascP].reverse();
+          playRagaSequence(tonicPc, ascP, descP, selectedTuningA4);
         });
 
         ragasGrid.append(card);
       });
-      ragasSection.append(ragasGrid);
-      inspectorCol.append(ragasSection);
     }
+
+    tabOptions.forEach((tab) => {
+      const tabBtn = el('button', `scale-tradition-tab ${tab.id === activeTraditionTab ? 'scale-tradition-tab--active' : ''}`, tab.label);
+      tabBtn.addEventListener('click', () => {
+        activeTraditionTab = tab.id;
+        tabsRow.querySelectorAll('.scale-tradition-tab').forEach((b: any) => b.classList.remove('scale-tradition-tab--active'));
+        tabBtn.classList.add('scale-tradition-tab--active');
+        renderWorldCards(tab.id);
+      });
+      tabsRow.append(tabBtn);
+    });
+
+    worldHeader.append(tabsRow);
+    worldSection.append(worldHeader);
+    renderWorldCards(activeTraditionTab);
+    worldSection.append(ragasGrid);
+    inspectorCol.append(worldSection);
 
     // Harmonic Mixing Transitions Card
     if (comp) {
@@ -1883,33 +1988,54 @@ function renderProjectHarmony(entry, rec, projectBpm) {
 
   kbCol.append(midiBtn);
 
-  // Raaga Suggestions Box below keyboard
+  // World Scales & Regional Suggestions Box below keyboard
   const ragaChroma = new Float64Array(12);
   degrees.forEach((d) => {
     ragaChroma[(tonicPc + d) % 12] = 1.0;
   });
-  const suggestedRagas = rec.ragas || DSP.findMatchingRagas(ragaChroma, tonicPc, 4);
-  if (suggestedRagas && suggestedRagas.length > 0) {
+  const userTraditions = (settings && settings.scaleTraditions) || ['all'];
+  const suggestedWorldScales = findMatchingWorldScales(ragaChroma, tonicPc, userTraditions, 4);
+
+  if (suggestedWorldScales && suggestedWorldScales.length > 0) {
+    const isSingleIndian = userTraditions.length === 1 && userTraditions[0] === 'indian';
+    const isSingleArabic = userTraditions.length === 1 && userTraditions[0] === 'arabic';
+    const isSingleChinese = userTraditions.length === 1 && userTraditions[0] === 'chinese';
+    const isSingleWestern = userTraditions.length === 1 && userTraditions[0] === 'western';
+    const boxTitle = isSingleIndian
+      ? 'Raagas:'
+      : isSingleArabic
+        ? 'Maqamat:'
+        : isSingleChinese
+          ? 'Pentatonics:'
+          : isSingleWestern
+            ? 'Western Scales:'
+            : 'Suggestions:';
+
     const ragasBox = el('div', 'harmony__ragas-box');
-    const ragasTitle = el('span', 'harmony__ragas-title', 'Raagas:');
+    const ragasTitle = el('span', 'harmony__ragas-title', boxTitle);
     ragasBox.append(ragasTitle);
 
     const ragasList = el('div', 'harmony__ragas-list');
-    suggestedRagas.slice(0, 3).forEach((raga: any) => {
+    suggestedWorldScales.slice(0, 3).forEach((scaleMatch: ScoredWorldScale) => {
       const chip = el('button', 'harmony__raga-chip');
+      const regionMeta = WORLD_REGIONS.find((r) => r.id === scaleMatch.tradition);
+      const flagStr = regionMeta ? regionMeta.flag : '🌐';
+
       chip.append(el('span', 'harmony__raga-drag-icon', '⋮⋮'));
-      chip.append(el('span', 'harmony__raga-name', raga.name));
-      chip.append(el('span', 'harmony__raga-pct', `${raga.matchPercent}%`));
+      chip.append(el('span', 'harmony__scale-flag', flagStr));
+      chip.append(el('span', 'harmony__raga-name', scaleMatch.name));
+      chip.append(el('span', 'harmony__raga-pct', `${scaleMatch.matchPercent}%`));
       
-      const aarohStr = raga.aarohana ? `\n▲ Aarohana: ${raga.aarohana}` : '';
-      const avarohStr = raga.avarohana ? `\n▼ Avarohana: ${raga.avarohana}` : '';
-      chip.title = `${raga.name} (${raga.thaat} Thaat) · ${raga.time || ''}${aarohStr}${avarohStr}\n\nDrag to DAW track or Click to inspect & export MIDI`;
+      const ascStr = scaleMatch.phraseNotation?.ascending ? `\n▲ Ascending: ${scaleMatch.phraseNotation.ascending}` : '';
+      const descStr = scaleMatch.phraseNotation?.descending ? `\n▼ Descending: ${scaleMatch.phraseNotation.descending}` : '';
+      const moodStr = scaleMatch.mood ? ` · ${scaleMatch.mood}` : '';
+      chip.title = `${scaleMatch.name} (${scaleMatch.subCategory || scaleMatch.tradition})${moodStr}${ascStr}${descStr}\n\nDrag to DAW track or Click to inspect & export MIDI`;
       
-      const aaroh = raga.aarohanaDegrees || raga.degrees;
-      const avaroh = raga.avarohanaDegrees || [...aaroh].reverse();
-      const rMidiBytes = ragaMidi(tonicPc, aaroh, avaroh, { bpm: projectBpm || 120 });
-      const cleanRagaName = raga.name.replace(/[^a-zA-Z0-9_-]/g, '_');
-      const rMidiFileName = `${entry.name.replace(/[^a-zA-Z0-9_-]/g, '_')}_Raga_${cleanRagaName}_${effectiveTonic || 'C'}.mid`;
+      const ascPhrase = scaleMatch.ascendingPhrase || scaleMatch.degrees;
+      const descPhrase = scaleMatch.descendingPhrase || [...ascPhrase].reverse();
+      const rMidiBytes = generateWorldScaleMidi(tonicPc, ascPhrase, descPhrase, { bpm: projectBpm || 120 });
+      const cleanScaleName = scaleMatch.name.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const rMidiFileName = `${entry.name.replace(/[^a-zA-Z0-9_-]/g, '_')}_Scale_${cleanScaleName}_${effectiveTonic || 'C'}.mid`;
 
       chip.draggable = true;
       chip.addEventListener('dragstart', async (e: DragEvent) => {
@@ -1926,7 +2052,7 @@ function renderProjectHarmony(entry, rec, projectBpm) {
 
       chip.addEventListener('click', (e) => {
         e.stopPropagation();
-        openCamelotModal(entry, { ...rec, tonic: effectiveTonic, camelot: effectiveCamelot, scale: raga.name.toLowerCase() }, projectBpm);
+        openCamelotModal(entry, { ...rec, tonic: effectiveTonic, camelot: effectiveCamelot, scale: scaleMatch.id || scaleMatch.name.toLowerCase() }, projectBpm);
       });
       ragasList.append(chip);
     });
@@ -6633,6 +6759,63 @@ $('openSettings').addEventListener('click', openSheet);
 $('closeSettings').addEventListener('click', closeSheet);
 scrimEl.addEventListener('click', closeSheet);
 
+const openRegionGlobeBtn = $('openRegionGlobeSetup');
+if (openRegionGlobeBtn) {
+  openRegionGlobeBtn.addEventListener('click', () => {
+    showRegionOnboardingModal({
+      currentRegion: settings.region || 'indian',
+      currentTraditions: settings.scaleTraditions || ['all'],
+      isUpdateOrSettings: true,
+      onSave: async (result) => {
+        settings = await window.api.updateSettings({
+          region: result.region,
+          scaleTraditions: result.scaleTraditions,
+          regionSetupComplete: true
+        });
+        applySettings();
+        render();
+        toast('Preferences Updated', `Set region to ${result.region}`);
+      },
+      playSynthNote: (pc, oct, a4) => playSynthNote(pc, oct, a4 || 440)
+    });
+  });
+}
+
+const settingRegionSelectEl = $('settingRegionSelect') as HTMLSelectElement | null;
+if (settingRegionSelectEl) {
+  settingRegionSelectEl.addEventListener('change', async () => {
+    const newRegion = settingRegionSelectEl.value as ScaleTraditionId;
+    settings = await window.api.updateSettings({
+      region: newRegion,
+      regionSetupComplete: true
+    });
+    applySettings();
+    render();
+    const regObj = WORLD_REGIONS.find((r) => r.id === newRegion);
+    toast('Region Updated', `Primary music region set to ${regObj ? regObj.name : newRegion}`);
+  });
+}
+
+const settingScaleTraditionSelectEl = $('settingScaleTraditionSelect') as HTMLSelectElement | null;
+if (settingScaleTraditionSelectEl) {
+  settingScaleTraditionSelectEl.addEventListener('change', async () => {
+    const val = settingScaleTraditionSelectEl.value;
+    if (val === 'custom') {
+      if (openRegionGlobeBtn) openRegionGlobeBtn.click();
+      return;
+    }
+    const newTraditions = val === 'all' ? ['all'] : [val as ScaleTraditionId];
+    settings = await window.api.updateSettings({
+      scaleTraditions: newTraditions,
+      regionSetupComplete: true
+    });
+    applySettings();
+    render();
+    const label = val === 'western' ? 'Western Scales Only' : val === 'all' ? 'All World Traditions' : `${val} traditions`;
+    toast('Scale Suggestions Updated', `Suggestions set to ${label}`);
+  });
+}
+
 function startCurrentViewTour(force = true) {
   if (view === 'project' && openProject) {
     startProjectWalkthrough(force);
@@ -7113,67 +7296,94 @@ function renderScaleMidiTool() {
     kbSection.append(scaleActions);
     resultBox.append(kbSection);
 
-    // Matching Indian Raagas Section
-    const suggestedRagas = res.ragas || [];
-    if (suggestedRagas.length > 0) {
-      const ragasSection = el('div', 'scale-ragas-section');
-      ragasSection.append(el('h4', 'scale-notes__title', 'Matching Indian Classical Raagas (Aarohana & Avarohana)'));
+    // World Musical Traditions & Scales Explorer in Scale Tool
+    const toolChroma = new Float64Array(12);
+    degrees.forEach((d) => {
+      toolChroma[(tonicPc + d) % 12] = 1.0;
+    });
 
-      const ragasGrid = el('div', 'scale-ragas-grid');
-      suggestedRagas.forEach((raga: any) => {
-        const isCurrentRaga = selectedScale === raga.name.toLowerCase();
-        const card = el('div', `raga-card ${isCurrentRaga ? 'raga-card--active' : ''}`);
+    let activeToolTab: ScaleTraditionId = 'all';
+    const worldSection = el('div', 'scale-ragas-section scale-world-section');
+    
+    const worldHeader = el('div', 'scale-world-header');
+    worldHeader.append(el('h4', 'scale-notes__title', 'World Musical Traditions & Scale Suggestions'));
+
+    const tabsRow = el('div', 'scale-tradition-tabs');
+    const tabOptions: { id: ScaleTraditionId; label: string }[] = [
+      { id: 'all', label: '✨ All Traditions' },
+      { id: 'indian', label: '🇮🇳 Indian Raagas' },
+      { id: 'arabic', label: '🇪🇬 Arabic Maqamat' },
+      { id: 'chinese', label: '🇨🇳 Chinese & East Asian' },
+      { id: 'western', label: '🌐 Western & Jazz' },
+      { id: 'mediterranean', label: '🇪🇸 Mediterranean' }
+    ];
+
+    const ragasGrid = el('div', 'scale-ragas-grid scale-world-grid');
+
+    function renderToolWorldCards(tabId: ScaleTraditionId) {
+      ragasGrid.innerHTML = '';
+      const matchedScales = findMatchingWorldScales(toolChroma, tonicPc, tabId, 12);
+
+      matchedScales.forEach((scaleMatch: ScoredWorldScale) => {
+        const isCurrent = selectedScale === scaleMatch.id || selectedScale === scaleMatch.name.toLowerCase();
+        const card = el('div', `raga-card ${isCurrent ? 'raga-card--active' : ''}`);
 
         const top = el('div', 'raga-card__header');
-        top.append(el('span', 'raga-card__name', raga.name));
-        top.append(el('span', 'raga-card__pct', `${raga.matchPercent}% Match`));
+        const regionMeta = WORLD_REGIONS.find((r) => r.id === scaleMatch.tradition);
+        const flagStr = regionMeta ? regionMeta.flag : '🌐';
+
+        top.append(el('span', 'raga-card__name', `${flagStr} ${scaleMatch.name}`));
+        top.append(el('span', 'raga-card__pct', `${scaleMatch.matchPercent}% Match`));
         card.append(top);
 
-        const sub = el('div', 'raga-card__thaat', `${raga.thaat} Thaat`);
+        const sub = el('div', 'raga-card__thaat', `${scaleMatch.subCategory || scaleMatch.tradition}${scaleMatch.nativeName ? ` · ${scaleMatch.nativeName}` : ''}`);
         card.append(sub);
 
-        if (raga.aarohana) {
-          const aarohRow = el('div', 'raga-card__phrase raga-card__phrase--aaroh');
-          aarohRow.append(el('span', 'raga-phrase__tag', '▲ Aaroh:'));
-          aarohRow.append(el('span', 'raga-phrase__notes', raga.aarohana));
-          card.append(aarohRow);
-        }
-        if (raga.avarohana) {
-          const avarohRow = el('div', 'raga-card__phrase raga-card__phrase--avaroh');
-          avarohRow.append(el('span', 'raga-phrase__tag', '▼ Avaroh:'));
-          avarohRow.append(el('span', 'raga-phrase__notes', raga.avarohana));
-          card.append(avarohRow);
+        if (scaleMatch.phraseNotation) {
+          if (scaleMatch.phraseNotation.ascending) {
+            const ascRow = el('div', 'raga-card__phrase raga-card__phrase--aaroh');
+            ascRow.append(el('span', 'raga-phrase__tag', '▲ Asc:'));
+            ascRow.append(el('span', 'raga-phrase__notes', scaleMatch.phraseNotation.ascending));
+            card.append(ascRow);
+          }
+          if (scaleMatch.phraseNotation.descending) {
+            const descRow = el('div', 'raga-card__phrase raga-card__phrase--avaroh');
+            descRow.append(el('span', 'raga-phrase__tag', '▼ Desc:'));
+            descRow.append(el('span', 'raga-phrase__notes', scaleMatch.phraseNotation.descending));
+            card.append(descRow);
+          }
         }
 
-        if (raga.time || raga.mood) {
+        if (scaleMatch.mood || scaleMatch.timeOfDay || scaleMatch.suggestedRhythm) {
           const metaRow = el('div', 'raga-card__meta');
-          if (raga.time) metaRow.append(el('span', 'raga-card__time', `🕒 ${raga.time}`));
-          if (raga.mood) metaRow.append(el('span', 'raga-card__mood', `✨ ${raga.mood}`));
+          if (scaleMatch.timeOfDay) metaRow.append(el('span', 'raga-card__time', `🕒 ${scaleMatch.timeOfDay}`));
+          if (scaleMatch.mood) metaRow.append(el('span', 'raga-card__mood', `✨ ${scaleMatch.mood}`));
+          if (scaleMatch.suggestedRhythm) metaRow.append(el('span', 'raga-card__rhythm', `🥁 ${scaleMatch.suggestedRhythm.split('/')[0]}`));
           card.append(metaRow);
         }
 
-        const ragaActions = el('div', 'raga-card__actions');
+        const actions = el('div', 'raga-card__actions');
 
         const previewBtn = el('button', 'pill pill--sm raga-btn--preview', '▶ Audition');
-        previewBtn.title = 'Audition Aarohana (ascending) & Avarohana (descending)';
+        previewBtn.title = 'Audition authentic ascending & descending melodic phrasing';
         previewBtn.addEventListener('click', (e) => {
           e.stopPropagation();
-          const aaroh = raga.aarohanaDegrees || raga.degrees;
-          const avaroh = raga.avarohanaDegrees || [...aaroh].reverse();
-          playRagaSequence(tonicPc, aaroh, avaroh, tuningA4);
+          const asc = scaleMatch.ascendingPhrase || scaleMatch.degrees;
+          const desc = scaleMatch.descendingPhrase || [...asc].reverse();
+          playRagaSequence(tonicPc, asc, desc, tuningA4);
         });
-        ragaActions.append(previewBtn);
+        actions.append(previewBtn);
 
-        const ragaMidiBtn = el('button', 'pill pill--sm pill--solid raga-btn--midi', '⤓ Drag to DAW');
-        ragaMidiBtn.title = 'Drag onto any DAW track or click to export MIDI containing Aarohana & Avarohana phrases';
-        const aaroh = raga.aarohanaDegrees || raga.degrees;
-        const avaroh = raga.avarohanaDegrees || [...aaroh].reverse();
-        const rMidiBytes = ragaMidi(tonicPc, aaroh, avaroh, { bpm: res.bpm || 120 });
-        const cleanRagaName = raga.name.replace(/[^a-zA-Z0-9_-]/g, '_');
-        const rMidiFileName = `${scaleToolState.file.name.replace(/\.[^/.]+$/, '')}_Raga_${cleanRagaName}_${selectedTonic}.mid`;
+        const midiBtn = el('button', 'pill pill--sm pill--solid raga-btn--midi', '⤓ Drag to DAW');
+        midiBtn.title = 'Drag onto any DAW track or click to export MIDI containing scale phrasing';
+        const asc = scaleMatch.ascendingPhrase || scaleMatch.degrees;
+        const desc = scaleMatch.descendingPhrase || [...asc].reverse();
+        const rMidiBytes = generateWorldScaleMidi(tonicPc, asc, desc, { bpm: res.bpm || 120 });
+        const cleanName = scaleMatch.name.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const rMidiFileName = `${scaleToolState.file.name.replace(/\.[^/.]+$/, '')}_Scale_${cleanName}_${selectedTonic}.mid`;
 
-        ragaMidiBtn.draggable = true;
-        ragaMidiBtn.addEventListener('dragstart', async (e: DragEvent) => {
+        midiBtn.draggable = true;
+        midiBtn.addEventListener('dragstart', async (e: DragEvent) => {
           if (e.dataTransfer) {
             e.dataTransfer.setData('text/plain', rMidiFileName);
             e.dataTransfer.effectAllowed = 'copy';
@@ -7184,11 +7394,11 @@ function renderScaleMidiTool() {
           }
           if (window.api.dragMidi) await window.api.dragMidi(rMidiFileName, Array.from(rMidiBytes));
         });
-        ragaMidiBtn.addEventListener('click', async (e) => {
+        midiBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
           if (window.api.saveMidi) {
             const saved = await window.api.saveMidi(rMidiFileName, Array.from(rMidiBytes));
-            if (saved) toast('Raga MIDI exported', saved);
+            if (saved) toast('Scale MIDI exported', saved);
           } else {
             const blob = new Blob([rMidiBytes.buffer as ArrayBuffer], { type: 'audio/midi' });
             const url = URL.createObjectURL(blob);
@@ -7197,31 +7407,46 @@ function renderScaleMidiTool() {
             a.download = rMidiFileName;
             a.click();
             URL.revokeObjectURL(url);
-            toast('Raga MIDI exported', rMidiFileName);
+            toast('Scale MIDI exported', rMidiFileName);
           }
         });
-        ragaActions.append(ragaMidiBtn);
-        card.append(ragaActions);
+        actions.append(midiBtn);
+        card.append(actions);
 
-        card.title = `Click to select Raaga ${raga.name}`;
+        card.title = `Click to select ${scaleMatch.name}`;
         card.addEventListener('click', () => {
-          scaleToolState.activeScale = raga.name.toLowerCase();
-          if (raga.degrees) {
-            DSP.SCALES[raga.name.toLowerCase()] = raga.degrees;
-            DSP.THAAT_MAP[raga.name.toLowerCase()] = `${raga.thaat} (${raga.name})`;
+          scaleToolState.activeScale = scaleMatch.id || scaleMatch.name.toLowerCase();
+          if (scaleMatch.degrees) {
+            DSP.SCALES[scaleMatch.id] = scaleMatch.degrees;
+            DSP.SCALES[scaleMatch.name.toLowerCase()] = scaleMatch.degrees;
+            DSP.THAAT_MAP[scaleMatch.id] = `${scaleMatch.subCategory || scaleMatch.tradition} (${scaleMatch.name})`;
           }
           render();
-          const aaroh = raga.aarohanaDegrees || raga.degrees;
-          const avaroh = raga.avarohanaDegrees || [...aaroh].reverse();
-          playRagaSequence(tonicPc, aaroh, avaroh, tuningA4);
+          const ascP = scaleMatch.ascendingPhrase || scaleMatch.degrees;
+          const descP = scaleMatch.descendingPhrase || [...ascP].reverse();
+          playRagaSequence(tonicPc, ascP, descP, tuningA4);
         });
 
         ragasGrid.append(card);
       });
-
-      ragasSection.append(ragasGrid);
-      resultBox.append(ragasSection);
     }
+
+    tabOptions.forEach((tab) => {
+      const tabBtn = el('button', `scale-tradition-tab ${tab.id === activeToolTab ? 'scale-tradition-tab--active' : ''}`, tab.label);
+      tabBtn.addEventListener('click', () => {
+        activeToolTab = tab.id;
+        tabsRow.querySelectorAll('.scale-tradition-tab').forEach((b: any) => b.classList.remove('scale-tradition-tab--active'));
+        tabBtn.classList.add('scale-tradition-tab--active');
+        renderToolWorldCards(tab.id);
+      });
+      tabsRow.append(tabBtn);
+    });
+
+    worldHeader.append(tabsRow);
+    worldSection.append(worldHeader);
+    renderToolWorldCards(activeToolTab);
+    worldSection.append(ragasGrid);
+    resultBox.append(worldSection);
 
     section.append(resultBox);
   }
@@ -7275,24 +7500,21 @@ function rollRandomIdea(target: 'all' | 'key' | 'bpm' | 'meter' | 'genre' = 'all
     nextTonicPc = Math.floor(Math.random() * 12);
     nextTonic = DSP.NOTES[nextTonicPc];
 
-    // Combine western scales and Indian Classical Raagas for rich variety
-    const ragaNames = DSP.RAGA_DEFINITIONS.map((r) => r.name);
-    const scaleKeys = Object.keys(DSP.SCALES);
-    const combinedPool = [...scaleKeys, ...ragaNames];
-    const pickedKey = combinedPool[Math.floor(Math.random() * combinedPool.length)];
+    // Combine authentic world scales based on user tradition preferences
+    const userTraditions = (settings && settings.scaleTraditions) || ['all'];
+    const candidates = userTraditions.includes('all')
+      ? WORLD_SCALES_DATABASE
+      : WORLD_SCALES_DATABASE.filter((s) => userTraditions.includes(s.tradition));
+    const pickedScale = (candidates.length > 0 ? candidates : WORLD_SCALES_DATABASE)[
+      Math.floor(Math.random() * (candidates.length || WORLD_SCALES_DATABASE.length))
+    ];
 
-    const foundRagaDef = DSP.RAGA_DEFINITIONS.find((r) => r.name.toLowerCase() === pickedKey.toLowerCase() || r.name === pickedKey);
-    if (foundRagaDef) {
-      nextScaleName = foundRagaDef.name;
-      nextDegrees = foundRagaDef.degrees;
-      nextThaat = foundRagaDef.thaat;
-      if (target === 'all' && foundRagaDef.suggestedTimeSig) {
-        nextTimeSig = foundRagaDef.suggestedTimeSig;
-      }
-    } else {
-      nextScaleName = pickedKey;
-      nextDegrees = DSP.SCALES[pickedKey] || DSP.SCALES.major;
-      nextThaat = DSP.THAAT_MAP[pickedKey] || null;
+    nextScaleName = pickedScale.name;
+    nextDegrees = pickedScale.degrees;
+    nextThaat = pickedScale.subCategory || pickedScale.tradition;
+    if (target === 'all' && pickedScale.suggestedRhythm) {
+      const matchSig = TIME_SIGNATURE_POOL.find((ts) => pickedScale.suggestedRhythm?.includes(ts));
+      if (matchSig) nextTimeSig = matchSig;
     }
   }
 

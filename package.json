@@ -1,6 +1,6 @@
 {
   "name": "daw-buddy",
-  "version": "0.4.1-beta.1",
+  "version": "0.4.2-beta.1",
   "description": "Browse, analyse and tidy your music production sessions",
   "main": "dist/main/main.js",
   "author": "ba55ick",
@@ -11,7 +11,7 @@
     "build:renderer": "esbuild src/renderer/app.ts src/renderer/mini.ts src/renderer/splash.ts src/renderer/analysis-worker.ts --bundle --outdir=dist/renderer --format=iife --platform=browser --target=es2020",
     "start": "node scripts/launch.js",
     "start:dev": "npm run build && electron .",
-    "test": "tsx test/regression.js && tsx test/search.test.js && tsx test/matching.test.js && tsx test/webhook.test.js && tsx test/dsp.test.js && tsx test/drone.test.js && tsx test/scaleview.test.js && tsx test/midiwrite.test.js && tsx test/navigation.test.js && tsx test/projectindex.test.js && tsx test/disk.test.js && tsx test/finisher.test.js && tsx test/silence-leading.test.js && tsx test/convert.test.js && tsx test/smartrename.test.js && tsx test/dragselect.test.js && tsx test/theme.test.js && tsx test/trim.test.js && tsx test/samples.test.js && tsx test/tour.test.js && tsx test/watcher.test.js",
+    "test": "tsx test/regression.js && tsx test/search.test.js && tsx test/matching.test.js && tsx test/webhook.test.js && tsx test/dsp.test.js && tsx test/drone.test.js && tsx test/scaleview.test.js && tsx test/midiwrite.test.js && tsx test/navigation.test.js && tsx test/projectindex.test.js && tsx test/disk.test.js && tsx test/finisher.test.js && tsx test/silence-leading.test.js && tsx test/convert.test.js && tsx test/smartrename.test.js && tsx test/dragselect.test.js && tsx test/theme.test.js && tsx test/trim.test.js && tsx test/samples.test.js && tsx test/tour.test.js && tsx test/watcher.test.js && tsx test/world-scales.test.js",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.renderer.json",
     "dist": "npm run build && electron-builder",
     "dist:win": "npm run build && electron-builder --win",
