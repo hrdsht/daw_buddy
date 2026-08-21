@@ -229,6 +229,69 @@ export function rhythmGuideMidi(
   return new Uint8Array([...head, ...track]);
 }
 
+export interface ChordProgressionMidiItem {
+  midiNotes: number[];
+  durationBeats?: number;
+  durationSec?: number;
+}
+
+/**
+ * Writes a Standard MIDI File containing a sequential timed chord progression.
+ */
+export function progressionMidi(chords: ChordProgressionMidiItem[], options: MidiOptions = {}): Uint8Array {
+  const bpm = options.bpm || 120;
+  const velocity = options.velocity || 85;
+  const events: number[] = [];
+
+  const usPerQuarter = Math.round(60000000 / bpm);
+  events.push(
+    ...vlq(0), 0xff, 0x51, 0x03,
+    (usPerQuarter >> 16) & 0xff, (usPerQuarter >> 8) & 0xff, usPerQuarter & 0xff
+  );
+  events.push(...vlq(0), 0xff, 0x58, 0x04, 4, 2, 24, 8);
+
+  const secondsPerBeat = 60 / bpm;
+
+  for (let i = 0; i < chords.length; i++) {
+    const c = chords[i];
+    if (!c.midiNotes || c.midiNotes.length === 0) continue;
+    const notes = [...c.midiNotes].sort((a, b) => a - b);
+    let beats = c.durationBeats || 4;
+    if (c.durationSec && c.durationSec > 0) {
+      beats = Math.max(1, Math.round((c.durationSec / secondsPerBeat) * 2) / 2);
+    }
+    const chordTicks = Math.round(beats * TPQ);
+
+    // Note Ons
+    notes.forEach((note, idx) => {
+      events.push(...vlq(idx === 0 ? 0 : 0), 0x90, note & 0x7f, velocity);
+    });
+
+    // Note Offs after chordTicks
+    notes.forEach((note, idx) => {
+      events.push(...vlq(idx === 0 ? chordTicks : 0), 0x80, note & 0x7f, 0);
+    });
+  }
+
+  events.push(...vlq(0), 0xff, 0x2f, 0x00);
+
+  const head = [
+    0x4d, 0x54, 0x68, 0x64, // 'MThd'
+    ...be32(6),
+    ...be16(0), // format 0
+    ...be16(1), // one track
+    ...be16(TPQ)
+  ];
+
+  const track = [
+    0x4d, 0x54, 0x72, 0x6b, // 'MTrk'
+    ...be32(events.length),
+    ...events
+  ];
+
+  return new Uint8Array([...head, ...track]);
+}
+
 /**
  * Scale degrees to MIDI notes in a chosen octave.
  * Octave 3 by default — low enough to read as a root, high enough not to turn into mud.
@@ -239,4 +302,5 @@ export function notesFor(tonicPc: number, degrees: number[], octave = 3): number
 }
 
 export { TPQ };
+
 

@@ -6952,6 +6952,188 @@ button.is-loading {
   }
 }
 
+/* ============================================================
+   SCALE & KEY TOOL — FULL-LENGTH CHORD PROGRESSION SECTION
+   ============================================================ */
+
+.scale-progression-section {
+  margin-top: 24px;
+  padding: 16px 18px;
+  background: rgba(18, 24, 38, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
+}
+
+.scale-progression-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.scale-progression-meta {
+  font-size: 11.5px;
+  color: var(--muted, #94a3b8);
+  margin-top: 3px;
+  font-weight: 500;
+}
+
+.scale-progression-formula {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  padding: 4px 10px;
+  border-radius: 20px;
+  letter-spacing: 0.3px;
+}
+
+.scale-progression-scroll {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 2px 10px 2px;
+  scroll-behavior: smooth;
+}
+
+.scale-progression-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+
+.scale-progression-scroll::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 3px;
+}
+
+.scale-progression-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+
+.scale-progression-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.scale-progression-timeline {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  min-width: min-content;
+}
+
+.chord-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 86px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+}
+
+.chord-card:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.22);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.chord-card--active,
+.chord-card:active {
+  transform: scale(0.96);
+  border-color: #38bdf8;
+  background: rgba(56, 189, 248, 0.18);
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.35);
+}
+
+.chord-card--playing {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.16);
+  box-shadow: 0 0 18px rgba(245, 158, 11, 0.4);
+  transform: translateY(-3px);
+}
+
+.chord-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.chord-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #f8fafc;
+  letter-spacing: 0.2px;
+}
+
+.chord-roman {
+  font-size: 11px;
+  font-weight: 700;
+  color: #38bdf8;
+  letter-spacing: 0.5px;
+}
+
+.chord-badge--min .chord-name {
+  color: #a78bfa;
+}
+
+.chord-badge--min .chord-roman {
+  color: #c4b5fd;
+}
+
+.chord-badge--dom7 .chord-name,
+.chord-badge--maj7 .chord-name,
+.chord-badge--min7 .chord-name {
+  color: #fbbf24;
+}
+
+.chord-badge--dim .chord-name {
+  color: #f87171;
+}
+
+.chord-badge--aug .chord-name,
+.chord-badge--sus4 .chord-name,
+.chord-badge--sus2 .chord-name {
+  color: #34d399;
+}
+
+.chord-time {
+  font-size: 10px;
+  color: var(--muted, #64748b);
+  font-family: var(--font-mono, monospace);
+  font-weight: 500;
+}
+
+.chord-notes {
+  font-size: 9.5px;
+  color: #94a3b8;
+  white-space: nowrap;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+.scale-progression-actions {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+
 
 
 

@@ -21,7 +21,7 @@ import {
   DEGREE_NAMES,
   SARGAM_NAMES
 } from './scaleview';
-import { scaleMidi, notesFor, ragaMidi, rhythmGuideMidi } from './midiwrite';
+import { scaleMidi, progressionMidi, notesFor, ragaMidi, rhythmGuideMidi } from './midiwrite';
 import {
   ScaleTraditionId,
   WORLD_REGIONS,
@@ -1550,6 +1550,37 @@ function playSynthNote(pc: number, octave = 4, a4 = 440, duration = 0.85): { osc
     return null;
   }
 }
+
+function playSynthChord(midiNotes: number[], a4 = 440, duration = 1.35): void {
+  try {
+    const ctx = getAudioContext();
+    if (!ctx || !midiNotes || midiNotes.length === 0) return;
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+    const now = ctx.currentTime;
+    const masterGain = ctx.createGain();
+    const gainPerNote = 0.28 / Math.sqrt(midiNotes.length);
+    masterGain.gain.setValueAtTime(0.001, now);
+    masterGain.gain.exponentialRampToValueAtTime(gainPerNote, now + 0.03);
+    masterGain.gain.linearRampToValueAtTime(gainPerNote * 0.75, now + duration * 0.4);
+    masterGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+    masterGain.connect(ctx.destination);
+
+    midiNotes.forEach((midi) => {
+      const freq = a4 * Math.pow(2, (midi - 69) / 12);
+      const osc = ctx.createOscillator();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, now);
+      osc.connect(masterGain);
+      osc.start(now);
+      osc.stop(now + duration + 0.05);
+    });
+  } catch (err) {
+    console.error('Chord synth error:', err);
+  }
+}
+
 
 function playFullScale(tonicPc: number, degrees: number[], a4 = 440, id = 'full-scale', onDone?: () => void): boolean {
   if (isScalePlaying(id)) {
@@ -7718,10 +7749,13 @@ function parseMidiChromaAndTempo(arrayBuffer: ArrayBuffer) {
   }
 
   const numTracks = (bytes[10] << 8) | bytes[11];
+  const ticksPerQuarter = (bytes[12] << 8) | bytes[13] || 480;
   let bpm = 120;
   let hasTempoMeta = false;
   const chromaCounts = new Float64Array(12);
   let totalEvents = 0;
+
+  const timedNotes: Array<{ tick: number; note: number; vel: number }> = [];
 
   let offset = 14;
   for (let t = 0; t < numTracks && offset < bytes.length; t++) {
@@ -7733,12 +7767,16 @@ function parseMidiChromaAndTempo(arrayBuffer: ArrayBuffer) {
     const trackEnd = offset + trackLen;
 
     let runningStatus = 0;
+    let currentTicks = 0;
     while (offset < trackEnd && offset < bytes.length) {
       // Read variable-length delta time
+      let delta = 0;
       while (offset < bytes.length) {
         const b = bytes[offset++];
+        delta = (delta << 7) | (b & 0x7f);
         if (!(b & 0x80)) break;
       }
+      currentTicks += delta;
 
       if (offset >= bytes.length) break;
 
@@ -7783,6 +7821,7 @@ function parseMidiChromaAndTempo(arrayBuffer: ArrayBuffer) {
         if (vel > 0) {
           chromaCounts[note % 12] += 1;
           totalEvents++;
+          timedNotes.push({ tick: currentTicks, note, vel });
         }
       } else if (msgType === 0x80 || msgType === 0xa0 || msgType === 0xb0 || msgType === 0xe0) {
         offset += 2;
@@ -7825,6 +7864,139 @@ function parseMidiChromaAndTempo(arrayBuffer: ArrayBuffer) {
     ? { C: '8B', G: '9B', D: '10B', A: '11B', E: '12B', B: '1B', 'F#': '2B', 'C#': '3B', 'G#': '4B', 'D#': '5B', 'A#': '6B', F: '7B' }[tonicNote] || '8B'
     : { A: '8A', E: '9A', B: '10A', 'F#': '11A', 'C#': '12A', 'G#': '1A', 'D#': '2A', 'A#': '3A', F: '4A', C: '5A', G: '6A', D: '7A' }[tonicNote] || '8A';
 
+  // MIDI Chord progression extraction across timeline
+  const secondsPerTick = (60 / bpm) / ticksPerQuarter;
+  const windowTicks = Math.max(ticksPerQuarter, Math.round(ticksPerQuarter * 2)); // 2 beats
+  const maxTick = timedNotes.length > 0 ? Math.max(...timedNotes.map((n) => n.tick)) : 0;
+  const totalMidiDuration = (maxTick + windowTicks) * secondsPerTick;
+
+  const rawMidiChords: Array<{ startSec: number; endSec: number; rootPc: number; quality: string; score: number }> = [];
+
+  for (let t = 0; t <= maxTick; t += windowTicks) {
+    const endTick = t + windowTicks;
+    const notesInWindow = timedNotes.filter((n) => n.tick >= t && n.tick < endTick);
+    if (notesInWindow.length === 0) continue;
+
+    const winChroma = new Float64Array(12);
+    notesInWindow.forEach((n) => {
+      winChroma[n.note % 12] += 1;
+    });
+
+    let bestRoot = 0;
+    let bestQuality = 'maj';
+    let bestScore = -Infinity;
+
+    for (let r = 0; r < 12; r++) {
+      for (const [qKey, tmpl] of Object.entries(DSP.CHORD_TEMPLATES)) {
+        let matchScore = 0;
+        let penalty = 0;
+        const inChordSet = new Set(tmpl.intervals.map((iv) => (r + iv) % 12));
+        for (let pc = 0; pc < 12; pc++) {
+          if (inChordSet.has(pc)) {
+            matchScore += winChroma[pc];
+          } else {
+            penalty += winChroma[pc] * 0.4;
+          }
+        }
+        matchScore += winChroma[r] * 0.3;
+        const score = (matchScore - penalty) / (tmpl.intervals.length + 0.4);
+        if (score > bestScore) {
+          bestScore = score;
+          bestRoot = r;
+          bestQuality = qKey;
+        }
+      }
+    }
+
+    if (bestScore > 0.2) {
+      rawMidiChords.push({
+        startSec: Math.round(t * secondsPerTick * 10) / 10,
+        endSec: Math.round(endTick * secondsPerTick * 10) / 10,
+        rootPc: bestRoot,
+        quality: bestQuality,
+        score: bestScore
+      });
+    }
+  }
+
+  // Merge consecutive identical chords
+  const mergedMidiSegments: any[] = [];
+  if (rawMidiChords.length > 0) {
+    let cur = rawMidiChords[0];
+    let curStart = cur.startSec;
+    let curEnd = cur.endSec;
+    let curScoreSum = cur.score;
+    let curCount = 1;
+
+    for (let i = 1; i < rawMidiChords.length; i++) {
+      const next = rawMidiChords[i];
+      if (next.rootPc === cur.rootPc && next.quality === cur.quality) {
+        curEnd = next.endSec;
+        curScoreSum += next.score;
+        curCount++;
+      } else {
+        const dur = Math.round((curEnd - curStart) * 10) / 10;
+        const rootName = NOTES[cur.rootPc];
+        const tmpl = (DSP.CHORD_TEMPLATES as any)[cur.quality] || (DSP.CHORD_TEMPLATES as any).maj;
+        const chordName = `${rootName}${tmpl.nameSuffix}`;
+        const roman = DSP.getRomanNumeral(cur.rootPc, cur.quality, tonicPc, !isMajor);
+        const noteNames = tmpl.intervals.map((iv: number) => NOTES[(cur.rootPc + iv) % 12]);
+        const midiNotes = tmpl.intervals.map((iv: number) => 60 + cur.rootPc + iv);
+
+        mergedMidiSegments.push({
+          startTime: curStart,
+          endTime: curEnd,
+          duration: dur,
+          chord: chordName,
+          root: rootName,
+          rootPc: cur.rootPc,
+          quality: cur.quality,
+          roman,
+          notes: noteNames,
+          midiNotes,
+          confidence: Math.round((curScoreSum / curCount) * 100) / 100
+        });
+
+        cur = next;
+        curStart = next.startSec;
+        curEnd = next.endSec;
+        curScoreSum = next.score;
+        curCount = 1;
+      }
+    }
+
+    const dur = Math.round((curEnd - curStart) * 10) / 10;
+    const rootName = NOTES[cur.rootPc];
+    const tmpl = (DSP.CHORD_TEMPLATES as any)[cur.quality] || (DSP.CHORD_TEMPLATES as any).maj;
+    const chordName = `${rootName}${tmpl.nameSuffix}`;
+    const roman = DSP.getRomanNumeral(cur.rootPc, cur.quality, tonicPc, !isMajor);
+    const noteNames = tmpl.intervals.map((iv: number) => NOTES[(cur.rootPc + iv) % 12]);
+    const midiNotes = tmpl.intervals.map((iv: number) => 60 + cur.rootPc + iv);
+
+    mergedMidiSegments.push({
+      startTime: curStart,
+      endTime: curEnd,
+      duration: dur,
+      chord: chordName,
+      root: rootName,
+      rootPc: cur.rootPc,
+      quality: cur.quality,
+      roman,
+      notes: noteNames,
+      midiNotes,
+      confidence: Math.round((curScoreSum / curCount) * 100) / 100
+    });
+  }
+
+  const chordProgression = {
+    duration: totalMidiDuration,
+    chordCount: mergedMidiSegments.length,
+    segments: mergedMidiSegments,
+    summary: mergedMidiSegments.map((s) => s.chord).join(' → ') || 'N/A',
+    romanSummary: mergedMidiSegments.map((s) => s.roman).join(' – ') || 'N/A',
+    uniqueChords: Array.from(new Set(mergedMidiSegments.map((s) => s.chord)))
+  };
+
   return {
     isMidi: true,
     noteCount: totalEvents,
@@ -7841,7 +8013,8 @@ function parseMidiChromaAndTempo(arrayBuffer: ArrayBuffer) {
     tuningA4: 440,
     tuningCents: 0,
     thaat: DSP.THAAT_MAP[scaleName] || null,
-    ragas: ragas
+    ragas: ragas,
+    chordProgression
   };
 }
 
@@ -8122,6 +8295,161 @@ function renderScaleMidiTool() {
 
     kbSection.append(scaleActions);
     resultBox.append(kbSection);
+
+    // Full-Length Chord Progression Section
+    const progData = res.chordProgression;
+    if (progData && progData.segments && progData.segments.length > 0) {
+      const progSection = el('div', 'scale-progression-section');
+      
+      const progHeader = el('div', 'scale-progression-header');
+      const titleWrapper = el('div');
+      titleWrapper.append(el('h4', 'scale-notes__title', '🎼 Full-Length Chord Progression'));
+      titleWrapper.append(el('div', 'scale-progression-meta', `${progData.chordCount} Chords Detected · Key of ${selectedTonic} ${selectedScale}`));
+      progHeader.append(titleWrapper);
+
+      // Roman Numeral & Chord Formula Badge
+      if (progData.romanSummary && progData.romanSummary !== 'N/A') {
+        const formulaBadge = el('div', 'scale-progression-formula', `Harmonic Flow: ${progData.romanSummary}`);
+        progHeader.append(formulaBadge);
+      }
+      progSection.append(progHeader);
+
+      // Timeline Flow Strip
+      const timelineScroll = el('div', 'scale-progression-scroll');
+      const timelineStrip = el('div', 'scale-progression-timeline');
+
+      let isProgPlaying = false;
+      let progPlayTimeout: any = null;
+
+      const formatProgTime = (s: number) => {
+        const m = Math.floor(s / 60);
+        const sec = Math.floor(s % 60);
+        return `${m}:${sec < 10 ? '0' : ''}${sec}`;
+      };
+
+      progData.segments.forEach((seg: any) => {
+        const chordCard = el('div', 'chord-card');
+        chordCard.setAttribute('title', `Click to audition ${seg.chord} (${(seg.notes || []).join(' - ')})`);
+
+        const chordBadge = el('div', `chord-badge chord-badge--${seg.quality || 'maj'}`);
+        chordBadge.append(el('span', 'chord-name', seg.chord));
+        if (seg.roman) {
+          chordBadge.append(el('span', 'chord-roman', seg.roman));
+        }
+        chordCard.append(chordBadge);
+
+        const timeLabel = el('div', 'chord-time', `${formatProgTime(seg.startTime)} – ${formatProgTime(seg.endTime)}`);
+        chordCard.append(timeLabel);
+
+        if (seg.notes && seg.notes.length > 0) {
+          const notesList = el('div', 'chord-notes', seg.notes.join(' · '));
+          chordCard.append(notesList);
+        }
+
+        // Click to audition chord
+        chordCard.addEventListener('click', () => {
+          chordCard.classList.add('chord-card--active');
+          setTimeout(() => chordCard.classList.remove('chord-card--active'), 800);
+          playSynthChord(seg.midiNotes, tuningA4, Math.min(2.0, Math.max(0.8, seg.duration || 1.2)));
+        });
+
+        timelineStrip.append(chordCard);
+      });
+
+      timelineScroll.append(timelineStrip);
+      progSection.append(timelineScroll);
+
+      // Action Buttons for Progression
+      const progActions = el('div', 'scale-modal-actions scale-progression-actions');
+      
+      const playProgBtn = el('button', 'pill pill--solid scale-action-btn', '▶ Play Progression');
+      playProgBtn.addEventListener('click', () => {
+        if (isProgPlaying) {
+          isProgPlaying = false;
+          if (progPlayTimeout) clearTimeout(progPlayTimeout);
+          playProgBtn.textContent = '▶ Play Progression';
+          playProgBtn.classList.remove('pill--active');
+          const cards = timelineStrip.querySelectorAll('.chord-card');
+          cards.forEach((c) => c.classList.remove('chord-card--playing'));
+          return;
+        }
+
+        isProgPlaying = true;
+        playProgBtn.textContent = '⏸ Stop Playback';
+        playProgBtn.classList.add('pill--active');
+
+        let step = 0;
+        const playNext = () => {
+          if (!isProgPlaying || step >= progData.segments.length) {
+            isProgPlaying = false;
+            playProgBtn.textContent = '▶ Play Progression';
+            playProgBtn.classList.remove('pill--active');
+            const cards = timelineStrip.querySelectorAll('.chord-card');
+            cards.forEach((c) => c.classList.remove('chord-card--playing'));
+            return;
+          }
+          const s = progData.segments[step];
+          const cards = timelineStrip.querySelectorAll('.chord-card');
+          cards.forEach((c, i) => {
+            if (i === step) {
+              c.classList.add('chord-card--playing');
+              (c as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+            } else {
+              c.classList.remove('chord-card--playing');
+            }
+          });
+
+          playSynthChord(s.midiNotes, tuningA4, Math.min(2.0, Math.max(0.8, s.duration || 1.2)));
+          step++;
+          const delayMs = Math.max(400, Math.min(3000, (s.duration || 1.2) * 1000));
+          progPlayTimeout = setTimeout(playNext, delayMs);
+        };
+        playNext();
+      });
+      progActions.append(playProgBtn);
+
+      // Drag MIDI Progression to DAW Button
+      const progMidiBtn = el('button', 'pill scale-midi-btn scale-action-btn', '⤓ Drag Progression MIDI to DAW');
+      const pMidiItems = progData.segments.map((s: any) => ({
+        midiNotes: s.midiNotes,
+        durationSec: s.duration
+      }));
+      const pMidiBytes = progressionMidi(pMidiItems, { bpm: res.bpm || 120 });
+      const pMidiFileName = `${scaleToolState.file.name.replace(/\.[^/.]+$/, '')}_Progression_${selectedTonic}_${selectedScale}.mid`;
+
+      progMidiBtn.draggable = true;
+      progMidiBtn.addEventListener('dragstart', async (e: DragEvent) => {
+        if (e.dataTransfer) {
+          e.dataTransfer.setData('text/plain', pMidiFileName);
+          e.dataTransfer.effectAllowed = 'copy';
+          const canvas = document.createElement('canvas');
+          canvas.width = 1;
+          canvas.height = 1;
+          e.dataTransfer.setDragImage(canvas, 0, 0);
+        }
+        if (window.api.dragMidi) await window.api.dragMidi(pMidiFileName, Array.from(pMidiBytes));
+      });
+
+      progMidiBtn.addEventListener('click', async () => {
+        if (window.api.saveMidi) {
+          const saved = await window.api.saveMidi(pMidiFileName, Array.from(pMidiBytes));
+          if (saved) toast('Chord Progression MIDI exported', saved);
+        } else {
+          const blob = new Blob([pMidiBytes.buffer as ArrayBuffer], { type: 'audio/midi' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = pMidiFileName;
+          a.click();
+          URL.revokeObjectURL(url);
+          toast('Chord Progression MIDI exported', pMidiFileName);
+        }
+      });
+      progActions.append(progMidiBtn);
+
+      progSection.append(progActions);
+      resultBox.append(progSection);
+    }
 
     // World Musical Traditions & Scales Explorer in Scale Tool
     const toolChroma = new Float64Array(12);

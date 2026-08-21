@@ -88,7 +88,36 @@ function testRhythmGuideMidiGeneration() {
   assert.equal(bytes[bytes.length - 1], 0x00);
 }
 
+function testProgressionMidiGeneration() {
+  const chords = [
+    { midiNotes: [60, 64, 67], durationSec: 2.0 }, // C Maj
+    { midiNotes: [67, 71, 74], durationSec: 2.0 }, // G Maj
+    { midiNotes: [69, 72, 76], durationSec: 2.0 }, // A Min
+    { midiNotes: [65, 69, 72], durationSec: 2.0 }  // F Maj
+  ];
+  const bytes = midiwrite.progressionMidi(chords, { bpm: 120 });
+  assert.ok(bytes instanceof Uint8Array || Buffer.isBuffer(bytes));
+
+  // Check MIDI header 'MThd'
+  assert.equal(bytes[0], 0x4d);
+  assert.equal(bytes[1], 0x54);
+  assert.equal(bytes[2], 0x68);
+  assert.equal(bytes[3], 0x64);
+
+  // Track header 'MTrk'
+  assert.equal(bytes[14], 0x4d);
+  assert.equal(bytes[15], 0x54);
+  assert.equal(bytes[16], 0x72);
+  assert.equal(bytes[17], 0x6b);
+
+  // End of track marker
+  assert.equal(bytes[bytes.length - 3], 0xff);
+  assert.equal(bytes[bytes.length - 2], 0x2f);
+  assert.equal(bytes[bytes.length - 1], 0x00);
+}
+
 testMidiGeneration();
 testRagaMidiGeneration();
 testRhythmGuideMidiGeneration();
+testProgressionMidiGeneration();
 console.log('ok - testMidiGeneration');

@@ -233,6 +233,39 @@ function scaleChangeDetectorIdentifiesModulation() {
   assert.equal(seg1.transitionFromPrev.semitoneDelta, 2, 'Should detect +2 st shift');
 }
 
+function chordProgressionDetectorIdentifiesChanges() {
+  const sampleRate = 11025;
+  const seconds = 8;
+  const samples = new Float32Array(sampleRate * seconds);
+
+  // 0..4s: C Major (C4 261.63, E4 329.63, G4 392.00)
+  const half = Math.floor(samples.length / 2);
+  for (let i = 0; i < half; i += 1) {
+    const t = i / sampleRate;
+    samples[i] =
+      0.40 * Math.sin(2 * Math.PI * 261.63 * t) +
+      0.30 * Math.sin(2 * Math.PI * 329.63 * t) +
+      0.30 * Math.sin(2 * Math.PI * 392.00 * t);
+  }
+
+  // 4..8s: A Minor (A4 440.00, C5 523.25, E5 659.25)
+  for (let i = half; i < samples.length; i += 1) {
+    const t = i / sampleRate;
+    samples[i] =
+      0.40 * Math.sin(2 * Math.PI * 440.00 * t) +
+      0.30 * Math.sin(2 * Math.PI * 523.25 * t) +
+      0.30 * Math.sin(2 * Math.PI * 659.25 * t);
+  }
+
+  const report = DSP.detectChordProgression(samples, sampleRate, { windowSec: 2, hopSec: 1, tonicPc: 0, isMinorScale: false });
+  // console.log('DEBUG CHORD REPORT:', JSON.stringify(report, null, 2));
+  assert.ok(report, 'Chord progression report should be generated');
+  assert.ok(report.chordCount >= 2, `Should detect at least 2 chords, got ${report.chordCount}`);
+  assert.ok(report.segments.some((s) => s.root === 'C' && s.quality === 'maj'), 'Should detect C major chord segment');
+  assert.ok(report.segments.some((s) => s.root === 'A' && (s.quality === 'min' || s.quality === 'min7')), 'Should detect A minor chord segment');
+  assert.ok(report.romanSummary.includes('I'), 'Roman summary should contain I');
+}
+
 automaticPlayAnalysisReturnsTempoAndKey();
 console.log('ok - automaticPlayAnalysisReturnsTempoAndKey');
 ragaPerformanceIdentifiesTonicAndModalScale();
@@ -247,6 +280,9 @@ genreDatabaseTests();
 console.log('ok - genreDatabaseTests');
 scaleChangeDetectorIdentifiesModulation();
 console.log('ok - scaleChangeDetectorIdentifiesModulation');
+chordProgressionDetectorIdentifiesChanges();
+console.log('ok - chordProgressionDetectorIdentifiesChanges');
+
 
 
 

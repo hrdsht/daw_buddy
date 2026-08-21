@@ -1,6 +1,6 @@
 {
   "name": "daw-buddy",
-  "version": "0.4.5-beta",
+  "version": "0.4.6-beta",
   "description": "Browse, analyse and tidy your music production sessions",
   "main": "dist/main/main.js",
   "author": "ba55ick <hpkalas@gmail.com>",

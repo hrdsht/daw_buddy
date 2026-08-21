@@ -1398,6 +1398,13 @@ function analyse(channelData: Float32Array | Float64Array, sampleRate: number, o
   const meter = detectMeter(tempo.envelope, tempo.beatLag, hopSeconds);
   const key = detectKey(frames, binHz);
 
+  // Compute full-length chord progression across the entire audio buffer
+  const chordProgression = detectChordProgression(channelData, sampleRate, {
+    bpm: tempo.bpm,
+    tonicPc: key.tonicPc,
+    isMinorScale: key.mode === 'min'
+  });
+
   return {
     bpm: tempo.bpm,
     bpmConfidence: tempo.confidence,
@@ -1417,6 +1424,7 @@ function analyse(channelData: Float32Array | Float64Array, sampleRate: number, o
     tuningCents: key.tuningCents,
     thaat: key.thaat,
     ragas: key.ragas,
+    chordProgression,
     analysedSeconds: Math.round(wanted / sampleRate)
   };
 }
@@ -1827,6 +1835,270 @@ export function detectScaleModulations(
   };
 }
 
+export interface DetectedChordSegment {
+  startTime: number;
+  endTime: number;
+  duration: number;
+  chord: string;
+  root: string;
+  rootPc: number;
+  quality: string;
+  roman: string;
+  notes: string[];
+  midiNotes: number[];
+  confidence: number;
+}
+
+export interface ChordProgressionReport {
+  duration: number;
+  chordCount: number;
+  segments: DetectedChordSegment[];
+  summary: string;
+  romanSummary: string;
+  uniqueChords: string[];
+}
+
+export const CHORD_TEMPLATES: Record<string, { intervals: number[]; nameSuffix: string; isMinor: boolean; isDim: boolean; isAug: boolean }> = {
+  maj: { intervals: [0, 4, 7], nameSuffix: '', isMinor: false, isDim: false, isAug: false },
+  min: { intervals: [0, 3, 7], nameSuffix: 'm', isMinor: true, isDim: false, isAug: false },
+  dom7: { intervals: [0, 4, 7, 10], nameSuffix: '7', isMinor: false, isDim: false, isAug: false },
+  maj7: { intervals: [0, 4, 7, 11], nameSuffix: 'maj7', isMinor: false, isDim: false, isAug: false },
+  min7: { intervals: [0, 3, 7, 10], nameSuffix: 'm7', isMinor: true, isDim: false, isAug: false },
+  sus4: { intervals: [0, 5, 7], nameSuffix: 'sus4', isMinor: false, isDim: false, isAug: false },
+  sus2: { intervals: [0, 2, 7], nameSuffix: 'sus2', isMinor: false, isDim: false, isAug: false },
+  dim: { intervals: [0, 3, 6], nameSuffix: 'dim', isMinor: true, isDim: true, isAug: false },
+  aug: { intervals: [0, 4, 8], nameSuffix: 'aug', isMinor: false, isDim: false, isAug: true },
+  power: { intervals: [0, 7], nameSuffix: '5', isMinor: false, isDim: false, isAug: false }
+};
+
+export function getRomanNumeral(rootPc: number, quality: string, tonicPc: number, isMinorScale: boolean): string {
+  const interval = ((rootPc - tonicPc) % 12 + 12) % 12;
+  const isDimChord = quality === 'dim';
+  const isSeventh = quality === 'dom7' || quality === 'maj7' || quality === 'min7';
+
+  const majorMap: Record<number, string> = {
+    0: 'I', 1: '♭II', 2: 'ii', 3: '♭III', 4: 'iii', 5: 'IV',
+    6: '♭V', 7: 'V', 8: '♭VI', 9: 'vi', 10: '♭VII', 11: 'vii°'
+  };
+
+  const minorMap: Record<number, string> = {
+    0: 'i', 1: '♭II', 2: 'ii°', 3: 'III', 4: 'iv', 5: 'v',
+    6: '♭VI', 7: 'v', 8: 'VI', 9: '♭VII', 10: 'VII', 11: 'vii°'
+  };
+
+  let base = isMinorScale ? (minorMap[interval] || 'I') : (majorMap[interval] || 'I');
+  if (isDimChord && !base.includes('°')) base += '°';
+  if (quality === 'min' && !isMinorScale && base === base.toUpperCase()) base = base.toLowerCase();
+  if (quality === 'maj' && isMinorScale && base === base.toLowerCase()) base = base.toUpperCase();
+  if (isSeventh) base += '7';
+  if (quality === 'sus4') base += 'sus4';
+  if (quality === 'sus2') base += 'sus2';
+  return base;
+}
+
+export function detectChordProgression(
+  samples: Float32Array | Float64Array,
+  sampleRate: number,
+  options: { windowSec?: number; hopSec?: number; tonicPc?: number; isMinorScale?: boolean; bpm?: number } = {}
+): ChordProgressionReport {
+  const totalDuration = samples.length / sampleRate;
+  if (totalDuration < 1.0) {
+    return {
+      duration: totalDuration,
+      chordCount: 0,
+      segments: [],
+      summary: 'N/A',
+      romanSummary: 'N/A',
+      uniqueChords: []
+    };
+  }
+
+  const tonicPc = options.tonicPc ?? 0;
+  const isMinor = options.isMinorScale ?? false;
+
+  // Window sizing: if BPM provided, 1 bar (4 beats) or half bar (2 beats) window
+  let windowSec = 2.0;
+  if (options.bpm && options.bpm >= 40 && options.bpm <= 240) {
+    const beatSec = 60 / options.bpm;
+    windowSec = Math.max(1.0, Math.min(4.0, beatSec * 2)); // 2 beats
+  } else if (options.windowSec) {
+    windowSec = options.windowSec;
+  }
+  const hopSec = options.hopSec || windowSec * 0.75;
+  const windowSamples = Math.floor(windowSec * sampleRate);
+  const hopSamples = Math.floor(hopSec * sampleRate);
+
+  const rawChords: Array<{
+    startSec: number;
+    endSec: number;
+    rootPc: number;
+    quality: string;
+    score: number;
+  }> = [];
+
+  for (let offset = 0; offset + windowSamples * 0.4 <= samples.length; offset += hopSamples) {
+    const end = Math.min(samples.length, offset + windowSamples);
+    const winSlice = samples.subarray(offset, end);
+    const { frames, binHz } = spectra(winSlice, sampleRate);
+    if (frames.length === 0) continue;
+
+    const chroma = new Float64Array(12);
+    for (const frame of frames) {
+      const c = chromaFromSpectrum(frame, binHz);
+      for (let i = 0; i < 12; i++) chroma[i] += c[i];
+    }
+
+    // Normalize chroma
+    let maxChroma = 0;
+    let sumChroma = 0;
+    for (let i = 0; i < 12; i++) {
+      if (chroma[i] > maxChroma) maxChroma = chroma[i];
+      sumChroma += chroma[i];
+    }
+    if (maxChroma <= 1e-6 || sumChroma <= 1e-6) continue;
+    for (let i = 0; i < 12; i++) chroma[i] /= maxChroma;
+
+    // Score against chord templates
+    let bestRoot = 0;
+    let bestQuality = 'maj';
+    let bestScore = -Infinity;
+
+    for (let root = 0; root < 12; root++) {
+      for (const [qKey, tmpl] of Object.entries(CHORD_TEMPLATES)) {
+        let matchScore = 0;
+        let penalty = 0;
+
+        const inChordSet = new Set(tmpl.intervals.map((iv) => (root + iv) % 12));
+
+        for (let pc = 0; pc < 12; pc++) {
+          if (inChordSet.has(pc)) {
+            matchScore += chroma[pc];
+          } else {
+            penalty += chroma[pc] * 0.35;
+          }
+        }
+
+        // Bias root and 5th
+        matchScore += chroma[root] * 0.3;
+        const fifthPc = (root + 7) % 12;
+        matchScore += chroma[fifthPc] * 0.15;
+
+        const normalizedScore = (matchScore - penalty) / (tmpl.intervals.length + 0.45);
+        if (normalizedScore > bestScore) {
+          bestScore = normalizedScore;
+          bestRoot = root;
+          bestQuality = qKey;
+        }
+      }
+    }
+
+    const startSec = Math.round((offset / sampleRate) * 100) / 100;
+    const endSec = Math.round((end / sampleRate) * 100) / 100;
+
+    if (bestScore > 0.18) {
+      rawChords.push({
+        startSec,
+        endSec,
+        rootPc: bestRoot,
+        quality: bestQuality,
+        score: bestScore
+      });
+    }
+  }
+
+  if (rawChords.length === 0) {
+    return {
+      duration: totalDuration,
+      chordCount: 0,
+      segments: [],
+      summary: 'No distinct chords detected',
+      romanSummary: 'N/A',
+      uniqueChords: []
+    };
+  }
+
+  // Merge consecutive identical chords
+  const mergedSegments: DetectedChordSegment[] = [];
+  let cur = rawChords[0];
+  let curStart = cur.startSec;
+  let curEnd = cur.endSec;
+  let curScoreSum = cur.score;
+  let curCount = 1;
+
+  for (let i = 1; i < rawChords.length; i++) {
+    const next = rawChords[i];
+    if (next.rootPc === cur.rootPc && next.quality === cur.quality) {
+      curEnd = next.endSec;
+      curScoreSum += next.score;
+      curCount++;
+    } else {
+      const dur = Math.round((curEnd - curStart) * 10) / 10;
+      const rootName = NOTES[cur.rootPc];
+      const tmpl = CHORD_TEMPLATES[cur.quality] || CHORD_TEMPLATES.maj;
+      const chordName = `${rootName}${tmpl.nameSuffix}`;
+      const roman = getRomanNumeral(cur.rootPc, cur.quality, tonicPc, isMinor);
+      const noteNames = tmpl.intervals.map((iv) => NOTES[(cur.rootPc + iv) % 12]);
+      const midiNotes = tmpl.intervals.map((iv) => 60 + cur.rootPc + iv); // C4 base
+
+      mergedSegments.push({
+        startTime: curStart,
+        endTime: curEnd,
+        duration: dur,
+        chord: chordName,
+        root: rootName,
+        rootPc: cur.rootPc,
+        quality: cur.quality,
+        roman,
+        notes: noteNames,
+        midiNotes,
+        confidence: Math.round((curScoreSum / curCount) * 100) / 100
+      });
+
+      cur = next;
+      curStart = next.startSec;
+      curEnd = next.endSec;
+      curScoreSum = next.score;
+      curCount = 1;
+    }
+  }
+
+  // Push final segment
+  const dur = Math.round((curEnd - curStart) * 10) / 10;
+  const rootName = NOTES[cur.rootPc];
+  const tmpl = CHORD_TEMPLATES[cur.quality] || CHORD_TEMPLATES.maj;
+  const chordName = `${rootName}${tmpl.nameSuffix}`;
+  const roman = getRomanNumeral(cur.rootPc, cur.quality, tonicPc, isMinor);
+  const noteNames = tmpl.intervals.map((iv) => NOTES[(cur.rootPc + iv) % 12]);
+  const midiNotes = tmpl.intervals.map((iv) => 60 + cur.rootPc + iv);
+
+  mergedSegments.push({
+    startTime: curStart,
+    endTime: curEnd,
+    duration: dur,
+    chord: chordName,
+    root: rootName,
+    rootPc: cur.rootPc,
+    quality: cur.quality,
+    roman,
+    notes: noteNames,
+    midiNotes,
+    confidence: Math.round((curScoreSum / curCount) * 100) / 100
+  });
+
+  const uniqueChords = Array.from(new Set(mergedSegments.map((s) => s.chord)));
+  const summary = mergedSegments.map((s) => s.chord).join(' → ');
+  const romanSummary = mergedSegments.map((s) => s.roman).join(' – ');
+
+  return {
+    duration: totalDuration,
+    chordCount: mergedSegments.length,
+    segments: mergedSegments,
+    summary: summary || 'N/A',
+    romanSummary: romanSummary || 'N/A',
+    uniqueChords
+  };
+}
+
 export const DSP = {
   analyse,
   detectKey,
@@ -1835,6 +2107,9 @@ export const DSP = {
   detectTuning,
   detectDroneAndBass,
   detectScaleModulations,
+  detectChordProgression,
+  getRomanNumeral,
+  CHORD_TEMPLATES,
   fftMagnitudes,
   chromaFromSpectrum,
   suppressHarmonics,
@@ -1850,4 +2125,5 @@ export const DSP = {
   GENRE_DATABASE,
   RECOMMENDED_FFT
 };
+
 
