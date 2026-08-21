@@ -20,7 +20,7 @@ We take the security and privacy of DAW Buddy and its users seriously. If you be
    - Navigate to the [Security Advisories](https://github.com/hrdsht/daw_buddy/security/advisories) tab on GitHub.
    - Click **"Report a vulnerability"** to open a confidential report.
 2. **Direct Contact**:
-   - If GitHub Private Vulnerability Reporting is unavailable, please open a private security draft advisory or reach out directly to the maintainer via GitHub profile contact.
+   - If GitHub Private Vulnerability Reporting is unavailable, please contact the maintainer directly at **hpkalas@gmail.com**.
 
 ### What to Include:
 To help us triage and resolve the issue quickly, please include:

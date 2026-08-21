@@ -35,7 +35,7 @@ mac:
   category: public.app-category.music
 
 linux:
-  maintainer: ba55ick <contact@dawbuddy.app>
+  maintainer: ba55ick <hpkalas@gmail.com>
   target:
     - target: AppImage
       arch:
