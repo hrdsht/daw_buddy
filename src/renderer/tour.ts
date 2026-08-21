@@ -40,7 +40,7 @@ export const TOUR_STEPS: TourStep[] = [
     target: '.player',
     title: 'Real-time Transport & Waveform',
     description:
-      'Scrub interactive audio waveforms, audition with custom Reverb, engage root-note Drone synths, and monitor with safety soft clipping. When no audio is loaded, DAW Buddy displays an interactive Demo Waveform Preview.',
+      'Scrub interactive audio waveforms, audition with custom Reverb, engage root-note Drone synths, and monitor with safety soft clipping.',
     position: 'top'
   },
   {
@@ -113,7 +113,7 @@ export const PROJECT_TOUR_STEPS: TourStep[] = [
     target: '.player',
     title: 'Real-Time Audio Player & Space Reverb',
     description:
-      'Audition mixdowns without launching heavy DAW software. Scrub the interactive waveform, adjust listening volume, or engage the space reverb simulator. Displays an interactive Demo Waveform Preview until an audio render is played.',
+      'Audition mixdowns without launching heavy DAW software. Scrub the interactive waveform, adjust listening volume, or engage the space reverb simulator.',
     position: 'top'
   }
 ];

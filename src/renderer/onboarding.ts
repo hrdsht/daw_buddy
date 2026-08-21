@@ -59,17 +59,17 @@ export function showRegionOnboardingModal(options: {
     : 'Welcome to DAW Buddy — Choose Your Tradition';
   titleRow.append(title);
 
-  if (options.isUpdateOrSettings) {
-    const closeBtn = document.createElement('button');
-    closeBtn.className = 'onboarding-header__close-btn';
-    closeBtn.innerHTML = '✕';
-    closeBtn.title = 'Close';
-    closeBtn.addEventListener('click', () => {
-      globe.destroy();
-      overlay.remove();
-    });
-    titleRow.append(closeBtn);
-  }
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'onboarding-header__close-btn';
+  closeBtn.innerHTML = '✕';
+  closeBtn.title = 'Close';
+  closeBtn.addEventListener('click', () => {
+    localStorage.setItem('dawBuddyRegionSetupComplete', 'true');
+    localStorage.setItem('dawBuddyRegionSetupVersion', '0.4.2-beta.1');
+    globe.destroy();
+    overlay.remove();
+  });
+  titleRow.append(closeBtn);
 
   const subtitle = document.createElement('p');
   subtitle.className = 'onboarding-header__subtitle';

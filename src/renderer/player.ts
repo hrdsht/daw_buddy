@@ -780,15 +780,6 @@ const Player = (() => {
     ctx.moveTo(playedX, 2);
     ctx.lineTo(playedX, height - 2);
     ctx.stroke();
-
-    // Subtle Demo Waveform watermark label when idle/onboarding
-    if (!current) {
-      ctx.save();
-      ctx.font = '500 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillStyle = isLight ? 'rgba(0, 0, 0, 0.35)' : 'rgba(255, 255, 255, 0.26)';
-      ctx.fillText('DEMO WAVEFORM PREVIEW', 10, 14);
-      ctx.restore();
-    }
   }
 
   let cachedAmberHex = '';

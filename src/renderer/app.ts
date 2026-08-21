@@ -360,25 +360,36 @@ async function boot() {
   applySettings();
   await refresh();
 
-  // If user hasn't configured region & world scales yet, display the interactive 3D Globe wizard!
-  if (!settings.regionSetupComplete) {
-    setTimeout(() => {
-      showRegionOnboardingModal({
-        currentRegion: settings.region || 'indian',
-        currentTraditions: settings.scaleTraditions || ['all'],
-        isUpdateOrSettings: false,
-        onSave: async (result) => {
-          settings = await window.api.updateSettings({
-            region: result.region,
-            scaleTraditions: result.scaleTraditions,
-            regionSetupComplete: true
-          });
-          applySettings();
-          render();
-        },
-        playSynthNote: (pc, oct, a4) => playSynthNote(pc, oct, a4 || 440)
-      });
-    }, 450);
+  // If user hasn't configured region & world scales yet, display the interactive 3D Globe wizard on first run or after update!
+  const APP_VERSION = '0.4.2-beta.1';
+  const seenSetupVersion = localStorage.getItem('dawBuddyRegionSetupVersion');
+  const isSetupDone = Boolean(settings.regionSetupComplete) || localStorage.getItem('dawBuddyRegionSetupComplete') === 'true';
+
+  if (!isSetupDone || seenSetupVersion !== APP_VERSION) {
+    if (isSetupDone && seenSetupVersion !== APP_VERSION) {
+      localStorage.setItem('dawBuddyRegionSetupVersion', APP_VERSION);
+    } else {
+      localStorage.setItem('dawBuddyRegionSetupVersion', APP_VERSION);
+      setTimeout(() => {
+        showRegionOnboardingModal({
+          currentRegion: settings.region || 'indian',
+          currentTraditions: settings.scaleTraditions || ['all'],
+          isUpdateOrSettings: false,
+          onSave: async (result) => {
+            localStorage.setItem('dawBuddyRegionSetupComplete', 'true');
+            localStorage.setItem('dawBuddyRegionSetupVersion', APP_VERSION);
+            settings = await window.api.updateSettings({
+              region: result.region,
+              scaleTraditions: result.scaleTraditions,
+              regionSetupComplete: true
+            });
+            applySettings();
+            render();
+          },
+          playSynthNote: (pc, oct, a4) => playSynthNote(pc, oct, a4 || 440)
+        });
+      }, 450);
+    }
   } else {
     // Auto-launch walkthrough on first start or after version updates
     setTimeout(() => {
@@ -6881,6 +6892,13 @@ $('openDataDir').addEventListener('click', () => window.api.reveal(settings.data
 $('openSettings').addEventListener('click', openSheet);
 $('closeSettings').addEventListener('click', closeSheet);
 scrimEl.addEventListener('click', closeSheet);
+
+const checkUpdatesBtn = $('checkUpdatesBtn');
+if (checkUpdatesBtn) {
+  checkUpdatesBtn.addEventListener('click', () => {
+    window.api.openExternal('https://github.com/hrdsht/daw_buddy/releases');
+  });
+}
 
 const openRegionGlobeBtn = $('openRegionGlobeSetup');
 if (openRegionGlobeBtn) {
