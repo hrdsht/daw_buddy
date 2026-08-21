@@ -42,3 +42,13 @@ NEW-CONVERSATION-PROMPT.md
 # Standalone interactive showcase files
 DAW_Buddy_Interactive_Showcase.html
 *.showcase.html
+
+# External media never belongs in the repo (see .agents/rules/assets-policy.md).
+# Keep sample/audio assets in $DAWBUDDY_ASSETS, outside every project checkout.
+*.wav
+*.mp3
+*.flac
+*.aif
+*.aiff
+*.ogg
+*.m4a

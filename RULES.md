@@ -89,5 +89,14 @@ them away (full detail lives with the code):
 
 ---
 
+## 5. External media & assets
+
+Sample audio, packs, stems and commercial media **never** live in the repo. Keep
+them in a per-machine directory pointed to by `$DAWBUDDY_ASSETS` — never a
+hardcoded absolute path. `.gitignore` blocks audio extensions as a backstop.
+Full policy: [`.agents/rules/assets-policy.md`](.agents/rules/assets-policy.md).
+
+---
+
 _When a rule and a request conflict, surface the conflict — don't silently pick
 one. The rules are the default; the maintainer can override them explicitly._
