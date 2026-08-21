@@ -7630,6 +7630,48 @@ function renderRandomizerTool(entry: any = null) {
 
   // Quick Reroll Pill Group
   const rerollGroup = el('div', 'randomizer-reroll-group');
+
+  const traditionSelect = el('select', 'input input--sm randomizer-tradition-select') as HTMLSelectElement;
+  traditionSelect.style.width = 'auto';
+  traditionSelect.style.cursor = 'pointer';
+  traditionSelect.style.padding = '4px 10px';
+  traditionSelect.style.fontSize = '12px';
+  traditionSelect.style.borderRadius = '20px';
+  traditionSelect.title = 'Filter Randomizer scale pool by musical tradition';
+
+  const userTraditions = (settings && settings.scaleTraditions) || ['all'];
+  const activeTradVal = userTraditions.includes('all') ? 'all' : (userTraditions.length === 1 ? userTraditions[0] : 'custom');
+
+  const tradOptions: { value: string; label: string }[] = [
+    { value: 'all', label: '✨ All World Scales' },
+    { value: 'western', label: '🌐 Western Scales Only' },
+    { value: 'indian', label: '🇮🇳 Indian Classical Raagas' },
+    { value: 'arabic', label: '🇪🇬 Arabic Maqamat' },
+    { value: 'chinese', label: '🇨🇳 Chinese Pentatonics' },
+    { value: 'mediterranean', label: '🇪🇸 Mediterranean & Flamenco' },
+    { value: 'celtic', label: '🇮🇪 Celtic Folk' }
+  ];
+
+  tradOptions.forEach((opt) => {
+    const optEl = document.createElement('option');
+    optEl.value = opt.value;
+    optEl.textContent = opt.label;
+    if (opt.value === activeTradVal) optEl.selected = true;
+    traditionSelect.appendChild(optEl);
+  });
+
+  traditionSelect.addEventListener('change', async () => {
+    const val = traditionSelect.value;
+    const newTrads = val === 'all' ? ['all'] : [val as ScaleTraditionId];
+    settings = await window.api.updateSettings({
+      scaleTraditions: newTrads
+    });
+    rollRandomIdea('key');
+    renderRandomizerTool(entry);
+    toast('Randomizer Pool Updated', `Scale pool set to ${tradOptions.find(o => o.value === val)?.label || val}`);
+  });
+
+  rerollGroup.append(traditionSelect);
   
   const rerollGenreBtn = el('button', 'pill pill--sm', '🎧 Reroll Genre');
   rerollGenreBtn.addEventListener('click', () => {
@@ -7665,6 +7707,13 @@ function renderRandomizerTool(entry: any = null) {
 
   const state = randomizerState!;
   const resultBox = el('div', 'scale-results-box');
+
+  const currentWorldDef = WORLD_SCALES_DATABASE.find(
+    (s) => s.name.toLowerCase() === state.scaleName.toLowerCase() || s.id.toLowerCase() === state.scaleName.toLowerCase()
+  );
+  const regionObj = currentWorldDef ? WORLD_REGIONS.find((r) => r.id === currentWorldDef.tradition) : null;
+  const flagPrefix = regionObj ? `${regionObj.flag} ` : '';
+  const subCategoryText = currentWorldDef?.subCategory || state.thaat || (regionObj ? regionObj.name : 'World Scale');
 
   // Primary Metrics Grid
   const metricsGrid = el('div', 'scale-metrics-grid');
@@ -7704,12 +7753,16 @@ function renderRandomizerTool(entry: any = null) {
   keyCard.append(el('div', 'scale-metric__label', 'Key & Scale'));
   const camelotTag = `<span class="scale-camelot-badge">${state.camelot}</span> `;
   const keyHtml = el('div', 'scale-metric__val');
-  keyHtml.innerHTML = `${camelotTag}${state.tonic} ${state.scaleName}`;
+  keyHtml.innerHTML = `${camelotTag}${flagPrefix}${state.tonic} ${state.scaleName}`;
   keyCard.append(keyHtml);
-  keyCard.append(el('div', 'scale-metric__sub', state.thaat ? `${state.thaat} Thaat` : 'Western Scale'));
+  keyCard.append(el('div', 'scale-metric__sub', `${subCategoryText}${currentWorldDef?.nativeName ? ` · ${currentWorldDef.nativeName}` : ''}`));
 
   const playScaleAction = () => {
-    if (state.raga && (state.raga.aarohanaDegrees || state.raga.degrees)) {
+    if (currentWorldDef && (currentWorldDef.ascendingPhrase || currentWorldDef.degrees)) {
+      const asc = currentWorldDef.ascendingPhrase || currentWorldDef.degrees;
+      const desc = currentWorldDef.descendingPhrase || [...asc].reverse();
+      playRagaSequence(state.tonicPc, asc, desc, state.tuningA4);
+    } else if (state.raga && (state.raga.aarohanaDegrees || state.raga.degrees)) {
       const aaroh = state.raga.aarohanaDegrees || state.raga.degrees;
       const avaroh = state.raga.avarohanaDegrees || [...aaroh].reverse();
       playRagaSequence(state.tonicPc, aaroh, avaroh, state.tuningA4);
@@ -7746,7 +7799,7 @@ function renderRandomizerTool(entry: any = null) {
 
   // 4. Time Signature & Tala Card (with interactive rhythm pulse audition action)
   const meterCard = el('div', 'scale-metric-card scale-metric-card--actionable');
-  meterCard.append(el('div', 'scale-metric__label', 'Time Signature & Tala'));
+  meterCard.append(el('div', 'scale-metric__label', 'Time Signature & Rhythm'));
   meterCard.append(el('div', 'scale-metric__val', state.timeSignature));
   if (state.tala) {
     const talaDiv = el('div', 'randomizer-tala-detail');
@@ -7755,6 +7808,8 @@ function renderRandomizerTool(entry: any = null) {
       talaDiv.append(el('div', 'randomizer-tala-bols', state.tala.bols));
     }
     meterCard.append(talaDiv);
+  } else if (currentWorldDef?.suggestedRhythm) {
+    meterCard.append(el('div', 'scale-metric__sub', `🥁 ${currentWorldDef.suggestedRhythm}`));
   } else {
     meterCard.append(el('div', 'scale-metric__sub', 'Standard Meter'));
   }
@@ -7780,12 +7835,14 @@ function renderRandomizerTool(entry: any = null) {
   });
   metricsGrid.append(meterCard);
 
-  // 4. Raaga Time & Mood Card
+  // 5. Mood & Expression Card
   const moodCard = el('div', 'scale-metric-card');
-  moodCard.append(el('div', 'scale-metric__label', 'Mood & Prahar (Time)'));
-  if (state.raga && (state.raga.time || state.raga.mood)) {
-    if (state.raga.time) moodCard.append(el('div', 'scale-metric__sub', `🕒 ${state.raga.time}`));
-    if (state.raga.mood) moodCard.append(el('div', 'scale-metric__val', `✨ ${state.raga.mood}`));
+  moodCard.append(el('div', 'scale-metric__label', 'Mood & Expression'));
+  if (currentWorldDef?.mood || (state.raga && state.raga.mood)) {
+    const mText = currentWorldDef?.mood || state.raga?.mood;
+    moodCard.append(el('div', 'scale-metric__val', `✨ ${mText}`));
+    const tText = currentWorldDef?.timeOfDay || state.raga?.time || 'Universal / Anytime';
+    moodCard.append(el('div', 'scale-metric__sub', `🕒 ${tText}`));
   } else {
     moodCard.append(el('div', 'scale-metric__val', 'Expressive & Inspiring'));
     moodCard.append(el('div', 'scale-metric__sub', 'Universal / Anytime'));
@@ -7890,83 +7947,113 @@ function renderRandomizerTool(entry: any = null) {
   kbSection.append(scaleActions);
   resultBox.append(kbSection);
 
-  // Matching Indian Classical Raagas Section (with Suggested Time Signature tags)
-  const suggestedRagas = state.ragas || [];
-  if (suggestedRagas.length > 0) {
-    const ragasSection = el('div', 'scale-ragas-section');
-    ragasSection.append(el('h4', 'scale-notes__title', 'Matching Indian Classical Raagas (with Suggested Time Signatures)'));
+  // World Musical Traditions & Scales Explorer in Randomizer
+  const ragaChroma = new Float64Array(12);
+  state.degrees.forEach((d) => {
+    ragaChroma[(state.tonicPc + d) % 12] = 1.0;
+  });
 
-    const ragasGrid = el('div', 'scale-ragas-grid');
-    suggestedRagas.forEach((raga: any) => {
-      const isCurrentRaga = state.scaleName.toLowerCase() === raga.name.toLowerCase();
-      const card = el('div', `raga-card ${isCurrentRaga ? 'raga-card--active' : ''}`);
+  let activeRandTab: ScaleTraditionId = 'all';
+  const worldSection = el('div', 'scale-ragas-section scale-world-section');
+  
+  const worldHeader = el('div', 'scale-world-header');
+  worldHeader.append(el('h4', 'scale-notes__title', 'World Musical Traditions & Scale Ideas'));
+
+  const tabsRow = el('div', 'scale-tradition-tabs');
+  const tabOptions: { id: ScaleTraditionId; label: string }[] = [
+    { id: 'all', label: '✨ All Traditions' },
+    { id: 'indian', label: '🇮🇳 Indian Raagas' },
+    { id: 'arabic', label: '🇪🇬 Arabic Maqamat' },
+    { id: 'chinese', label: '🇨🇳 Chinese & East Asian' },
+    { id: 'western', label: '🌐 Western & Jazz' },
+    { id: 'mediterranean', label: '🇪🇸 Mediterranean' }
+  ];
+
+  const ragasGrid = el('div', 'scale-ragas-grid scale-world-grid');
+
+  function renderRandomizerWorldCards(tabId: ScaleTraditionId) {
+    ragasGrid.innerHTML = '';
+    const matchedScales = findMatchingWorldScales(ragaChroma, state.tonicPc, tabId, 12);
+
+    matchedScales.forEach((scaleMatch: ScoredWorldScale) => {
+      const isCurrent = state.scaleName.toLowerCase() === scaleMatch.name.toLowerCase() || state.scaleName.toLowerCase() === scaleMatch.id.toLowerCase();
+      const card = el('div', `raga-card ${isCurrent ? 'raga-card--active' : ''}`);
 
       const top = el('div', 'raga-card__header');
-      top.append(el('span', 'raga-card__name', raga.name));
-      top.append(el('span', 'raga-card__pct', `${raga.matchPercent}% Match`));
+      const regionMeta = WORLD_REGIONS.find((r) => r.id === scaleMatch.tradition);
+      const flagStr = regionMeta ? regionMeta.flag : '🌐';
+
+      top.append(el('span', 'raga-card__name', `${flagStr} ${scaleMatch.name}`));
+      top.append(el('span', 'raga-card__pct', `${scaleMatch.matchPercent}% Match`));
       card.append(top);
 
-      const sub = el('div', 'raga-card__thaat', `${raga.thaat} Thaat`);
+      const sub = el('div', 'raga-card__thaat', `${scaleMatch.subCategory || scaleMatch.tradition}${scaleMatch.nativeName ? ` · ${scaleMatch.nativeName}` : ''}`);
       card.append(sub);
 
-      if (raga.aarohana) {
-        const aarohRow = el('div', 'raga-card__phrase raga-card__phrase--aaroh');
-        aarohRow.append(el('span', 'raga-phrase__tag', '▲ Aaroh:'));
-        aarohRow.append(el('span', 'raga-phrase__notes', raga.aarohana));
-        card.append(aarohRow);
-      }
-      if (raga.avarohana) {
-        const avarohRow = el('div', 'raga-card__phrase raga-card__phrase--avaroh');
-        avarohRow.append(el('span', 'raga-phrase__tag', '▼ Avaroh:'));
-        avarohRow.append(el('span', 'raga-phrase__notes', raga.avarohana));
-        card.append(avarohRow);
+      if (scaleMatch.phraseNotation) {
+        if (scaleMatch.phraseNotation.ascending) {
+          const ascRow = el('div', 'raga-card__phrase raga-card__phrase--aaroh');
+          ascRow.append(el('span', 'raga-phrase__tag', '▲ Asc:'));
+          ascRow.append(el('span', 'raga-phrase__notes', scaleMatch.phraseNotation.ascending));
+          card.append(ascRow);
+        }
+        if (scaleMatch.phraseNotation.descending) {
+          const descRow = el('div', 'raga-card__phrase raga-card__phrase--avaroh');
+          descRow.append(el('span', 'raga-phrase__tag', '▼ Desc:'));
+          descRow.append(el('span', 'raga-phrase__notes', scaleMatch.phraseNotation.descending));
+          card.append(descRow);
+        }
       }
 
-      if (raga.time || raga.mood) {
+      if (scaleMatch.mood || scaleMatch.timeOfDay || scaleMatch.suggestedRhythm) {
         const metaRow = el('div', 'raga-card__meta');
-        if (raga.time) metaRow.append(el('span', 'raga-card__time', `🕒 ${raga.time}`));
-        if (raga.mood) metaRow.append(el('span', 'raga-card__mood', `✨ ${raga.mood}`));
+        if (scaleMatch.timeOfDay) metaRow.append(el('span', 'raga-card__time', `🕒 ${scaleMatch.timeOfDay}`));
+        if (scaleMatch.mood) metaRow.append(el('span', 'raga-card__mood', `✨ ${scaleMatch.mood}`));
+        if (scaleMatch.suggestedRhythm) metaRow.append(el('span', 'raga-card__rhythm', `🥁 ${scaleMatch.suggestedRhythm.split('/')[0]}`));
         card.append(metaRow);
       }
 
-      // Suggested Time Signature Pill for this Raaga!
-      if (raga.suggestedTimeSig) {
-        const suggPill = el('button', 'randomizer-raga-sugg-pill');
-        suggPill.append(document.createTextNode(`⏱ Suggested: ${raga.suggestedTimeSig} ${raga.suggestedTaal ? `(${raga.suggestedTaal})` : ''}`));
-        suggPill.title = `Click to set time signature to ${raga.suggestedTimeSig} and sync metronome`;
-        suggPill.addEventListener('click', (e) => {
-          e.stopPropagation();
-          state.timeSignature = raga.suggestedTimeSig;
-          state.tala = DSP.TALA_MAP[raga.suggestedTimeSig] || null;
-          Player.setMetronomeSignature(raga.suggestedTimeSig);
-          renderRandomizerTool(entry);
-          toast('Meter Updated', `Set to ${raga.suggestedTimeSig} (${raga.suggestedTaal || ''})`);
-        });
-        card.append(suggPill);
+      // Suggested Time Signature button if available
+      if (scaleMatch.suggestedRhythm) {
+        const matchedSig = TIME_SIGNATURE_POOL.find((ts) => scaleMatch.suggestedRhythm?.includes(ts));
+        if (matchedSig && matchedSig !== state.timeSignature) {
+          const suggPill = el('button', 'randomizer-raga-sugg-pill');
+          suggPill.append(document.createTextNode(`⏱ Suggested: ${matchedSig} (${scaleMatch.suggestedRhythm.split('/')[0].trim()})`));
+          suggPill.title = `Click to set time signature to ${matchedSig} and sync metronome`;
+          suggPill.addEventListener('click', (e) => {
+            e.stopPropagation();
+            state.timeSignature = matchedSig;
+            state.tala = DSP.TALA_MAP[matchedSig] || null;
+            Player.setMetronomeSignature(matchedSig);
+            renderRandomizerTool(entry);
+            toast('Meter Updated', `Set to ${matchedSig} for ${scaleMatch.name}`);
+          });
+          card.append(suggPill);
+        }
       }
 
-      const ragaActions = el('div', 'raga-card__actions');
+      const actions = el('div', 'raga-card__actions');
 
       const previewBtn = el('button', 'pill pill--sm raga-btn--preview', '▶ Audition');
-      previewBtn.title = 'Audition Aarohana (ascending) & Avarohana (descending)';
+      previewBtn.title = 'Audition authentic ascending & descending melodic phrasing';
       previewBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        const aaroh = raga.aarohanaDegrees || raga.degrees;
-        const avaroh = raga.avarohanaDegrees || [...aaroh].reverse();
-        playRagaSequence(state.tonicPc, aaroh, avaroh, state.tuningA4);
+        const asc = scaleMatch.ascendingPhrase || scaleMatch.degrees;
+        const desc = scaleMatch.descendingPhrase || [...asc].reverse();
+        playRagaSequence(state.tonicPc, asc, desc, state.tuningA4);
       });
-      ragaActions.append(previewBtn);
+      actions.append(previewBtn);
 
-      const ragaMidiBtn = el('button', 'pill pill--sm pill--solid raga-btn--midi', '⤓ Drag to DAW');
-      ragaMidiBtn.title = 'Drag onto any DAW track or click to export MIDI containing Aarohana & Avarohana phrases';
-      const aaroh = raga.aarohanaDegrees || raga.degrees;
-      const avaroh = raga.avarohanaDegrees || [...aaroh].reverse();
-      const rMidiBytes = ragaMidi(state.tonicPc, aaroh, avaroh, { bpm: state.bpm });
-      const cleanRagaName = raga.name.replace(/[^a-zA-Z0-9_-]/g, '_');
-      const rMidiFileName = `Random_Raga_${cleanRagaName}_${state.tonic}_${state.bpm}BPM.mid`;
+      const midiBtn = el('button', 'pill pill--sm pill--solid raga-btn--midi', '⤓ Drag to DAW');
+      midiBtn.title = 'Drag onto any DAW track or click to export MIDI';
+      const asc = scaleMatch.ascendingPhrase || scaleMatch.degrees;
+      const desc = scaleMatch.descendingPhrase || [...asc].reverse();
+      const rMidiBytes = generateWorldScaleMidi(state.tonicPc, asc, desc, { bpm: state.bpm });
+      const cleanName = scaleMatch.name.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const rMidiFileName = `Random_Scale_${cleanName}_${state.tonic}_${state.bpm}BPM.mid`;
 
-      ragaMidiBtn.draggable = true;
-      ragaMidiBtn.addEventListener('dragstart', async (e: DragEvent) => {
+      midiBtn.draggable = true;
+      midiBtn.addEventListener('dragstart', async (e: DragEvent) => {
         if (e.dataTransfer) {
           e.dataTransfer.setData('text/plain', rMidiFileName);
           e.dataTransfer.effectAllowed = 'copy';
@@ -7977,11 +8064,11 @@ function renderRandomizerTool(entry: any = null) {
         }
         if (window.api.dragMidi) await window.api.dragMidi(rMidiFileName, Array.from(rMidiBytes));
       });
-      ragaMidiBtn.addEventListener('click', async (e) => {
+      midiBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         if (window.api.saveMidi) {
           const saved = await window.api.saveMidi(rMidiFileName, Array.from(rMidiBytes));
-          if (saved) toast('Raga MIDI exported', saved);
+          if (saved) toast('Scale MIDI exported', saved);
         } else {
           const blob = new Blob([rMidiBytes.buffer as ArrayBuffer], { type: 'audio/midi' });
           const url = URL.createObjectURL(blob);
@@ -7990,35 +8077,52 @@ function renderRandomizerTool(entry: any = null) {
           a.download = rMidiFileName;
           a.click();
           URL.revokeObjectURL(url);
-          toast('Raga MIDI exported', rMidiFileName);
+          toast('Scale MIDI exported', rMidiFileName);
         }
       });
-      ragaActions.append(ragaMidiBtn);
-      card.append(ragaActions);
+      actions.append(midiBtn);
+      card.append(actions);
 
-      card.title = `Click to load Raaga ${raga.name}`;
+      card.title = `Click to load ${scaleMatch.name} into Randomizer`;
       card.addEventListener('click', () => {
-        state.scaleName = raga.name;
-        state.degrees = raga.degrees;
-        state.thaat = raga.thaat;
-        state.raga = raga;
-        if (raga.suggestedTimeSig) {
-          state.timeSignature = raga.suggestedTimeSig;
-          state.tala = DSP.TALA_MAP[raga.suggestedTimeSig] || null;
-          Player.setMetronomeSignature(raga.suggestedTimeSig);
+        state.scaleName = scaleMatch.name;
+        state.degrees = scaleMatch.degrees;
+        state.thaat = scaleMatch.subCategory || scaleMatch.tradition;
+        state.raga = scaleMatch.tradition === 'indian' ? scaleMatch : null;
+        if (scaleMatch.suggestedRhythm) {
+          const matchSig = TIME_SIGNATURE_POOL.find((ts) => scaleMatch.suggestedRhythm?.includes(ts));
+          if (matchSig) {
+            state.timeSignature = matchSig;
+            state.tala = DSP.TALA_MAP[matchSig] || null;
+            Player.setMetronomeSignature(matchSig);
+          }
         }
         renderRandomizerTool(entry);
-        const aarohDegrees = raga.aarohanaDegrees || raga.degrees;
-        const avarohDegrees = raga.avarohanaDegrees || [...aarohDegrees].reverse();
-        playRagaSequence(state.tonicPc, aarohDegrees, avarohDegrees, state.tuningA4);
+        const ascP = scaleMatch.ascendingPhrase || scaleMatch.degrees;
+        const descP = scaleMatch.descendingPhrase || [...ascP].reverse();
+        playRagaSequence(state.tonicPc, ascP, descP, state.tuningA4);
       });
 
       ragasGrid.append(card);
     });
-
-    ragasSection.append(ragasGrid);
-    resultBox.append(ragasSection);
   }
+
+  tabOptions.forEach((tab) => {
+    const tabBtn = el('button', `scale-tradition-tab ${tab.id === activeRandTab ? 'scale-tradition-tab--active' : ''}`, tab.label);
+    tabBtn.addEventListener('click', () => {
+      activeRandTab = tab.id;
+      tabsRow.querySelectorAll('.scale-tradition-tab').forEach((b: any) => b.classList.remove('scale-tradition-tab--active'));
+      tabBtn.classList.add('scale-tradition-tab--active');
+      renderRandomizerWorldCards(tab.id);
+    });
+    tabsRow.append(tabBtn);
+  });
+
+  worldHeader.append(tabsRow);
+  worldSection.append(worldHeader);
+  renderRandomizerWorldCards(activeRandTab);
+  worldSection.append(ragasGrid);
+  resultBox.append(worldSection);
 
   // YouTube Challenge & Reference Explorer (Opens predefined queries directly in default web browser)
   const ytSection = el('div', 'randomizer-yt-section');
