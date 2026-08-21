@@ -4,6 +4,10 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
+// Enable 2x Retina / HiDPI rendering so all text, icons, and waveforms are ultra-crisp
+app.commandLine.appendSwitch('force-device-scale-factor', '2');
+app.commandLine.appendSwitch('high-dpi-support', '1');
+
 const now = Date.now();
 
 const mockEntries = [
@@ -268,8 +272,8 @@ app.whenReady().then(async () => {
   ipcMain.handle('output:get', async () => 'D:\\Music\\Projects\\Bounces');
 
   const win = new BrowserWindow({
-    width: 1440,
-    height: 900,
+    width: 1360,
+    height: 840,
     show: false,
     backgroundColor: '#0c1013',
     webPreferences: {
@@ -281,18 +285,23 @@ app.whenReady().then(async () => {
 
   await win.loadFile(path.join(__dirname, '..', 'dist', 'renderer', 'index.html'));
 
-  // Wait 1.5s for initial startup & remove any auto-tour
-  await new Promise((r) => setTimeout(r, 1500));
+  // Wait 1.8s for all async timers and completely purge any tour overlays / blur filters
+  await new Promise((r) => setTimeout(r, 1800));
   await win.webContents.executeJavaScript(`
+    // Kill any active tour instances
     document.querySelectorAll('.tour-overlay, .tour-card, .tour-tooltip').forEach(el => el.remove());
+    document.body.style.filter = 'none';
+    document.documentElement.style.filter = 'none';
+    const mainEl = document.querySelector('.main');
+    if (mainEl) mainEl.style.filter = 'none';
   `);
-  await new Promise((r) => setTimeout(r, 300));
+  await new Promise((r) => setTimeout(r, 400));
 
-  // 1. Pristine Dashboard View
+  // 1. Pristine Razor-Sharp Dashboard
   const homeImg = await win.webContents.capturePage();
   const homePath = path.join(outDir, 'daw-buddy-dashboard.png');
   fs.writeFileSync(homePath, homeImg.toPNG());
-  console.log('Saved Dashboard to:', homePath);
+  console.log('Saved Razor-Sharp Dashboard to:', homePath);
 
   // 2. Tools Hub View
   await win.webContents.executeJavaScript(`
@@ -300,7 +309,7 @@ app.whenReady().then(async () => {
     if (toolsBtn) toolsBtn.click();
     document.querySelectorAll('.tour-overlay, .tour-card, .tour-tooltip').forEach(el => el.remove());
   `);
-  await new Promise((r) => setTimeout(r, 1000));
+  await new Promise((r) => setTimeout(r, 800));
   const toolsImg = await win.webContents.capturePage();
   const toolsPath = path.join(outDir, 'daw-buddy-tools.png');
   fs.writeFileSync(toolsPath, toolsImg.toPNG());
@@ -312,7 +321,7 @@ app.whenReady().then(async () => {
     if (randCard) randCard.click();
     setTimeout(() => {
       document.querySelectorAll('.tour-overlay, .tour-card, .tour-tooltip').forEach(el => el.remove());
-    }, 200);
+    }, 150);
   `);
   await new Promise((r) => setTimeout(r, 1200));
   const randImg = await win.webContents.capturePage();
@@ -330,10 +339,10 @@ app.whenReady().then(async () => {
       setTimeout(() => {
         const globeBtn = document.getElementById('openRegionGlobeSetup');
         if (globeBtn) globeBtn.click();
-      }, 400);
-    }, 300);
+      }, 300);
+    }, 200);
   `);
-  await new Promise((r) => setTimeout(r, 2200));
+  await new Promise((r) => setTimeout(r, 2000));
   const globeImg = await win.webContents.capturePage();
   const globePath = path.join(outDir, 'daw-buddy-globe.png');
   fs.writeFileSync(globePath, globeImg.toPNG());
