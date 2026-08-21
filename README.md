@@ -160,11 +160,12 @@ npm start
 
 This compiles the TypeScript, bundles the window, and launches the app.
 
-**From then on, just double-click the launcher** instead of using a terminal:
+**From then on, just double-click the launcher** in the `scripts/` folder
+instead of using a terminal:
 
-- **Windows:** `DAW Buddy.bat`
-- **macOS:** `DAW Buddy.command` — run `chmod +x "DAW Buddy.command"` once so macOS will let it launch
-- **Linux:** `DAW Buddy.sh` — run `chmod +x "DAW Buddy.sh"` once to make it executable
+- **Windows:** `scripts/DAW Buddy.bat`
+- **macOS:** `scripts/DAW Buddy.command` — run `chmod +x "scripts/DAW Buddy.command"` once so macOS will let it launch
+- **Linux:** `scripts/DAW Buddy.sh` — run `chmod +x "scripts/DAW Buddy.sh"` once to make it executable
 
 The launcher checks Node is installed, runs `npm install` on a fresh copy, and
 starts the app. Keep the terminal window open while you use it — closing it
