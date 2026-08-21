@@ -38,16 +38,29 @@ people/agents bumped the version independently, without thinking. Stop that.
    jump ahead (`0.3.0-beta.1` must become `0.3.0` before anything touches
    `0.4.x`).
 
-6. **Check state before releasing — coordinate.** Before any release:
+6. **Check state before releasing — coordinate.** Before a release:
    `git fetch`, then `gh release list` and `git tag --sort=-v:refname`. Only one
-   person cuts a release at a time. Parallel releases are exactly how `v0.3.0`
-   got skipped.
+   person releases at a time. Parallel releases are how `v0.3.0` got skipped.
 
-7. **Release only from `main`, only when green.** `npm run typecheck && npm test`
-   pass locally, CI is green, then `gh release create vX.Y.Z`.
+7. **Releasing is automated — one action, no manual "create release".** From a
+   green `main` (`npm run typecheck && npm test` pass):
+
+   ```
+   npm version <patch|minor|major>       # bumps package.json + lockfile + tag
+   git push origin main --follow-tags    # pushes the commit AND the tag
+   ```
+
+   Pushing the `vX.Y.Z` tag triggers `.github/workflows/release.yml`, which
+   **refuses to release if the tag ≠ `package.json` version** (no drift, ever),
+   then creates the pre-release with auto-generated notes and builds + attaches
+   installers for macOS / Windows / Linux. **Never run `gh release create` by
+   hand** — that's what let versions race.
 
 8. **Releases stay `--prerelease` until the app is code-signed** (macOS
    Gatekeeper / Windows SmartScreen). See `docs/proposals/0008-code-signing.md`.
+
+9. **Keep `CHANGELOG.md` current.** Note user-facing changes under
+   `[Unreleased]` as you go; on release, move them under the new version.
 
 ---
 

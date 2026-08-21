@@ -1,23 +1,65 @@
 name: Release
 
-# Builds installers when you publish a GitHub Release, and uploads the
-# .exe / .dmg / AppImage to that release. A macOS .dmg can only be built on
-# macOS, so the job fans out across runners.
+# Tag-driven auto-release. The single source of truth is package.json version:
 #
-# Also runnable on demand (workflow_dispatch): same three-runner build, but the
-# installers go to workflow artifacts instead of a release — so mac/Windows
-# packaging can be dry-run before ever tagging a public version.
+#     npm version <patch|minor|major>      # bumps package.json + creates tag vX.Y.Z
+#     git push origin main --follow-tags   # pushes the commit AND the tag
+#
+# Pushing the tag triggers this workflow, which:
+#   1. refuses to release if the tag != package.json version (no drift, ever),
+#   2. creates the GitHub pre-release with auto-generated notes,
+#   3. builds installers on macOS/Windows/Linux and attaches them.
+#
+# There is no manual "create a release" step, so two people can't race and skip
+# a version (which is how v0.3.0 got skipped). Also runnable on demand
+# (workflow_dispatch) as a dry-run: it builds and uploads artifacts, no release.
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+' # v0.4.2
+      - 'v[0-9]+.[0-9]+.[0-9]+-*' # v0.4.2-beta.1, v0.5.0-rc.1
   workflow_dispatch:
 
-# Upload release assets with the built-in GITHUB_TOKEN.
 permissions:
   contents: write
 
 jobs:
+  create-release:
+    # Only on a tag push. Guards version↔tag, then creates the release.
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Guard — the tag must match package.json version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(node -p "require('./package.json').version")"
+          echo "tag=$TAG  package.json=$PKG"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $PKG. Release with 'npm version' so the two never drift."
+            exit 1
+          fi
+
+      - name: Create the pre-release (idempotent, auto-generated notes)
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists — reusing it."
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --prerelease --generate-notes --verify-tag \
+              --title "DAW Buddy $GITHUB_REF_NAME"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   build:
+    needs: [create-release]
+    # create-release is skipped on a workflow_dispatch (no tag); still build then.
+    if: always() && (needs.create-release.result == 'success' || needs.create-release.result == 'skipped')
     strategy:
       # Don't let one platform's failure cancel the others — a broken Windows
       # build shouldn't throw away finished mac/Linux installers.
@@ -40,30 +82,24 @@ jobs:
           npm run typecheck
           npm test
 
-      # electron-builder runs `npm run build` shape via the dist script, then
-      # packages dist/ + prod deps into release/. We never let electron-builder
-      # publish: its GitHub provider derives the tag from package.json version
-      # (v0.2.0), which won't match a pre-release tag like v0.2.0-rc.1 — it would
-      # try to create a second release. Instead we attach to the exact release
-      # that triggered the run, below. Unsigned for now — see docs/proposals/0003.
+      # electron-builder packages dist/ + prod deps into release/. We never let it
+      # publish (its GitHub provider derives the tag from package.json, which would
+      # fight pre-release suffixes); we attach to the pushed tag below instead.
       - name: Build installers
         run: npm run dist -- --publish never
 
-      # Attach to the triggering release by its real tag (rc or final), so the
-      # version/tag naming never has to line up with package.json.
       - name: Attach installers to the release
-        if: github.event_name == 'release'
+        if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
         run: |
           shopt -s nullglob
           files=(release/*.dmg release/*.exe release/*.AppImage release/*.deb release/*.rpm release/*.tar.gz release/*.zip)
           echo "Uploading: ${files[*]}"
-          gh release upload "$TAG" "${files[@]}" --clobber
+          gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.event.release.tag_name }}
 
-      - name: Upload installers as artifacts (manual runs)
+      - name: Upload installers as artifacts (manual dry-run)
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
