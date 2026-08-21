@@ -3,7 +3,7 @@
   "version": "0.4.2-beta.1",
   "description": "Browse, analyse and tidy your music production sessions",
   "main": "dist/main/main.js",
-  "author": "ba55ick",
+  "author": "ba55ick <contact@dawbuddy.app>",
   "license": "MIT",
   "scripts": {
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",

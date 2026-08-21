@@ -35,6 +35,7 @@ mac:
   category: public.app-category.music
 
 linux:
+  maintainer: ba55ick <contact@dawbuddy.app>
   target:
     - target: AppImage
       arch:
@@ -53,6 +54,7 @@ linux:
         - arm64
   category: Audio
   synopsis: Fast project browser, key/scale analyzer, stem manager and audio organizer for music producers
+  description: The intelligent desktop companion built specifically for music producers, sound designers, and audio engineers.
   desktop:
     entry:
       StartupWMClass: daw-buddy
