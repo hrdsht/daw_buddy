@@ -6,6 +6,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 [![Version](https://img.shields.io/badge/version-v0.4.2--beta.1-orange.svg)]()
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-ba55ick-FFDD00.svg?style=flat&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/ba55ick)
 
 <p align="center">
   <img src="docs/assets/daw-buddy-dashboard.png" alt="DAW Buddy Studio Dashboard" width="100%" />
@@ -340,3 +341,15 @@ npm run dist     package an installer
 
 See `docs/BUILD_NOTES.md` and `docs/proposals/` for the architecture, roadmap,
 and design decisions.
+
+---
+
+## ☕ Support the Project
+
+If DAW Buddy saves you hours in your creative workflow, consider buying a coffee to support continued development:
+
+<p align="left">
+  <a href="https://buymeacoffee.com/ba55ick" target="_blank">
+    <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 50px !important; width: 180px !important;" />
+  </a>
+</p>
