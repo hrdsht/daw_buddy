@@ -1,0 +1,3 @@
+# Linguist language overrides
+*.html linguist-documentation
+docs/** linguist-documentation
