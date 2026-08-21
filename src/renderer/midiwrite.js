@@ -99,4 +99,110 @@ function notesFor(tonicPc, degrees, octave = 3) {
   return degrees.map((d) => base + d);
 }
 
-module.exports = { scaleMidi, notesFor, TPQ };
+/**
+ * Writes a rhythmic Standard MIDI File containing a single-note metronome / timing click track.
+ */
+function rhythmGuideMidi(bpm = 120, timeSignature = '4/4', options = {}) {
+  const bars = options.bars || 8;
+  const accentNote = options.accentNote !== undefined ? options.accentNote : 72;
+  const clickNote = options.clickNote !== undefined ? options.clickNote : 60;
+
+  const parts = String(timeSignature || '4/4').split('/');
+  const num = parseInt(parts[0], 10) || 4;
+  const den = parseInt(parts[1], 10) || 4;
+  const denLog2 = Math.round(Math.log2(den)) || 2;
+
+  const beatTicks = Math.round((480 * 4) / den);
+  const clickDuration = Math.max(20, Math.min(Math.round(beatTicks * 0.45), 180));
+  const gapDuration = beatTicks - clickDuration;
+
+  const events = [];
+  const usPerQuarter = Math.round(60000000 / bpm);
+  events.push(
+    ...vlq(0), 0xff, 0x51, 0x03,
+    (usPerQuarter >> 16) & 0xff, (usPerQuarter >> 8) & 0xff, usPerQuarter & 0xff
+  );
+
+  events.push(...vlq(0), 0xff, 0x58, 0x04, num & 0xff, denLog2 & 0xff, 24, 8);
+
+  const totalBeats = num * bars;
+  let prevGap = 0;
+
+  for (let b = 0; b < totalBeats; b++) {
+    const beatInBar = b % num;
+    const isDownbeat = beatInBar === 0;
+    const isSubAccent = (num === 4 && beatInBar === 2) || (num === 6 && beatInBar === 3) || (num === 7 && (beatInBar === 3 || beatInBar === 5));
+
+    const note = isDownbeat ? accentNote : clickNote;
+    const velocity = isDownbeat ? 127 : (isSubAccent ? 100 : 80);
+
+    const onDelta = b === 0 ? 0 : prevGap;
+    events.push(...vlq(onDelta), 0x90, note & 0x7f, velocity);
+    events.push(...vlq(clickDuration), 0x80, note & 0x7f, 0);
+
+    prevGap = gapDuration;
+  }
+
+  events.push(...vlq(prevGap), 0xff, 0x2f, 0x00);
+
+  const head = [
+    ...Buffer.from(HEADER, 'ascii'),
+    ...be32(6),
+    ...be16(0),
+    ...be16(1),
+    ...be16(TPQ)
+  ];
+
+  const track = [
+    ...Buffer.from(TRACK, 'ascii'),
+    ...be32(events.length),
+    ...events
+  ];
+
+  return Buffer.from([...head, ...track]);
+}
+
+function ragaMidi(tonicPc, aarohanaDegrees, avarohanaDegrees, options = {}) {
+  const bpm = options.bpm || 120;
+  const velocity = options.velocity || 85;
+  const octave = 4;
+  const base = 12 * (octave + 1) + tonicPc;
+  const noteDuration = Math.round(TPQ);
+  const events = [];
+
+  const usPerQuarter = Math.round(60000000 / bpm);
+  events.push(
+    ...vlq(0), 0xff, 0x51, 0x03,
+    (usPerQuarter >> 16) & 0xff, (usPerQuarter >> 8) & 0xff, usPerQuarter & 0xff
+  );
+  events.push(...vlq(0), 0xff, 0x58, 0x04, 4, 2, 24, 8);
+
+  const fullSequenceDegrees = [...aarohanaDegrees, ...avarohanaDegrees];
+  const midiNotes = fullSequenceDegrees.map((d) => Math.max(0, Math.min(127, base + d)));
+
+  midiNotes.forEach((note) => {
+    events.push(...vlq(0), 0x90, note & 0x7f, velocity);
+    events.push(...vlq(noteDuration), 0x80, note & 0x7f, 0);
+  });
+
+  events.push(...vlq(0), 0xff, 0x2f, 0x00);
+
+  const head = [
+    ...Buffer.from(HEADER, 'ascii'),
+    ...be32(6),
+    ...be16(0),
+    ...be16(1),
+    ...be16(TPQ)
+  ];
+
+  const track = [
+    ...Buffer.from(TRACK, 'ascii'),
+    ...be32(events.length),
+    ...events
+  ];
+
+  return Buffer.from([...head, ...track]);
+}
+
+module.exports = { scaleMidi, notesFor, ragaMidi, rhythmGuideMidi, TPQ };
+

@@ -386,6 +386,8 @@ body {
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 button,
@@ -394,6 +396,14 @@ textarea,
 select {
   font: inherit;
   color: inherit;
+}
+
+input,
+textarea,
+[contenteditable="true"],
+.selectable-text {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 :focus-visible {

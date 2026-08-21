@@ -21,7 +21,7 @@ import {
   DEGREE_NAMES,
   SARGAM_NAMES
 } from './scaleview';
-import { scaleMidi, notesFor, ragaMidi } from './midiwrite';
+import { scaleMidi, notesFor, ragaMidi, rhythmGuideMidi } from './midiwrite';
 import {
   ScaleTraditionId,
   WORLD_REGIONS,
@@ -7922,17 +7922,54 @@ function renderRandomizerTool(entry: any = null) {
   bpmCard.append(metroToggleBtn);
   metricsGrid.append(bpmCard);
 
-  // 3. Key & Camelot Card (with interactive audition action)
+  // 3. Key & Camelot Card (with interactive audition action and direct DAW MIDI drag)
   const keyCard = el('div', 'scale-metric-card scale-metric-card--actionable');
-  keyCard.append(el('div', 'scale-metric__label', 'Key & Scale'));
+  keyCard.append(el('div', 'scale-metric__label', 'Key & Scale (Drag to DAW)'));
   const camelotTag = `<span class="scale-camelot-badge">${state.camelot}</span> `;
   const keyHtml = el('div', 'scale-metric__val');
   keyHtml.innerHTML = `${camelotTag}${flagPrefix}${state.tonic} ${state.scaleName}`;
   keyCard.append(keyHtml);
   keyCard.append(el('div', 'scale-metric__sub', `${subCategoryText}${currentWorldDef?.nativeName ? ` · ${currentWorldDef.nativeName}` : ''}`));
 
+  // Generate MIDI bytes for Key & Scale
+  const cleanScaleName = state.scaleName.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const keyScaleMidiFileName = `Random_${state.tonic}_${cleanScaleName}_${state.bpm}BPM.mid`;
+  let keyScaleMidiBytes: Uint8Array;
+  if (currentWorldDef && (currentWorldDef.ascendingPhrase || currentWorldDef.degrees)) {
+    const asc = currentWorldDef.ascendingPhrase || currentWorldDef.degrees;
+    const desc = currentWorldDef.descendingPhrase || [...asc].reverse();
+    keyScaleMidiBytes = generateWorldScaleMidi(state.tonicPc, asc, desc, { bpm: state.bpm });
+  } else if (state.raga && (state.raga.aarohanaDegrees || state.raga.degrees)) {
+    const aaroh = state.raga.aarohanaDegrees || state.raga.degrees;
+    const avaroh = state.raga.avarohanaDegrees || [...aaroh].reverse();
+    keyScaleMidiBytes = ragaMidi(state.tonicPc, aaroh, avaroh, { bpm: state.bpm });
+  } else {
+    const notes = notesFor(state.tonicPc, state.degrees, 3);
+    keyScaleMidiBytes = scaleMidi(notes, { bpm: state.bpm, bars: 4 });
+  }
+
+  // Make the Key Card itself draggable to DAW
+  keyCard.draggable = true;
+  keyCard.title = `Drag "${state.tonic} ${state.scaleName}" MIDI directly into your DAW, or click to audition`;
+  keyCard.addEventListener('dragstart', async (e: DragEvent) => {
+    if (e.dataTransfer) {
+      e.dataTransfer.setData('text/plain', keyScaleMidiFileName);
+      e.dataTransfer.effectAllowed = 'copy';
+      const canvas = document.createElement('canvas');
+      canvas.width = 1;
+      canvas.height = 1;
+      e.dataTransfer.setDragImage(canvas, 0, 0);
+    }
+    if (window.api.dragMidi) await window.api.dragMidi(keyScaleMidiFileName, Array.from(keyScaleMidiBytes));
+  });
+
+  const keyActionsRow = el('div', 'scale-metric-card-actions');
+  keyActionsRow.style.display = 'flex';
+  keyActionsRow.style.gap = '6px';
+  keyActionsRow.style.marginTop = '8px';
+  keyActionsRow.style.flexWrap = 'wrap';
+
   const playKeyBtn = el('button', 'pill pill--sm', '▶ Audition Scale');
-  playKeyBtn.style.marginTop = '8px';
   playKeyBtn.title = 'Play full scale notes and tonic tone (Click to stop)';
 
   const playScaleBtn = el('button', 'pill pill--solid scale-action-btn', '▶ Play Scale');
@@ -7978,16 +8015,53 @@ function renderRandomizerTool(entry: any = null) {
     e.stopPropagation();
     playScaleAction();
   });
-  keyCard.append(playKeyBtn);
-  keyCard.title = 'Click to audition scale & root tone (Click again to stop)';
-  keyCard.addEventListener('click', () => {
-    playScaleAction();
+  keyActionsRow.append(playKeyBtn);
+
+  const dragScaleMidiBtn = el('button', 'pill pill--sm scale-midi-btn', '⤓ Drag MIDI to DAW');
+  dragScaleMidiBtn.title = 'Drag onto any DAW track (or click to export) Scale MIDI';
+  dragScaleMidiBtn.draggable = true;
+  dragScaleMidiBtn.addEventListener('dragstart', async (e: DragEvent) => {
+    e.stopPropagation();
+    if (e.dataTransfer) {
+      e.dataTransfer.setData('text/plain', keyScaleMidiFileName);
+      e.dataTransfer.effectAllowed = 'copy';
+      const canvas = document.createElement('canvas');
+      canvas.width = 1;
+      canvas.height = 1;
+      e.dataTransfer.setDragImage(canvas, 0, 0);
+    }
+    if (window.api.dragMidi) await window.api.dragMidi(keyScaleMidiFileName, Array.from(keyScaleMidiBytes));
+  });
+  dragScaleMidiBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (window.api.saveMidi) {
+      const saved = await window.api.saveMidi(keyScaleMidiFileName, Array.from(keyScaleMidiBytes));
+      if (saved) toast('Scale MIDI exported', saved);
+    } else {
+      const blob = new Blob([keyScaleMidiBytes.buffer as ArrayBuffer], { type: 'audio/midi' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = keyScaleMidiFileName;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast('Scale MIDI exported', keyScaleMidiFileName);
+    }
+  });
+  keyActionsRow.append(dragScaleMidiBtn);
+
+  keyCard.append(keyActionsRow);
+  keyCard.addEventListener('click', (e) => {
+    // Only toggle playback if clicked on the card background, not child controls
+    if ((e.target as HTMLElement).tagName !== 'BUTTON') {
+      playScaleAction();
+    }
   });
   metricsGrid.append(keyCard);
 
-  // 4. Time Signature & Tala Card (with interactive rhythm pulse audition action)
+  // 4. Time Signature & Tala Card (with interactive rhythm pulse audition action and Metronome Click MIDI drag)
   const meterCard = el('div', 'scale-metric-card scale-metric-card--actionable');
-  meterCard.append(el('div', 'scale-metric__label', 'Time Signature & Rhythm'));
+  meterCard.append(el('div', 'scale-metric__label', 'Time Signature & Rhythm (Drag to DAW)'));
   meterCard.append(el('div', 'scale-metric__val', state.timeSignature));
   if (state.tala) {
     const talaDiv = el('div', 'randomizer-tala-detail');
@@ -8002,9 +8076,34 @@ function renderRandomizerTool(entry: any = null) {
     meterCard.append(el('div', 'scale-metric__sub', 'Standard Meter'));
   }
 
+  // Generate 8-Bar Metronome Click Guide MIDI for this time signature & BPM
+  const cleanMeterName = state.timeSignature.replace('/', '_');
+  const rhythmGuideFileName = `Metronome_${cleanMeterName}_${state.bpm}BPM_Guide.mid`;
+  const rhythmGuideBytes = rhythmGuideMidi(state.bpm, state.timeSignature, { bars: 8 });
+
+  // Make the Time Signature card itself draggable to DAW
+  meterCard.draggable = true;
+  meterCard.title = `Drag 8-Bar ${state.timeSignature} (${state.bpm} BPM) Metronome Guide MIDI into your DAW, or click to toggle pulse`;
+  meterCard.addEventListener('dragstart', async (e: DragEvent) => {
+    if (e.dataTransfer) {
+      e.dataTransfer.setData('text/plain', rhythmGuideFileName);
+      e.dataTransfer.effectAllowed = 'copy';
+      const canvas = document.createElement('canvas');
+      canvas.width = 1;
+      canvas.height = 1;
+      e.dataTransfer.setDragImage(canvas, 0, 0);
+    }
+    if (window.api.dragMidi) await window.api.dragMidi(rhythmGuideFileName, Array.from(rhythmGuideBytes));
+  });
+
+  const meterActionsRow = el('div', 'scale-metric-card-actions');
+  meterActionsRow.style.display = 'flex';
+  meterActionsRow.style.gap = '6px';
+  meterActionsRow.style.marginTop = '8px';
+  meterActionsRow.style.flexWrap = 'wrap';
+
   const isMeterPlaying = Player.isMetronome();
   const meterPlayBtn = el('button', `pill pill--sm ${isMeterPlaying ? 'pill--solid pill--metro is-on' : ''}`, isMeterPlaying ? '⏹ Stop Rhythm' : `🥁 Play Rhythm (${state.timeSignature})`);
-  meterPlayBtn.style.marginTop = '8px';
   meterPlayBtn.title = `Audition ${state.timeSignature} meter rhythm pattern in real-time`;
   meterPlayBtn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -8013,13 +8112,49 @@ function renderRandomizerTool(entry: any = null) {
     Player.setMetronome(!Player.isMetronome());
     renderRandomizerTool(entry);
   });
-  meterCard.append(meterPlayBtn);
-  meterCard.title = `Click to toggle ${state.timeSignature} meter pulse`;
-  meterCard.addEventListener('click', () => {
-    Player.setMetronomeBpm(state.bpm);
-    Player.setMetronomeSignature(state.timeSignature);
-    Player.setMetronome(!Player.isMetronome());
-    renderRandomizerTool(entry);
+  meterActionsRow.append(meterPlayBtn);
+
+  const dragRhythmBtn = el('button', 'pill pill--sm scale-midi-btn', `⤓ Drag Rhythm MIDI (${state.timeSignature})`);
+  dragRhythmBtn.title = `Drag 8-Bar ${state.timeSignature} Click/Metronome MIDI to DAW track to align samples visually`;
+  dragRhythmBtn.draggable = true;
+  dragRhythmBtn.addEventListener('dragstart', async (e: DragEvent) => {
+    e.stopPropagation();
+    if (e.dataTransfer) {
+      e.dataTransfer.setData('text/plain', rhythmGuideFileName);
+      e.dataTransfer.effectAllowed = 'copy';
+      const canvas = document.createElement('canvas');
+      canvas.width = 1;
+      canvas.height = 1;
+      e.dataTransfer.setDragImage(canvas, 0, 0);
+    }
+    if (window.api.dragMidi) await window.api.dragMidi(rhythmGuideFileName, Array.from(rhythmGuideBytes));
+  });
+  dragRhythmBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (window.api.saveMidi) {
+      const saved = await window.api.saveMidi(rhythmGuideFileName, Array.from(rhythmGuideBytes));
+      if (saved) toast('Rhythm MIDI exported', saved);
+    } else {
+      const blob = new Blob([rhythmGuideBytes.buffer as ArrayBuffer], { type: 'audio/midi' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = rhythmGuideFileName;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast('Rhythm MIDI exported', rhythmGuideFileName);
+    }
+  });
+  meterActionsRow.append(dragRhythmBtn);
+
+  meterCard.append(meterActionsRow);
+  meterCard.addEventListener('click', (e) => {
+    if ((e.target as HTMLElement).tagName !== 'BUTTON') {
+      Player.setMetronomeBpm(state.bpm);
+      Player.setMetronomeSignature(state.timeSignature);
+      Player.setMetronome(!Player.isMetronome());
+      renderRandomizerTool(entry);
+    }
   });
   metricsGrid.append(meterCard);
 
