@@ -38,12 +38,25 @@
         <header class="topbar">
           <button id="backBtn" class="round" title="Back" hidden>‹</button>
           <div id="pageTitle" class="topbar__title">Projects</div>
-          <input
-            id="search"
-            class="search"
-            type="search"
-            placeholder="Search — name, bpm:140-145, key:8A, daw:ableton, note:vocal"
-          />
+          <div class="search-wrap">
+            <input
+              id="search"
+              class="search"
+              type="search"
+              placeholder="Search projects…"
+            />
+            <button id="searchHintBtn" class="search-hint-btn" type="button" title="Search filters" aria-label="Show search tips">&#9660;</button>
+            <div id="searchHintBubble" class="search-hint-bubble" role="tooltip" hidden>
+              <strong>Search filters</strong>
+              <ul>
+                <li><code>bpm:140</code> or <code>bpm:120-145</code></li>
+                <li><code>key:8A</code> or <code>key:Am</code></li>
+                <li><code>daw:ableton</code> / <code>daw:logic</code></li>
+                <li><code>note:vocal</code> — matches your notes</li>
+                <li>Plain text searches by name</li>
+              </ul>
+            </div>
+          </div>
           <div class="topbar__right">
             <div id="sortMount" class="sortmount"></div>
             <button id="miniToggle" class="pill" title="Open floating Mini Player">
@@ -232,8 +245,62 @@
           <button class="pill surface-btn" data-surface="light">Light</button>
           <button class="pill surface-btn" data-surface="amoled">AMOLED</button>
         </div>
-        <div class="appearance-row">
-          <button id="resetTheme" class="pill pill--sm">Reset to default (Dark Minimalist)</button>
+
+        <div class="theme-tuning-box" style="margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px;">
+          <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); font-weight: 600;">Theme Tuning (Brightness &amp; Contrast)</div>
+          
+          <div class="theme-slider-row" style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+            <span style="font-size: 12px; min-width: 75px;">Brightness</span>
+            <input type="range" id="themeBrightnessSlider" min="60" max="140" value="100" step="1" style="flex: 1; accent-color: var(--amber); cursor: pointer;" />
+            <span id="themeBrightnessValue" class="mono" style="font-size: 11.5px; width: 44px; text-align: right; color: var(--dim);">100%</span>
+          </div>
+
+          <div class="theme-slider-row" style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+            <span style="font-size: 12px; min-width: 75px;">Contrast</span>
+            <input type="range" id="themeContrastSlider" min="70" max="140" value="100" step="1" style="flex: 1; accent-color: var(--amber); cursor: pointer;" />
+            <span id="themeContrastValue" class="mono" style="font-size: 11.5px; width: 44px; text-align: right; color: var(--dim);">100%</span>
+          </div>
+          
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+            <button id="resetThemeTuning" class="pill pill--sm" style="font-size: 11px;">Reset Tuning (100%)</button>
+            <button id="resetTheme" class="pill pill--sm" style="font-size: 11px;">Reset Theme</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="field">
+        <h3>Graphics &amp; Animation Scale</h3>
+        <p class="muted">
+          Tune UI animation and transition speed with a 4-step snappy slider. Setting scale to 0.50x or 0.25x provides an instantaneous, ultra-snappy developer feel.
+        </p>
+
+        <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px; margin-bottom: 8px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+            <span style="font-size: 12px; font-weight: 500;">Speed Scale:</span>
+            <span id="animScaleDisplayValue" style="font-size: 12px; font-weight: 600; color: var(--amber);">0.50x (Snappy)</span>
+          </div>
+
+          <input
+            type="range"
+            id="animScaleRangeSlider"
+            min="0"
+            max="3"
+            step="1"
+            value="2"
+            style="width: 100%; accent-color: var(--amber); cursor: pointer;"
+          />
+
+          <div style="display: flex; justify-content: space-between; font-size: 10.5px; color: var(--dim); user-select: none; margin-top: 2px;">
+            <span style="cursor: pointer;" onclick="document.getElementById('animScaleRangeSlider').value='0'; document.getElementById('animScaleRangeSlider').dispatchEvent(new Event('input'))">0x (Off)</span>
+            <span style="cursor: pointer;" onclick="document.getElementById('animScaleRangeSlider').value='1'; document.getElementById('animScaleRangeSlider').dispatchEvent(new Event('input'))">0.25x</span>
+            <span style="cursor: pointer;" onclick="document.getElementById('animScaleRangeSlider').value='2'; document.getElementById('animScaleRangeSlider').dispatchEvent(new Event('input'))">0.50x</span>
+            <span style="cursor: pointer;" onclick="document.getElementById('animScaleRangeSlider').value='3'; document.getElementById('animScaleRangeSlider').dispatchEvent(new Event('input'))">1.0x (Full)</span>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--muted); margin-top: 8px;">
+          <span>🖥️ GPU Acceleration:</span>
+          <span style="color: var(--amber); font-weight: 600;">Active (Hardware Accelerated)</span>
         </div>
       </section>
 
@@ -358,6 +425,21 @@
         <button id="checkUpdatesBtn" class="pill pill--solid" type="button">
           🔍 Check for Updates (GitHub)
         </button>
+      </section>
+
+      <section class="field">
+        <h3>Crash Logging &amp; Diagnostics</h3>
+        <p class="muted">
+          Automatically records local diagnostic reports if an unexpected error or crash occurs so you can easily report issues. No audio or personal project content is ever logged.
+        </p>
+        <label class="switch" style="margin-bottom: 8px;">
+          <input type="checkbox" id="enableCrashLogs" checked />
+          <span class="switch__track" aria-hidden="true"></span>
+          Enable Crash &amp; Diagnostics Logging
+        </label>
+        <div style="margin-top: 8px;">
+          <button id="openCrashLogsDir" class="pill pill--solid">📂 Open Crash Logs Folder</button>
+        </div>
       </section>
 
       <section class="field">

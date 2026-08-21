@@ -5,6 +5,10 @@
    ================================================================== */
 
 :root {
+  /* Theme Brightness & Contrast Tuning */
+  --theme-brightness: 1;
+  --theme-contrast: 1;
+
   /* Minimalist Dark (Default) */
   --bg: #0e1210;
   --surface: #141916;
@@ -30,6 +34,10 @@
   --r-lg: 12px;
   --player-h: 88px;
   --accent-glow: 0 0 14px rgba(0, 240, 255, 0.3);
+}
+
+html {
+  filter: brightness(var(--theme-brightness, 1)) contrast(var(--theme-contrast, 1));
 }
 
 /* ---- Minimalist Accents (Dark) --------------------------------------- */
@@ -85,11 +93,11 @@ body[data-theme-style="minimalist"].theme-amoled {
    ABLETON LIVE THEME (High-Tech DAW Precision & Clip Matrix Palette)
    ================================================================== */
 body[data-theme-style="ableton"] {
-  --bg: #1e1e24;
-  --surface: #2b2b34;
-  --raised: #34343f;
-  --hover: #3e3e4c;
-  --active: #474757;
+  --bg: #121318;
+  --surface: #1a1b22;
+  --raised: #22242d;
+  --hover: #2b2e3a;
+  --active: #353847;
   --text: #e2e2ee;
   --muted: #9595a8;
   --dim: #6c6c80;
@@ -99,8 +107,8 @@ body[data-theme-style="ableton"] {
   --sage: #29a9ff;
   --alert: #ff3366;
 
-  --line: rgba(255, 255, 255, 0.09);
-  --line-crisp: #121217;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-crisp: #0b0c10;
 
   --r: 2px;
   --r-lg: 3px;
@@ -661,14 +669,23 @@ body.is-mac .topbar {
   display: none;
 }
 
-.search {
+/* ---- Search wrap + hint bubble ---------------------------------------- */
+.search-wrap {
+  position: relative;
   flex: 1 1 auto;
   max-width: 460px;
+  display: flex;
+  align-items: center;
+}
+
+.search {
+  flex: 1 1 auto;
+  width: 100%;
   background: var(--raised);
   border: none;
   border: 1px solid transparent;
   border-radius: var(--r);
-  padding: 8px 13px;
+  padding: 8px 34px 8px 13px;
   font-size: 13.5px;
 }
 
@@ -680,6 +697,106 @@ body.is-mac .topbar {
   outline: none;
   background: var(--hover);
   border-color: rgba(157, 222, 100, 0.32);
+}
+
+/* The ▾ chevron button sits inside the right edge of the search input */
+.search-hint-btn {
+  position: absolute;
+  right: 7px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--dim);
+  font-size: 10px;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.15s, background 0.15s;
+  line-height: 1;
+}
+
+.search-hint-btn:hover,
+.search-hint-btn.is-open {
+  color: var(--amber);
+  background: var(--hover);
+}
+
+/* Comic speech bubble */
+.search-hint-bubble {
+  position: absolute;
+  top: calc(100% + 12px);
+  left: 0;
+  z-index: 200;
+  min-width: 230px;
+  max-width: 290px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 12px 14px 10px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.45), 0 0 0 1px var(--line);
+  animation: bubble-in 0.18s ease both;
+}
+
+/* Speech bubble tail pointing up-left toward the ▾ button */
+.search-hint-bubble::before {
+  content: '';
+  position: absolute;
+  top: -7px;
+  right: 14px;
+  width: 12px;
+  height: 12px;
+  background: var(--raised);
+  border-left: 1px solid var(--line);
+  border-top: 1px solid var(--line);
+  transform: rotate(45deg);
+}
+
+.search-hint-bubble[hidden] {
+  display: none;
+}
+
+@keyframes bubble-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0)   scale(1); }
+}
+
+.search-hint-bubble strong {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--amber);
+  margin-bottom: 8px;
+}
+
+.search-hint-bubble ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.search-hint-bubble li {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.search-hint-bubble code {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--active);
+  color: var(--amber);
+  padding: 1px 5px;
+  border-radius: 4px;
 }
 
 .topbar__right {
@@ -2131,6 +2248,82 @@ body.theme-light .page__sticky-bar {
   text-overflow: ellipsis;
 }
 
+.raga-card__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.raga-btn--preview,
+.raga-btn--midi {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.015em;
+  padding: 5px 12px;
+  border-radius: 999px;
+  white-space: nowrap;
+  user-select: none;
+  cursor: pointer;
+  line-height: 1;
+  transition: all 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  text-shadow: none !important;
+  -webkit-font-smoothing: antialiased;
+}
+
+.raga-btn--preview {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text);
+}
+
+.raga-btn--preview:hover {
+  background: rgba(255, 255, 255, 0.13);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.raga-btn--preview.pill--solid {
+  background: var(--amber);
+  color: var(--amber-ink);
+  border-color: var(--amber);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--amber) 40%, transparent);
+}
+
+.raga-btn--midi {
+  background: var(--amber) !important;
+  color: var(--amber-ink) !important;
+  border: 1px solid transparent;
+  font-weight: 700;
+  cursor: grab;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--amber) 30%, transparent);
+}
+
+.raga-btn--midi:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--amber) 50%, transparent);
+  transform: translateY(-1px);
+}
+
+.raga-btn--midi:active {
+  cursor: grabbing;
+  transform: translateY(0);
+}
+
+.raga-btn__icon {
+  flex-shrink: 0;
+  display: inline-block;
+  vertical-align: middle;
+}
+
 .scale-modal-actions {
   display: flex;
   align-items: center;
@@ -2832,6 +3025,14 @@ body.theme-light .page__sticky-bar {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  cursor: pointer;
+  transition: color 0.15s ease, text-decoration 0.15s ease;
+}
+
+.player__title:hover {
+  color: var(--amber);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .player__time {
@@ -3151,6 +3352,9 @@ body.theme-light .page__sticky-bar {
   grid-row: 1 / 3;
   width: 52px;
   height: 52px;
+  cursor: ns-resize;
+  user-select: none;
+  touch-action: none;
 }
 
 .reverb-knob-input,
@@ -3166,7 +3370,8 @@ body.theme-light .page__sticky-bar {
   z-index: 2;
   margin: 0;
   opacity: 0;
-  cursor: ew-resize;
+  cursor: ns-resize;
+  pointer-events: none;
 }
 
 .reverb-knob {
@@ -3389,20 +3594,58 @@ body.theme-light .toast {
   position: fixed;
   right: 20px;
   bottom: calc(var(--player-h) + 24px);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+  align-items: end;
+  justify-items: end;
   pointer-events: none;
   z-index: 30;
+  overflow: visible;
 }
 
 .toast {
+  grid-area: 1 / 1;
   background: var(--raised);
   border-radius: var(--r);
   padding: 12px 16px;
-  max-width: 340px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
-  animation: rise 180ms ease;
+  padding-right: 28px;
+  max-width: 350px;
+  min-width: 240px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--line);
+  will-change: transform, opacity;
+  animation: toast-enter 0.28s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  pointer-events: auto;
+  cursor: pointer;
+  position: relative;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+/* Dissolve slightly on hover so user can easily see/click through underneath */
+.toast:hover {
+  opacity: 0.28 !important;
+  transform: scale(0.98);
+}
+
+.toast__close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 5px;
+  line-height: 1;
+  border-radius: 3px;
+  opacity: 0.7;
+}
+
+.toast__close:hover {
+  color: var(--text);
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .toast__title {
@@ -3419,13 +3662,349 @@ body.theme-light .toast {
 .toast__body {
   font-size: 12.5px;
   color: var(--muted);
+  line-height: 1.35;
 }
 
-@keyframes rise {
-  from {
+/* Default single-toast entrance */
+@keyframes toast-enter {
+  0% {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateX(60px) scale(0.92);
   }
+  70% {
+    opacity: 1;
+    transform: translateX(-6px) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+/* Comical bump-in: new notification slides in briskly from left directly into the slot */
+.toast.toast--bump-in {
+  z-index: 2;
+  animation: toast-bump-in 0.34s cubic-bezier(0.2, 0.9, 0.3, 1.2) forwards;
+}
+
+@keyframes toast-bump-in {
+  0% {
+    opacity: 0;
+    transform: translateX(-125%) scale(0.95);
+  }
+  60% {
+    opacity: 1;
+    transform: translateX(12px) scale(1.03);
+  }
+  80% {
+    opacity: 1;
+    transform: translateX(-3px) scale(0.99);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+/* Comical bump-out: old notification stays at exact position, gets struck from left, and flies right */
+.toast.toast--bump-out {
+  z-index: 1;
+  animation: toast-bump-out 0.30s cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
+  pointer-events: none;
+}
+
+@keyframes toast-bump-out {
+  0% {
+    opacity: 1;
+    transform: translateX(0) rotate(0deg);
+  }
+  20% {
+    opacity: 1;
+    transform: translateX(10px) rotate(2deg) scale(0.99);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(150%) rotate(7deg) scale(0.88);
+  }
+}
+
+/* Graceful auto-dismiss exit */
+.toast.toast--exit {
+  animation: toast-exit 0.24s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  pointer-events: none;
+}
+
+@keyframes toast-exit {
+  0% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(45px) scale(0.94);
+  }
+}
+
+/* ========================================================================== */
+/* CRASH RECOVERY MODAL & DRAGGABLE LOG PILL                                  */
+/* ========================================================================== */
+.crash-recovery-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: toast-enter 0.2s ease-out forwards;
+}
+
+.crash-recovery-modal {
+  background: var(--raised, #181d1a);
+  border: 1px solid rgba(255, 110, 110, 0.4);
+  border-radius: 12px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 70, 70, 0.2);
+  width: 100%;
+  max-width: 580px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  color: var(--text, #e6eee8);
+}
+
+.crash-recovery-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.crash-recovery-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #ff6b6b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.crash-recovery-close {
+  background: transparent;
+  border: none;
+  color: var(--muted, #8b9990);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.crash-recovery-close:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.crash-recovery-desc {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted, #b0c0b6);
+}
+
+.crash-recovery-box {
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.08));
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-family: monospace;
+  font-size: 11.5px;
+  color: #f87171;
+  max-height: 100px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.crash-drag-pill {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 2px dashed rgba(255, 180, 0, 0.5);
+  border-radius: 8px;
+  cursor: grab;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.crash-drag-pill:hover {
+  background: rgba(255, 180, 0, 0.12);
+  border-color: rgba(255, 180, 0, 0.9);
+  transform: translateY(-1px);
+}
+
+.crash-drag-pill:active {
+  cursor: grabbing;
+}
+
+.crash-drag-pill__icon {
+  font-size: 22px;
+}
+
+.crash-drag-pill__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.crash-drag-pill__name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--amber, #ffdf33);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crash-drag-pill__hint {
+  font-size: 11px;
+  color: var(--muted, #8b9990);
+}
+
+.crash-email-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 14px;
+  gap: 10px;
+}
+
+.crash-email-banner__left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.crash-email-banner__icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.crash-email-banner__text {
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.crash-email-address {
+  color: var(--amber);
+  user-select: all;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.crash-email-address:hover {
+  filter: brightness(1.2);
+}
+
+.crash-recovery-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.crash-recovery-actions .btn {
+  background: #1c221e !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: #f5f9f6 !important;
+  padding: 8px 16px !important;
+  border-radius: 6px !important;
+  font-family: var(--face) !important;
+  font-weight: 600 !important;
+  font-size: 12.5px !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  transition: all 0.15s ease !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3) !important;
+}
+
+.crash-recovery-actions .btn:hover {
+  background: #28332b !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  color: #ffffff !important;
+  transform: translateY(-1px) !important;
+}
+
+.crash-recovery-actions .btn--primary {
+  background: var(--amber, #00f0ff) !important;
+  color: var(--amber-ink, #000) !important;
+  border: none !important;
+  font-weight: 700 !important;
+}
+
+.crash-recovery-actions .btn--primary:hover {
+  filter: brightness(1.15) !important;
+  background: var(--amber, #00f0ff) !important;
+}
+
+/* ==================================================================
+   GRAPHICS & ANIMATION SCALE SYSTEM (ANDROID DEVELOPER SPEED FEEL)
+   ================================================================== */
+:root {
+  --anim-speed-mult: 1;
+}
+
+body[data-anim-scale="0.5"] {
+  --anim-speed-mult: 0.5;
+}
+
+body[data-anim-scale="0.5"] *,
+body[data-anim-scale="0.5"] *::before,
+body[data-anim-scale="0.5"] *::after {
+  transition-duration: 0.08s !important;
+  animation-duration: 0.15s !important;
+}
+
+body[data-anim-scale="0.25"] {
+  --anim-speed-mult: 0.25;
+}
+
+body[data-anim-scale="0.25"] *,
+body[data-anim-scale="0.25"] *::before,
+body[data-anim-scale="0.25"] *::after {
+  transition-duration: 0.04s !important;
+  animation-duration: 0.08s !important;
+}
+
+body[data-anim-scale="0"] {
+  --anim-speed-mult: 0;
+}
+
+body[data-anim-scale="0"] *,
+body[data-anim-scale="0"] *::before,
+body[data-anim-scale="0"] *::after {
+  transition-duration: 0.001ms !important;
+  animation-duration: 0.001ms !important;
+  transition-delay: 0s !important;
+  animation-delay: 0s !important;
+}
+
+.anim-scale-btn.is-active {
+  background: var(--amber) !important;
+  color: var(--amber-ink, #000) !important;
+  font-weight: 700 !important;
+  border-color: var(--amber) !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -4943,6 +5522,30 @@ body.multi-select-mode .filerow__select-handle {
 }
 
 /* =================== Scale Change & Modulation Detector =================== */
+/* ---- Reusable button spinner ------------------------------------------- */
+@keyframes btn-spin {
+  to { transform: rotate(360deg); }
+}
+
+.btn-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: btn-spin 0.65s linear infinite;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+/* Any button in loading state gets pointer-events off + slight dim */
+button.is-loading {
+  opacity: 0.75;
+  pointer-events: none;
+  cursor: default;
+}
+
 .pill--scale-mod {
   font-weight: 600;
   display: inline-flex;
@@ -4959,8 +5562,129 @@ body.multi-select-mode .filerow__select-handle {
 }
 
 .pill--scale-mod.is-loading {
-  opacity: 0.8;
+  opacity: 0.75;
   pointer-events: none;
+}
+
+/* ==================================================================
+   ANALYSIS CHIP REVEAL ANIMATIONS
+   Four styles; JS picks one at random each time results land.
+   Applied to .statchip[data-analysis-chip] via .reveal-<name>
+   ================================================================== */
+
+/* --- Shared entry state for all variants -------------------------- */
+.statchip[data-analysis-chip].reveal-smoke,
+.statchip[data-analysis-chip].reveal-glass,
+.statchip[data-analysis-chip].reveal-poster,
+.statchip[data-analysis-chip].reveal-pop {
+  position: relative;
+  overflow: visible;
+  transform-origin: center bottom;
+  will-change: transform, opacity, filter;
+}
+
+/* ---- 1. SMOKE BOMB — hazy cloud wipe that clears to reveal ------- */
+@keyframes chip-smoke-in {
+  0%   { opacity: 0; filter: blur(14px) brightness(2); transform: scale(1.18) translateY(-6px); }
+  35%  { opacity: 0.6; filter: blur(6px) brightness(1.4); transform: scale(1.06) translateY(-2px); }
+  65%  { opacity: 0.9; filter: blur(2px) brightness(1.1); transform: scale(1.01); }
+  100% { opacity: 1; filter: blur(0) brightness(1); transform: scale(1) translateY(0); }
+}
+@keyframes chip-smoke-particles {
+  0%   { opacity: 0.7; transform: scale(0.8) translateY(0); }
+  60%  { opacity: 0.4; transform: scale(2.2) translateY(-18px); }
+  100% { opacity: 0; transform: scale(3) translateY(-32px); }
+}
+.statchip[data-analysis-chip].reveal-smoke {
+  animation: chip-smoke-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.statchip[data-analysis-chip].reveal-smoke::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  background: radial-gradient(ellipse at 50% 80%, rgba(200,230,255,0.55) 0%, transparent 70%);
+  pointer-events: none;
+  animation: chip-smoke-particles 0.6s ease-out both;
+}
+
+/* ---- 2. BREAKING GLASS — shatters old chip, new slides through --- */
+@keyframes chip-glass-shatter {
+  0%   { opacity: 0; transform: scale(0.7) skewX(-10deg); filter: brightness(2.5) saturate(2); clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
+  20%  { opacity: 0.85; transform: scale(1.08) skewX(5deg); filter: brightness(1.6) saturate(1.5); clip-path: polygon(2% 0, 100% 3%, 98% 100%, 0 97%); }
+  45%  { transform: scale(1.03) skewX(-2deg); filter: brightness(1.2); clip-path: polygon(0 2%, 97% 0, 100% 98%, 3% 100%); }
+  70%  { transform: scale(1.0) skewX(0deg); filter: brightness(1); clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
+  100% { opacity: 1; transform: scale(1); filter: none; }
+}
+@keyframes chip-glass-flash {
+  0%   { opacity: 0.9; }
+  40%  { opacity: 0.3; }
+  100% { opacity: 0; }
+}
+.statchip[data-analysis-chip].reveal-glass {
+  animation: chip-glass-shatter 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.statchip[data-analysis-chip].reveal-glass::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  border: 2px solid rgba(255,255,255,0.9);
+  box-shadow: 0 0 18px 4px rgba(255,255,255,0.5), inset 0 0 10px rgba(255,255,255,0.3);
+  pointer-events: none;
+  animation: chip-glass-flash 0.45s ease-out both;
+}
+
+/* ---- 3. FATA POSTER ("Fata poster nikla hero") — rips upward ------ */
+@keyframes chip-poster-rip {
+  0%   { opacity: 0; transform: translateY(22px) rotate(2.5deg) scale(0.88); filter: contrast(1.4) brightness(1.3); }
+  30%  { opacity: 0.8; transform: translateY(-6px) rotate(-1deg) scale(1.04); filter: contrast(1.1) brightness(1.1); }
+  55%  { transform: translateY(3px) rotate(0.5deg) scale(1.01); filter: none; }
+  75%  { transform: translateY(-2px) rotate(0); }
+  100% { opacity: 1; transform: translateY(0) rotate(0) scale(1); filter: none; }
+}
+@keyframes chip-poster-tear {
+  0%   { clip-path: polygon(0 100%, 100% 100%, 100% 100%, 0 100%); opacity: 0.9; }
+  40%  { clip-path: polygon(0 40%, 100% 30%, 100% 100%, 0 100%); opacity: 0.6; }
+  100% { clip-path: polygon(0 0%, 100% 0%, 100% 100%, 0 100%); opacity: 0; }
+}
+.statchip[data-analysis-chip].reveal-poster {
+  animation: chip-poster-rip 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.statchip[data-analysis-chip].reveal-poster::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, transparent 0%, rgba(255,200,80,0.35) 50%, rgba(255,120,30,0.15) 100%);
+  pointer-events: none;
+  animation: chip-poster-tear 0.55s ease-out both;
+}
+
+/* ---- 4. SCALE POP — bouncy spring reveal ------------------------- */
+@keyframes chip-pop-in {
+  0%   { opacity: 0; transform: scale(0.4) translateY(8px); }
+  50%  { opacity: 1; transform: scale(1.15) translateY(-4px); }
+  70%  { transform: scale(0.95) translateY(1px); }
+  85%  { transform: scale(1.05); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes chip-pop-ring {
+  0%   { opacity: 0.8; transform: scale(1); }
+  100% { opacity: 0; transform: scale(2.2); }
+}
+.statchip[data-analysis-chip].reveal-pop {
+  animation: chip-pop-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.statchip[data-analysis-chip].reveal-pop::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  border: 2px solid var(--amber);
+  box-shadow: 0 0 12px var(--amber);
+  pointer-events: none;
+  animation: chip-pop-ring 0.5s ease-out both;
 }
 
 .scale-mod-modal-overlay {

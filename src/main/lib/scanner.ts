@@ -27,7 +27,7 @@ const fs = require('fs/promises');
 const path = require('path');
 
 const daw = require('./daw');
-const { RENDER_FOLDER_NAMES, AUDIO_EXTS } = require('./renders');
+const { RENDER_FOLDER_NAMES, AUDIO_EXTS, isRenderFolderName } = require('./renders');
 const { VIDEO_EXTS } = require('./videos');
 
 const HEALTH_CEILING = 40;
@@ -195,7 +195,7 @@ async function walk(dir, root, depth, options, out) {
       // Renders and Bounces are skipped for finding PROJECTS but their
       // contents still get indexed — that's how a row knows whether it has
       // audio without a second pass. Two searches, two rule sets.
-      if (RENDER_FOLDER_NAMES.has(lower)) {
+      if (isRenderFolderName(entry.name)) {
         await indexAudio(full, options);
         continue;
       }
@@ -280,6 +280,18 @@ function addAudio(options, dir, stem, mtime = 0) {
   });
 }
 
+function sharesTitleWord(nameA, nameB) {
+  const cleanA = flatten(nameA);
+  const cleanB = flatten(nameB);
+  if (!cleanA || !cleanB) return false;
+  if (cleanA === cleanB || cleanA.startsWith(cleanB) || cleanB.startsWith(cleanA)) return true;
+
+  const wordsA = String(nameA).toLowerCase().split(/[^a-z0-9]+/i).filter((w) => w.length >= 3);
+  const wordsB = String(nameB).toLowerCase().split(/[^a-z0-9]+/i).filter((w) => w.length >= 3);
+  if (wordsA.length === 0 || wordsB.length === 0) return false;
+  return wordsA[0] === wordsB[0];
+}
+
 /**
  * How many indexed audio files look like they belong to this session and the
  * newest render modification timestamp among them.
@@ -292,12 +304,18 @@ function audioStatsFor(sessionName, projectFolder, root, options) {
   let latestMtime = 0;
   for (const [audioFolder, items] of options.audioIndex) {
     if (!audioFolderBelongsToProject(audioFolder, projectFolder, root)) continue;
-    const isInsideProject = isInsideOrEqual(audioFolder, projectFolder);
     for (const item of items) {
       const itemStem = typeof item === 'object' && item ? item.stem : item;
       const itemMtime = typeof item === 'object' && item ? item.mtime : 0;
-      const matches = itemStem === wanted || (typeof itemStem === 'string' && itemStem.startsWith(wanted));
-      if (matches || isInsideProject) {
+      if (typeof itemStem !== 'string') continue;
+
+      const matches =
+        itemStem === wanted ||
+        itemStem.startsWith(wanted) ||
+        wanted.startsWith(itemStem) ||
+        sharesTitleWord(sessionName, itemStem);
+
+      if (matches) {
         count += 1;
         if (itemMtime > latestMtime) latestMtime = itemMtime;
       }
@@ -328,7 +346,7 @@ function audioFolderBelongsToProject(audioFolder, projectFolder, root) {
     const rel = path.relative(current, audioFolder);
     if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) {
       const first = rel.split(path.sep)[0].toLowerCase();
-      if (RENDER_FOLDER_NAMES.has(first)) return true;
+      if (isRenderFolderName(first)) return true;
     }
 
     if (samePath(current, stop)) break;

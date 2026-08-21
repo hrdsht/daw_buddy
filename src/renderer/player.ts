@@ -392,6 +392,72 @@ const Player = (() => {
     input.addEventListener('input', () => updateReverbFromControls(name));
   });
 
+  // Professional DAW Vertical Drag (Y-axis only) & Mouse Wheel Controller for Reverb Mix Knob
+  const mixKnobWrap = (reverbInputs.mix.closest('.reverb-knob-wrap') as HTMLElement) || reverbInputs.mix.parentElement;
+  if (mixKnobWrap) {
+    let isDragging = false;
+    let startY = 0;
+    let startVal = 35;
+
+    const setMixValue = (newVal: number) => {
+      const clamped = Math.max(0, Math.min(100, Math.round(newVal)));
+      reverbInputs.mix.value = String(clamped);
+      updateReverbFromControls('mix');
+    };
+
+    mixKnobWrap.addEventListener('pointerdown', (e: PointerEvent) => {
+      if (e.button !== 0) return; // Only primary left-click
+      e.preventDefault();
+      e.stopPropagation();
+      isDragging = true;
+      startY = e.clientY;
+      startVal = Number(reverbInputs.mix.value) || 0;
+      mixKnobWrap.setPointerCapture(e.pointerId);
+      document.body.style.cursor = 'ns-resize';
+      mixKnobWrap.style.cursor = 'ns-resize';
+    });
+
+    mixKnobWrap.addEventListener('pointermove', (e: PointerEvent) => {
+      if (!isDragging) return;
+      e.preventDefault();
+      // Strictly Y-axis: Dragging UP (startY - clientY > 0) increases mix, dragging DOWN decreases mix.
+      // 140px drag delta spans 0% to 100% full sweep (Hold Shift for precision mode).
+      const deltaY = startY - e.clientY;
+      const sensitivity = e.shiftKey ? 0.25 : 0.72;
+      const nextVal = startVal + deltaY * sensitivity;
+      setMixValue(nextVal);
+    });
+
+    const endDrag = (e: PointerEvent) => {
+      if (isDragging) {
+        isDragging = false;
+        try { mixKnobWrap.releasePointerCapture(e.pointerId); } catch {}
+        document.body.style.cursor = '';
+        mixKnobWrap.style.cursor = 'ns-resize';
+      }
+    };
+
+    mixKnobWrap.addEventListener('pointerup', endDrag);
+    mixKnobWrap.addEventListener('pointercancel', endDrag);
+
+    // Mouse Scroll Wheel Support (Wheel UP -> Increase, Wheel DOWN -> Decrease)
+    mixKnobWrap.addEventListener('wheel', (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const currentVal = Number(reverbInputs.mix.value) || 0;
+      const step = e.shiftKey ? 1 : (Math.abs(e.deltaY) > 50 ? 5 : 2);
+      const direction = e.deltaY < 0 ? 1 : -1;
+      setMixValue(currentVal + direction * step);
+    }, { passive: false });
+
+    // Double-click to reset mix to default
+    mixKnobWrap.addEventListener('dblclick', (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setMixValue(DEFAULT_REVERB_SETTINGS.mix || 35);
+    });
+  }
+
   reverbReset.addEventListener('click', () => {
     reverbSettings = { ...DEFAULT_REVERB_SETTINGS };
     syncReverbControls();
@@ -615,12 +681,14 @@ const Player = (() => {
 
   /* --------------------------- loading --------------------------- */
 
-  async function load(file, { autoplay = true } = {}) {
+  async function load(file, { autoplay = true, project = null }: { autoplay?: boolean; project?: any } = {}) {
     if (isDemoPlaying) stopDemoPlayback();
     const serial = ++loadSerial;
     clearRegion(); // a new file starts as whole-file playback
-    current = { path: file.path, name: file.name };
+    const proj = project || (file && (file.project || file.where || file.folder)) || null;
+    current = { path: file.path, name: file.name, project: proj };
     titleEl.textContent = file.name;
+    titleEl.title = 'Click to open project';
     timeEl.textContent = 'Loading…';
     peaks = null;
     decoded = null;

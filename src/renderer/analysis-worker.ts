@@ -1,13 +1,23 @@
 import { DSP } from './dsp';
 
 /**
- * Runs tempo and key detection away from the visible app window so a 60-second
- * analysis cannot interrupt playback, scrolling or button clicks.
+ * Runs tempo/key detection AND scale-modulation scanning away from the
+ * visible app window so long analysis cannot interrupt playback or UI.
+ *
+ * Supported message types:
+ *   { type: 'analyse',                id, samples, sampleRate }
+ *   { type: 'detectScaleModulations', id, samples, sampleRate }
+ * (omitting `type` defaults to 'analyse' for backwards-compat)
  */
 (self as any).onmessage = (event) => {
-  const { id, samples, sampleRate } = event.data || {};
+  const { id, type, samples, sampleRate } = event.data || {};
   try {
-    const result = DSP.analyse(samples, sampleRate);
+    let result: any;
+    if (type === 'detectScaleModulations') {
+      result = DSP.detectScaleModulations(samples, sampleRate);
+    } else {
+      result = DSP.analyse(samples, sampleRate);
+    }
     (self as any).postMessage({ id, result });
   } catch (error) {
     (self as any).postMessage({

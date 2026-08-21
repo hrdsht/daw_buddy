@@ -46,6 +46,7 @@ const themeToggleEl = $('themeToggle');
 
 import {
   applyAppearance,
+  applyThemeTuning,
   currentSurface,
   currentThemeStyle,
   THEME_STYLES,
@@ -262,20 +263,20 @@ function toggleThemeComicBubble() {
   }, 10);
 }
 
-// Settings — Theme style switch (Minimalist vs Studio Classic)
+// Settings — Theme style switch (Minimalist vs Ableton Like vs Studio Classic)
 if ($('themeStyles')) {
   $('themeStyles').addEventListener('click', (event: MouseEvent) => {
     const btn = (event.target as HTMLElement).closest('.style-btn') as HTMLElement;
     if (btn) {
       const style = btn.getAttribute('data-style') || 'minimalist';
-      const defaultAccent = style === 'minimalist' ? 'cyan' : 'green';
+      const defaultAccent = style === 'minimalist' ? 'cyan' : (style === 'ableton' ? 'mint' : 'green');
       applyAppearance(defaultAccent, currentSurface(), style);
     }
   });
 }
 
-// Settings — Minimalist & Classic accent swatches
-['minimalistSwatches', 'classicSwatches'].forEach((id) => {
+// Settings — Accent swatches across all theme styles
+['minimalistSwatches', 'abletonSwatches', 'classicSwatches'].forEach((id) => {
   const el = $(id);
   if (el) {
     el.addEventListener('click', (event: MouseEvent) => {
@@ -297,9 +298,35 @@ if ($('surfaceModes')) {
   });
 }
 
+// Settings — Brightness & Contrast Sliders
+const themeBrightnessSlider = $('themeBrightnessSlider') as HTMLInputElement | null;
+if (themeBrightnessSlider) {
+  themeBrightnessSlider.addEventListener('input', () => {
+    const val = Number(themeBrightnessSlider.value) || 100;
+    applyThemeTuning(val, undefined);
+  });
+  themeBrightnessSlider.addEventListener('dblclick', () => applyThemeTuning(100, undefined));
+}
+
+const themeContrastSlider = $('themeContrastSlider') as HTMLInputElement | null;
+if (themeContrastSlider) {
+  themeContrastSlider.addEventListener('input', () => {
+    const val = Number(themeContrastSlider.value) || 100;
+    applyThemeTuning(undefined, val);
+  });
+  themeContrastSlider.addEventListener('dblclick', () => applyThemeTuning(undefined, 100));
+}
+
+if ($('resetThemeTuning')) {
+  $('resetThemeTuning').addEventListener('click', () => applyThemeTuning(100, 100));
+}
+
 // Settings — Reset theme to default (Dark Minimalist with Cyan accent)
 if ($('resetTheme')) {
-  $('resetTheme').addEventListener('click', () => applyAppearance('cyan', 'dark', 'minimalist'));
+  $('resetTheme').addEventListener('click', () => {
+    applyAppearance('cyan', 'dark', 'minimalist');
+    applyThemeTuning(100, 100);
+  });
 }
 
 if ($('miniToggle')) {
@@ -354,6 +381,154 @@ const activePlayAnalysis = new Map();
 const analysisJobs = new Map();
 const navigationHistory = new NavigationHistory();
 
+/* ==================================================================
+   GLOBAL UNCAUGHT ERROR REPORTING & CRASH RECOVERY
+   ================================================================== */
+
+window.addEventListener('error', (event) => {
+  console.error('[Renderer Uncaught Error]:', event.error || event.message);
+  try {
+    if (window.api && window.api.crashlogReportRendererError) {
+      window.api.crashlogReportRendererError({
+        message: event.message || 'Renderer Error',
+        stack: event.error?.stack,
+        name: event.error?.name
+      });
+    }
+  } catch {}
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+  console.error('[Renderer Unhandled Rejection]:', event.reason);
+  try {
+    const reason = event.reason;
+    if (window.api && window.api.crashlogReportRendererError) {
+      window.api.crashlogReportRendererError({
+        message: typeof reason === 'string' ? reason : (reason?.message || 'Unhandled Promise Rejection'),
+        stack: reason?.stack,
+        name: reason?.name
+      });
+    }
+  } catch {}
+});
+
+function showCrashRecoveryModal(report: any) {
+  if ($('crashRecoveryOverlay')) return;
+
+  const overlay = el('div', 'crash-recovery-overlay');
+  overlay.id = 'crashRecoveryOverlay';
+
+  const modal = el('div', 'crash-recovery-modal');
+
+  // Header
+  const header = el('div', 'crash-recovery-header');
+  const title = el('div', 'crash-recovery-title');
+  title.innerHTML = `<span>🚨</span> <span>DAW Buddy Recovered From a Crash</span>`;
+
+  const closeBtn = el('button', 'crash-recovery-close', '✕');
+  closeBtn.title = 'Skip / Dismiss (Esc)';
+  header.append(title, closeBtn);
+
+  // Description
+  const desc = el('div', 'crash-recovery-desc',
+    `DAW Buddy caught an unexpected error on ${report.timeString || 'the last session'}. A diagnostic report was saved locally. You can drag and drop the crash log below directly into an email, Discord, or GitHub issue, or copy the error text.`
+  );
+
+  // Error Snippet Box
+  const errorBox = el('div', 'crash-recovery-box',
+    `[${(report.source || 'main').toUpperCase()}] ${report.errorName || 'Error'}: ${report.errorMessage || 'Unknown crash'}\n\n${report.errorStack || ''}`
+  );
+
+  // Draggable Log Pill
+  const pill = el('div', 'crash-drag-pill');
+  pill.draggable = true;
+  pill.title = 'Click and drag this crash log file directly into an email, Discord, or folder';
+
+  const pillIcon = el('span', 'crash-drag-pill__icon', '📋');
+  const pillInfo = el('div', 'crash-drag-pill__info');
+  const filename = report.logFilePath ? report.logFilePath.split(/[\\/]/).pop() : 'crash-report.log';
+  const pillName = el('span', 'crash-drag-pill__name', filename);
+  const pillHint = el('span', 'crash-drag-pill__hint', '📦 Drag & Drop file directly into Mail / Discord');
+  pillInfo.append(pillName, pillHint);
+  pill.append(pillIcon, pillInfo);
+
+  pill.addEventListener('dragstart', (e: DragEvent) => {
+    e.preventDefault();
+    if (window.api && window.api.dragFiles && report.logFilePath) {
+      window.api.dragFiles([report.logFilePath]);
+    }
+  });
+
+  // Developer Support Email Banner (1-click copy)
+  const emailBanner = el('div', 'crash-email-banner');
+  const emailLeft = el('div', 'crash-email-banner__left');
+  const emailIcon = el('span', 'crash-email-banner__icon', '✉️');
+  const emailText = el('span', 'crash-email-banner__text');
+  emailText.innerHTML = `Send log to: <b class="crash-email-address" title="Click to copy">ba55icklistens@gmail.com</b>`;
+  emailLeft.append(emailIcon, emailText);
+
+  const copyEmailBtn = el('button', 'pill pill--sm', '📋 Copy Email');
+  copyEmailBtn.title = 'Copy ba55icklistens@gmail.com to clipboard';
+  const handleCopyEmail = async () => {
+    try {
+      await navigator.clipboard.writeText('ba55icklistens@gmail.com');
+      copyEmailBtn.textContent = '✓ Copied!';
+      setTimeout(() => { copyEmailBtn.textContent = '📋 Copy Email'; }, 2000);
+    } catch {}
+  };
+  copyEmailBtn.addEventListener('click', handleCopyEmail);
+  emailText.addEventListener('click', handleCopyEmail);
+  emailBanner.append(emailLeft, copyEmailBtn);
+
+  // Action Buttons
+  const actions = el('div', 'crash-recovery-actions');
+
+  const copyBtn = el('button', 'btn', '📋 Copy Details');
+  copyBtn.addEventListener('click', async () => {
+    try {
+      const textToCopy = `DAW Buddy Crash Report (${report.timeString}):\n${report.errorName}: ${report.errorMessage}\n\nStack:\n${report.errorStack || 'N/A'}\n\nSystem:\n${JSON.stringify(report.systemInfo, null, 2)}`;
+      await navigator.clipboard.writeText(textToCopy);
+      copyBtn.textContent = '✓ Copied!';
+      setTimeout(() => { copyBtn.textContent = '📋 Copy Details'; }, 2000);
+    } catch {}
+  });
+
+  const openFolderBtn = el('button', 'btn', '📂 Show in Folder');
+  openFolderBtn.addEventListener('click', async () => {
+    if (window.api && window.api.crashlogOpenFolder) {
+      await window.api.crashlogOpenFolder();
+    }
+  });
+
+  const dismissBtn = el('button', 'btn btn--primary', 'Skip / Dismiss');
+
+  const dismissModal = async () => {
+    try {
+      await window.api?.crashlogDismiss?.();
+    } catch {}
+    overlay.remove();
+    document.removeEventListener('keydown', onEsc);
+  };
+
+  const onEsc = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      dismissModal();
+    }
+  };
+
+  closeBtn.addEventListener('click', dismissModal);
+  dismissBtn.addEventListener('click', dismissModal);
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) dismissModal();
+  });
+  document.addEventListener('keydown', onEsc);
+
+  actions.append(openFolderBtn, copyBtn, dismissBtn);
+  modal.append(header, desc, errorBox, pill, emailBanner, actions);
+  overlay.append(modal);
+  document.body.append(overlay);
+}
+
 /* ============================= startup ============================= */
 
 async function boot() {
@@ -365,6 +540,16 @@ async function boot() {
   records = await window.api.getRecords();
   applySettings();
   await refresh();
+
+  // Check if a prior crash occurred and show skippable recovery modal
+  try {
+    const latestCrash = await window.api.crashlogGetLatest?.();
+    if (latestCrash && !latestCrash.dismissed) {
+      showCrashRecoveryModal(latestCrash);
+    }
+  } catch (err) {
+    console.warn('[CrashRecovery] Check error:', err);
+  }
 
   // If user hasn't configured region & world scales yet, display the interactive 3D Globe wizard on first run or after update!
   const APP_VERSION = '0.4.3';
@@ -417,6 +602,9 @@ function applySettings() {
   }
   $('ignoreInput').value = settings.ignore.join(', ');
   if ($('webhookInput')) $('webhookInput').value = settings.webhookUrl || '';
+  if ($('enableCrashLogs')) {
+    $('enableCrashLogs').checked = settings.enableCrashLogs !== false;
+  }
   $('dataDir').textContent = settings.dataDir;
   document.body.classList.toggle('is-mac', Boolean(settings.isMac));
 
@@ -454,6 +642,35 @@ function applySettings() {
       }
     }
     regText.innerHTML = `<strong>${regObj.name}</strong> (${tradDesc})`;
+  }
+
+  // Apply Animation Scale to DOM and Settings UI
+  const reduced = Boolean(settings.reducedAnimation);
+  const scale = typeof settings.animationScale === 'number' ? settings.animationScale : (reduced ? 0.5 : 1.0);
+  const effectiveScale = reduced ? scale : 1.0;
+  document.body.setAttribute('data-anim-scale', String(effectiveScale));
+
+  const scaleLabels: Record<number, string> = {
+    0: '0x (Instant / Off)',
+    1: '0.25x (Ultra Fast)',
+    2: '0.50x (Snappy)',
+    3: '1.0x (Full Default)'
+  };
+
+  let sliderIdx = 3;
+  if (effectiveScale <= 0.05) sliderIdx = 0;
+  else if (effectiveScale <= 0.35) sliderIdx = 1;
+  else if (effectiveScale <= 0.75) sliderIdx = 2;
+  else sliderIdx = 3;
+
+  const animSlider = $('animScaleRangeSlider') as HTMLInputElement | null;
+  const animValueDisplay = $('animScaleDisplayValue');
+
+  if (animSlider) {
+    animSlider.value = String(sliderIdx);
+  }
+  if (animValueDisplay) {
+    animValueDisplay.textContent = scaleLabels[sliderIdx] || `${effectiveScale}x`;
   }
 
   renderRootList();
@@ -986,13 +1203,15 @@ function renderList() {
     );
   }
 
+  const fragment = document.createDocumentFragment();
   list.forEach((entry) => {
-    viewEl.append(buildRow(entry));
+    fragment.append(buildRow(entry));
 
     if (entry.isGroup && expanded.has(entry.path)) {
-      entry.versions.forEach((version) => viewEl.append(buildVersionRow(version)));
+      entry.versions.forEach((version) => fragment.append(buildVersionRow(version)));
     }
   });
+  viewEl.append(fragment);
 }
 
 // NOTE: buildVersionRow is referenced by the grouped-versions expand path but
@@ -1176,7 +1395,7 @@ async function playNewest(entry) {
     return;
   }
   const file = result.renders[0].primary;
-  const decoded = await Player.load(file);
+  const decoded = await Player.load(file, { project: entry });
   if (decoded) analysePlayedAudio(entry, file, decoded);
 }
 
@@ -1200,7 +1419,7 @@ async function preloadLatestRender({ autoplay = false } = {}) {
         if (file) {
           selected = openProject.path;
           activeAuditionPath = openProject.path;
-          const decoded = await Player.load(file, { autoplay });
+          const decoded = await Player.load(file, { autoplay, project: openProject });
           if (decoded) analysePlayedAudio(openProject, file, decoded);
           return;
         }
@@ -1222,7 +1441,7 @@ async function preloadLatestRender({ autoplay = false } = {}) {
         if (file) {
           selected = entry.path;
           activeAuditionPath = entry.path;
-          const decoded = await Player.load(file, { autoplay });
+          const decoded = await Player.load(file, { autoplay, project: entry });
           if (decoded) analysePlayedAudio(entry, file, decoded);
           return;
         }
@@ -1451,7 +1670,7 @@ function renderScaleModBar(report: ScaleModulationReport | null, entry?: any) {
     if (seg.transitionFromPrev) {
       titleText += ` · ${seg.transitionFromPrev.type} (${seg.transitionFromPrev.shiftLabel})`;
     }
-    titleText += ' — Click to view relative raagas & audition';
+    titleText += ' — Click to seek · Double-click or Right-click to inspect';
     segEl.title = titleText;
 
     const label = el('span', 'scale-mod-segment__label');
@@ -1469,9 +1688,20 @@ function renderScaleModBar(report: ScaleModulationReport | null, entry?: any) {
 
     segEl.append(label);
 
+    // Single click → seek to section for quick auditioning
     segEl.addEventListener('click', (e: MouseEvent) => {
       e.stopPropagation();
       Player.seek(seg.startSec);
+    });
+
+    // Double-click OR right-click → open Scale & Modulation Inspector
+    segEl.addEventListener('dblclick', (e: MouseEvent) => {
+      e.stopPropagation();
+      openScaleModulationModal(seg, report, entry);
+    });
+    segEl.addEventListener('contextmenu', (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
       openScaleModulationModal(seg, report, entry);
     });
 
@@ -1791,12 +2021,14 @@ function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
         const actions = el('div', 'raga-card__actions');
 
         const cardSessionId = `camelot-world-card-${scaleMatch.id || scaleMatch.name}`;
+        let currentResetModalScaleUi: (() => void) | null = null;
         const resetPreviewBtn = () => {
-          previewBtn.textContent = '▶ Audition';
+          previewBtn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" class="raga-btn__icon"><polygon points="6 4 20 12 6 20 6 4"/></svg><span>Audition</span>`;
           previewBtn.classList.remove('pill--solid');
         };
 
-        const previewBtn = el('button', 'pill pill--sm raga-btn--preview', '▶ Audition');
+        const previewBtn = el('button', 'pill pill--sm raga-btn--preview');
+        previewBtn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" class="raga-btn__icon"><polygon points="6 4 20 12 6 20 6 4"/></svg><span>Audition</span>`;
         previewBtn.title = 'Audition authentic ascending & descending melodic phrasing (Click to stop)';
         previewBtn.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -1806,11 +2038,11 @@ function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
             return;
           }
           document.querySelectorAll('.raga-btn--preview').forEach((b: any) => {
-            b.textContent = '▶ Audition';
+            b.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" class="raga-btn__icon"><polygon points="6 4 20 12 6 20 6 4"/></svg><span>Audition</span>`;
             b.classList.remove('pill--solid');
           });
-          resetModalScaleUi();
-          previewBtn.textContent = '⏸ Pause';
+          if (typeof currentResetModalScaleUi === 'function') currentResetModalScaleUi();
+          previewBtn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" class="raga-btn__icon"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg><span>Pause</span>`;
           previewBtn.classList.add('pill--solid');
           const asc = scaleMatch.ascendingPhrase || scaleMatch.degrees;
           const desc = scaleMatch.descendingPhrase || [...asc].reverse();
@@ -1818,7 +2050,8 @@ function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
         });
         actions.append(previewBtn);
 
-        const midiBtn = el('button', 'pill pill--sm pill--solid raga-btn--midi', '⤓ Drag to DAW');
+        const midiBtn = el('button', 'pill pill--sm pill--solid raga-btn--midi');
+        midiBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" class="raga-btn__icon"><path d="M12 3v13M7 11l5 5 5-5M4 20h16"/></svg><span>Drag to DAW</span>`;
         midiBtn.title = 'Drag onto any DAW track or click to export MIDI containing scale phrasing';
         const asc = scaleMatch.ascendingPhrase || scaleMatch.degrees;
         const desc = scaleMatch.descendingPhrase || [...asc].reverse();
@@ -2764,7 +2997,11 @@ function renderProjectPage() {
   titles.append(el('h1', 'page__title', entry.name));
 
   const facts = el('div', 'page__facts');
-  if (projectBpm !== null) facts.append(fact('BPM', formatBpm(projectBpm)));
+  if (projectBpm !== null) {
+    const bChip = fact('BPM', formatBpm(projectBpm));
+    bChip.dataset.analysisChip = 'bpm';
+    facts.append(bChip);
+  }
   else if (entry.bpmError) facts.append(fact('BPM', 'not readable'));
   if (projectSig) {
     const talaInfo = DSP.TALA_MAP[projectSig] || (rec.tala ? { name: rec.tala } : null);
@@ -2775,9 +3012,18 @@ function renderProjectPage() {
     facts.append(sigChip);
   }
   if (rec.key) {
-    facts.append(fact('Key', `${rec.key}${rec.camelot ? ` (${rec.camelot})` : ''}`));
+    const kChip = fact('Key', `${rec.key}${rec.camelot ? ` (${rec.camelot})` : ''}`);
+    kChip.dataset.analysisChip = 'key';
+    facts.append(kChip);
   } else if (rec.tonic && rec.scale) {
-    facts.append(fact('Scale', `Tonic ${rec.tonic} · ${rec.scale}`));
+    const kChip = fact('Scale', `Tonic ${rec.tonic} · ${rec.scale}`);
+    kChip.dataset.analysisChip = 'key';
+    facts.append(kChip);
+  } else {
+    const kChip = fact('Key', '—');
+    kChip.dataset.analysisChip = 'key';
+    kChip.style.display = 'none';
+    facts.append(kChip);
   }
   if (rec.genre) {
     const genreChip = fact('Genre', rec.genre);
@@ -2926,8 +3172,7 @@ function renderProjectPage() {
   renderScaleModBar(cachedScaleMod, entry);
 
   scaleModBtn.addEventListener('click', async () => {
-    scaleModBtn.classList.add('is-loading');
-    scaleModBtn.textContent = '⏳ Analyzing scale changes...';
+    const restoreBtn = setBtnLoading(scaleModBtn as HTMLButtonElement, 'Analysing scale changes…');
 
     try {
       let channelData: Float32Array | null = null;
@@ -2960,9 +3205,8 @@ function renderProjectPage() {
         }
 
         if (!audioFileToAnalyze) {
+          restoreBtn();
           toast('Scale Change Detector', 'No audio file or bounce found in this project to analyze.');
-          scaleModBtn.classList.remove('is-loading');
-          scaleModBtn.innerHTML = '🎼 Detect scale changes';
           return;
         }
 
@@ -2971,35 +3215,34 @@ function renderProjectPage() {
         const decoded = await ac.decodeAudioData(bytes);
         channelData = decoded.getChannelData(0);
         sampleRate = decoded.sampleRate;
+        await ac.close();
       }
 
       if (!channelData || channelData.length === 0) {
+        restoreBtn();
         toast('Scale Change Detector', 'Could not decode audio samples for scale change analysis.', true);
-        scaleModBtn.classList.remove('is-loading');
-        scaleModBtn.innerHTML = '🎼 Detect scale changes';
         return;
       }
 
-      // Run sliding-window scale modulation analysis
-      const report = DSP.detectScaleModulations(channelData, sampleRate);
+      // Run sliding-window scale modulation analysis OFF the main thread
+      const report = await detectScaleModulationsInBackground(channelData, sampleRate);
       projectScaleModCache.set(entry.path, report);
 
-      scaleModBtn.classList.remove('is-loading');
+      restoreBtn();
       scaleModBtn.classList.add('is-on');
       scaleModBtn.innerHTML = `🎼 Scale changes (${report.uniqueKeys.length} ${report.uniqueKeys.length === 1 ? 'key' : 'keys'})`;
 
       renderScaleModBar(report, entry);
 
       if (report.hasModulation) {
-        toast('Scale Changes Detected', `Found modulations: ${report.uniqueKeys.join(' ➔ ')}! Click sections above waveform to inspect.`);
+        toast('Scale Changes Detected', `Found modulations: ${report.uniqueKeys.join(' ➔ ')}! Click a section to seek · Double-click to inspect.`);
       } else {
-        toast('Scale Analysis', `Steady tonal center detected in ${report.uniqueKeys[0] || 'track'}. Scale line displayed above waveform.`);
+        toast('Scale Analysis', `Steady tonal center: ${report.uniqueKeys[0] || 'track'}. Click sections to audition.`);
       }
     } catch (err: any) {
       console.error('Scale modulation analysis failed:', err);
       toast('Scale Detector Error', err.message || String(err), true);
-      scaleModBtn.classList.remove('is-loading');
-      scaleModBtn.innerHTML = '🎼 Detect scale changes';
+      restoreBtn();
     }
   });
 
@@ -3446,7 +3689,7 @@ function buildRenderRow(entry, render) {
   const play = el('button', 'filerow__play', '▶');
   play.addEventListener('click', async (event) => {
     event.stopPropagation();
-    await Player.load(render.primary, { autoplay: true });
+    await Player.load(render.primary, { autoplay: true, project: entry || openProject });
     if (entry) {
       await analyseRender(entry, { primary: render.primary }, analyse, { refresh: false });
     }
@@ -3486,7 +3729,7 @@ function buildRenderRow(entry, render) {
     pill.addEventListener('click', async (e: MouseEvent) => {
       e.stopPropagation();
       // Single click: load, analyse, and play that specific format!
-      await Player.load(fmtFile, { autoplay: true });
+      await Player.load(fmtFile, { autoplay: true, project: entry || openProject });
       if (entry) {
         await analyseRender(entry, { primary: fmtFile }, analyse, { refresh: false });
       }
@@ -3526,7 +3769,7 @@ function buildRenderRow(entry, render) {
 
   row.dataset.path = render.primary.path;
   row.addEventListener('dblclick', async () => {
-    await Player.load(render.primary, { autoplay: true });
+    await Player.load(render.primary, { autoplay: true, project: entry || openProject });
     if (entry) {
       await analyseRender(entry, { primary: render.primary }, analyse, { refresh: false });
     }
@@ -3611,7 +3854,7 @@ function buildStemRow(entry, file) {
   const play = el('button', 'filerow__play', '▶');
   play.addEventListener('click', (event) => {
     event.stopPropagation();
-    Player.load(file);
+    Player.load(file, { project: entry || openProject });
   });
   row.append(play);
 
@@ -3636,7 +3879,7 @@ function buildStemRow(entry, file) {
     });
     pill.addEventListener('click', (e: MouseEvent) => {
       e.stopPropagation();
-      Player.load(file);
+      Player.load(file, { project: entry || openProject });
     });
     const pillsWrap = el('span', 'format-pills');
     pillsWrap.append(pill);
@@ -3669,7 +3912,7 @@ function buildStemRow(entry, file) {
   actions.append(reveal);
   row.append(actions);
   row.dataset.path = file.path;
-  row.addEventListener('dblclick', () => Player.load(file));
+  row.addEventListener('dblclick', () => Player.load(file, { project: entry || openProject }));
   attachDraggableAndSelectable(row, item);
   return row;
 }
@@ -3684,32 +3927,115 @@ function analyseAudioButton(entry, file) {
 }
 
 async function analyseRender(entry, renderItem, buttonEl, { refresh = true } = {}) {
-  buttonEl.disabled = true;
-  buttonEl.textContent = 'Reading…';
+  const restoreBtn = setBtnLoading(buttonEl as HTMLButtonElement, 'Reading…');
 
   try {
     const current = Player.getCurrent();
     const decoded =
       current && current.path === renderItem.primary.path && Player.getDecoded()
         ? Player.getDecoded()
-        : await Player.load(renderItem.primary, { autoplay: false });
+        : await Player.load(renderItem.primary, { autoplay: false, project: entry || openProject });
 
     if (!decoded) {
       toast('Analysis failed', 'That file could not be decoded.', true);
+      restoreBtn();
       return;
     }
 
-    buttonEl.textContent = 'Analysing…';
+    buttonEl.innerHTML = '<span class="btn-spinner"></span> Analysing…';
     const result = await analyseAudioFile(renderItem.primary, decoded);
     await storeAnalysis(entry, renderItem.primary, result);
     showAnalysisResult(entry, result);
-    if (refresh) render();
+    if (refresh) patchAnalysisUI(entry, result);
+    else if (!refresh) { /* caller handles UI */ }
   } catch (error) {
     toast('Analysis failed', error.message || String(error), true);
   } finally {
-    buttonEl.disabled = false;
-    buttonEl.textContent = 'Analyse';
+    restoreBtn();
   }
+}
+
+/* ------------------------------------------------------------------
+   patchAnalysisUI — surgically update key/BPM chips in place
+   after analysis, with a randomised reveal animation.
+   No full render() = no page blink.
+   ------------------------------------------------------------------ */
+const REVEAL_CLASSES = ['reveal-smoke', 'reveal-glass', 'reveal-poster', 'reveal-pop'] as const;
+
+function pickReveal() {
+  return REVEAL_CLASSES[Math.floor(Math.random() * REVEAL_CLASSES.length)];
+}
+
+function animateChip(chip: HTMLElement) {
+  // Remove all reveal classes first (handles replaying when same chip gets new data)
+  REVEAL_CLASSES.forEach(c => chip.classList.remove(c));
+  // Force reflow so CSS animation replays even if same class is re-added
+  void chip.offsetWidth;
+  chip.classList.add(pickReveal());
+  // Clean up animation class after it finishes to allow future re-animation
+  chip.addEventListener('animationend', () => {
+    REVEAL_CLASSES.forEach(c => chip.classList.remove(c));
+  }, { once: true });
+}
+
+function patchAnalysisUI(entry, result) {
+  // Update in-list row key cells (keycell__key / keycell__camelot)
+  const rowKey = document.querySelector<HTMLElement>(`.keycell__key`);
+  // We prefer the targeted detail-page chips:
+  const keyChip = document.querySelector<HTMLElement>('.statchip[data-analysis-chip="key"]');
+
+  if (keyChip) {
+    // Rebuild label+value in place
+    const label = keyChip.querySelector('.statchip__label') as HTMLElement;
+    const value = keyChip.querySelector('.statchip__value') as HTMLElement;
+    if (result.key) {
+      if (label) label.textContent = 'Key';
+      if (value) value.textContent = `${result.key}${result.camelot ? ` (${result.camelot})` : ''}`;
+    } else if (result.tonic && result.scale) {
+      if (label) label.textContent = 'Scale';
+      if (value) value.textContent = `Tonic ${result.tonic} \u00b7 ${result.scale}`;
+    }
+    keyChip.style.display = '';
+    animateChip(keyChip);
+  }
+
+  // Also update sticky bar chip if visible
+  const stickyBar = document.getElementById('projectStickyBar');
+  if (stickyBar) {
+    const stickyChips = stickyBar.querySelectorAll<HTMLElement>('.sticky-bar__chip');
+    stickyChips.forEach(chip => {
+      const txt = chip.textContent || '';
+      if (txt.includes('BPM') && result.bpm) {
+        chip.textContent = `${result.bpm} BPM`;
+        animateChip(chip);
+      }
+    });
+    // Key chip in sticky bar
+    let keyBarChip = stickyBar.querySelector<HTMLElement>('.sticky-bar__chip[data-sticky-key]');
+    if (!keyBarChip && result.key) {
+      keyBarChip = document.createElement('span');
+      keyBarChip.className = 'sticky-bar__chip';
+      keyBarChip.dataset.stickyKey = '1';
+      const meta = stickyBar.querySelector('.sticky-bar__meta');
+      if (meta) meta.append(keyBarChip);
+    }
+    if (keyBarChip && result.key) {
+      keyBarChip.textContent = `${result.key}${result.camelot ? ` (${result.camelot})` : ''}`;
+      animateChip(keyBarChip);
+    }
+  }
+
+  // Update any in-list row that happens to be visible (keycell__key)
+  const allKeyRows = document.querySelectorAll<HTMLElement>('.keycell__key');
+  allKeyRows.forEach(cell => {
+    if (result.key) cell.textContent = result.key;
+    else if (result.tonic) cell.textContent = result.tonic;
+  });
+  const allCamelotRows = document.querySelectorAll<HTMLElement>('.keycell__camelot');
+  allCamelotRows.forEach(cell => {
+    if (result.camelot) cell.textContent = result.camelot;
+    else if (result.scale) cell.textContent = result.scale;
+  });
 }
 
 function ensureAnalysisWorker() {
@@ -3741,10 +4067,41 @@ function analyseDecodedInBackground(decoded) {
   return new Promise((resolve, reject) => {
     pendingAnalysis.set(id, { resolve, reject });
     worker.postMessage(
-      { id, samples, sampleRate: decoded.sampleRate },
+      { id, type: 'analyse', samples, sampleRate: decoded.sampleRate },
       [samples.buffer]
     );
   });
+}
+
+/** Runs DSP.detectScaleModulations off the main thread. */
+function detectScaleModulationsInBackground(channelData: Float32Array, sampleRate: number): Promise<any> {
+  const worker = ensureAnalysisWorker();
+  const id = ++analysisRequestId;
+  const samples = new Float32Array(channelData); // copy so original buffer stays valid
+
+  return new Promise((resolve, reject) => {
+    pendingAnalysis.set(id, { resolve, reject });
+    worker.postMessage(
+      { id, type: 'detectScaleModulations', samples, sampleRate },
+      [samples.buffer]
+    );
+  });
+}
+
+/**
+ * Show a spinner on a button while work is in progress.
+ * Returns a restore function that puts the button back to its original state.
+ */
+function setBtnLoading(btn: HTMLButtonElement, label: string): () => void {
+  const original = btn.innerHTML;
+  btn.disabled = true;
+  btn.classList.add('is-loading');
+  btn.innerHTML = `<span class="btn-spinner"></span> ${label}`;
+  return () => {
+    btn.disabled = false;
+    btn.classList.remove('is-loading');
+    btn.innerHTML = original;
+  };
 }
 
 function analyseAudioFile(file, decoded) {
@@ -4432,8 +4789,7 @@ async function renderSmartRenameTab(entry: any = null) {
 
   async function runAudioAnalysis() {
     if (smartItems.length === 0) return;
-    analyseAudioBtn.disabled = true;
-    analyseAudioBtn.textContent = 'Analysing audio...';
+    const restoreBtn = setBtnLoading(analyseAudioBtn as HTMLButtonElement, 'Analysing audio…');
     let measured = 0;
     for (const item of smartItems) {
       const isWav = item.name.toLowerCase().endsWith('.wav');
@@ -4458,8 +4814,7 @@ async function renderSmartRenameTab(entry: any = null) {
         }
       }
     }
-    analyseAudioBtn.disabled = false;
-    analyseAudioBtn.textContent = '🎧 Analyse audio features';
+    restoreBtn();
     toast('Audio Analysis', `Extracted features for ${measured} file(s)`);
     renderPanes();
   }
@@ -7162,6 +7517,26 @@ function decorateAction(id: string, iconName: string, label: string) {
 }
 
 $('openDataDir').addEventListener('click', () => window.api.reveal(settings.dataDir));
+
+const enableCrashLogsEl = $('enableCrashLogs');
+if (enableCrashLogsEl) {
+  enableCrashLogsEl.addEventListener('change', async () => {
+    const enabled = enableCrashLogsEl.checked;
+    if (window.api && window.api.crashlogSetEnabled) {
+      await window.api.crashlogSetEnabled(enabled);
+    }
+  });
+}
+
+const openCrashLogsDirEl = $('openCrashLogsDir');
+if (openCrashLogsDirEl) {
+  openCrashLogsDirEl.addEventListener('click', async () => {
+    if (window.api && window.api.crashlogOpenFolder) {
+      await window.api.crashlogOpenFolder();
+    }
+  });
+}
+
 $('openSettings').addEventListener('click', openSheet);
 $('closeSettings').addEventListener('click', closeSheet);
 scrimEl.addEventListener('click', closeSheet);
@@ -7227,6 +7602,29 @@ if (settingScaleTraditionSelectEl) {
     render();
     const label = val === 'western' ? 'Western Scales Only' : val === 'all' ? 'All World Traditions' : `${val} traditions`;
     toast('Scale Suggestions Updated', `Suggestions set to ${label}`);
+  });
+}
+
+const animScaleRangeSlider = $('animScaleRangeSlider') as HTMLInputElement | null;
+if (animScaleRangeSlider) {
+  animScaleRangeSlider.addEventListener('input', async () => {
+    const stepIdx = parseInt(animScaleRangeSlider.value, 10);
+    const scaleSteps = [0, 0.25, 0.5, 1.0];
+    const scaleLabels = ['0x (Instant / Off)', '0.25x (Ultra Fast)', '0.50x (Snappy)', '1.0x (Full Default)'];
+    const chosenScale = scaleSteps[stepIdx] ?? 1.0;
+    const isReduced = chosenScale < 1.0;
+
+    const animValueDisplay = $('animScaleDisplayValue');
+    if (animValueDisplay) {
+      animValueDisplay.textContent = scaleLabels[stepIdx] || `${chosenScale}x`;
+    }
+
+    settings = await window.api.updateSettings({
+      reducedAnimation: isReduced,
+      animationScale: chosenScale
+    });
+    applySettings();
+    toast('Animation Scale', `UI animation speed set to ${scaleLabels[stepIdx]}`);
   });
 }
 
@@ -7469,13 +7867,14 @@ async function handleScaleToolFile(file: File) {
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
       const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
       const sampleRate = audioBuffer.sampleRate;
-      const channelData = audioBuffer.getChannelData(0);
-      const analysis = DSP.analyse(channelData, sampleRate);
+      const duration = audioBuffer.duration;
+      // Run heavy DSP analysis in the background worker — never blocks the UI
+      const analysis = await analyseDecodedInBackground(audioBuffer);
       await audioCtx.close();
 
       scaleToolState.result = {
         isAudio: true,
-        durationSeconds: audioBuffer.duration,
+        durationSeconds: duration,
         ...analysis
       };
       scaleToolState.activeScale = analysis.scale;
@@ -7792,13 +8191,14 @@ function renderScaleMidiTool() {
 
         const actions = el('div', 'raga-card__actions');
 
-        const cardSessionId = `tool-world-card-${scaleMatch.id || scaleMatch.name}`;
+        const cardSessionId = `scale-world-card-${scaleMatch.id || scaleMatch.name}`;
         const resetPreviewBtn = () => {
-          previewBtn.textContent = '▶ Audition';
+          previewBtn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" class="raga-btn__icon"><polygon points="6 4 20 12 6 20 6 4"/></svg><span>Audition</span>`;
           previewBtn.classList.remove('pill--solid');
         };
 
-        const previewBtn = el('button', 'pill pill--sm raga-btn--preview', '▶ Audition');
+        const previewBtn = el('button', 'pill pill--sm raga-btn--preview');
+        previewBtn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" class="raga-btn__icon"><polygon points="6 4 20 12 6 20 6 4"/></svg><span>Audition</span>`;
         previewBtn.title = 'Audition authentic ascending & descending melodic phrasing (Click to stop)';
         previewBtn.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -7808,11 +8208,11 @@ function renderScaleMidiTool() {
             return;
           }
           document.querySelectorAll('.raga-btn--preview').forEach((b: any) => {
-            b.textContent = '▶ Audition';
+            b.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" class="raga-btn__icon"><polygon points="6 4 20 12 6 20 6 4"/></svg><span>Audition</span>`;
             b.classList.remove('pill--solid');
           });
           resetToolScaleUi();
-          previewBtn.textContent = '⏸ Pause';
+          previewBtn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" class="raga-btn__icon"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg><span>Pause</span>`;
           previewBtn.classList.add('pill--solid');
           const asc = scaleMatch.ascendingPhrase || scaleMatch.degrees;
           const desc = scaleMatch.descendingPhrase || [...asc].reverse();
@@ -8633,11 +9033,12 @@ function renderRandomizerTool(entry: any = null) {
 
       const cardSessionId = `randomizer-world-card-${scaleMatch.id || scaleMatch.name}`;
       const resetPreviewBtn = () => {
-        previewBtn.textContent = '▶ Audition';
+        previewBtn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" class="raga-btn__icon"><polygon points="6 4 20 12 6 20 6 4"/></svg><span>Audition</span>`;
         previewBtn.classList.remove('pill--solid');
       };
 
-      const previewBtn = el('button', 'pill pill--sm raga-btn--preview', '▶ Audition');
+      const previewBtn = el('button', 'pill pill--sm raga-btn--preview');
+      previewBtn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" class="raga-btn__icon"><polygon points="6 4 20 12 6 20 6 4"/></svg><span>Audition</span>`;
       previewBtn.title = 'Audition authentic ascending & descending melodic phrasing (Click to stop)';
       previewBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -8647,11 +9048,11 @@ function renderRandomizerTool(entry: any = null) {
           return;
         }
         document.querySelectorAll('.raga-btn--preview').forEach((b: any) => {
-          b.textContent = '▶ Audition';
+          b.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" class="raga-btn__icon"><polygon points="6 4 20 12 6 20 6 4"/></svg><span>Audition</span>`;
           b.classList.remove('pill--solid');
         });
         resetScaleUi();
-        previewBtn.textContent = '⏸ Pause';
+        previewBtn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" class="raga-btn__icon"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg><span>Pause</span>`;
         previewBtn.classList.add('pill--solid');
         const asc = scaleMatch.ascendingPhrase || scaleMatch.degrees;
         const desc = scaleMatch.descendingPhrase || [...asc].reverse();
@@ -8659,7 +9060,8 @@ function renderRandomizerTool(entry: any = null) {
       });
       actions.append(previewBtn);
 
-      const midiBtn = el('button', 'pill pill--sm pill--solid raga-btn--midi', '⤓ Drag to DAW');
+      const midiBtn = el('button', 'pill pill--sm pill--solid raga-btn--midi');
+      midiBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" class="raga-btn__icon"><path d="M12 3v13M7 11l5 5 5-5M4 20h16"/></svg><span>Drag to DAW</span>`;
       midiBtn.title = 'Drag onto any DAW track or click to export MIDI';
       const asc = scaleMatch.ascendingPhrase || scaleMatch.degrees;
       const desc = scaleMatch.descendingPhrase || [...asc].reverse();
@@ -8947,6 +9349,44 @@ function closeSheet() {
 /* ============================== wiring ============================= */
 
 $('rescan').addEventListener('click', refresh);
+
+/* ---- Search hint bubble (▾ button) --------------------------------- */
+(function () {
+  const hintBtn = $('searchHintBtn') as HTMLButtonElement;
+  const hintBubble = $('searchHintBubble') as HTMLElement;
+  let hoverTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function openBubble() {
+    hintBubble.hidden = false;
+    hintBtn.classList.add('is-open');
+  }
+  function closeBubble() {
+    hintBubble.hidden = true;
+    hintBtn.classList.remove('is-open');
+    if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null; }
+  }
+  function toggleBubble() {
+    if (hintBubble.hidden) openBubble(); else closeBubble();
+  }
+
+  // Click toggles
+  hintBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleBubble(); });
+
+  // Hover for 2 s → auto open
+  hintBtn.addEventListener('mouseenter', () => {
+    if (hintBubble.hidden) hoverTimer = setTimeout(openBubble, 2000);
+  });
+  hintBtn.addEventListener('mouseleave', () => {
+    if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null; }
+  });
+
+  // Close on outside click or Escape
+  document.addEventListener('click', (e) => {
+    if (!hintBubble.hidden && !hintBtn.contains(e.target as Node) && !hintBubble.contains(e.target as Node)) closeBubble();
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeBubble(); });
+})();
+
 let searchDebounceTimer: any = null;
 searchEl.addEventListener('input', () => {
   if (view !== 'list') view = 'list';
@@ -9072,6 +9512,47 @@ Player.onChange(({ path: playing }) => {
     if ((node as HTMLElement).dataset.path === playing) node.classList.add('is-playing');
   });
 });
+
+const nowPlayingTitleEl = document.getElementById('nowPlaying');
+if (nowPlayingTitleEl) {
+  nowPlayingTitleEl.addEventListener('click', () => {
+    const current = Player.getCurrent();
+    if (!current) return;
+
+    // 1. If project object is attached
+    if (current.project && typeof current.project === 'object' && current.project.sessionPath) {
+      goProject(current.project);
+      return;
+    }
+
+    // 2. Find matching project entry by path/folder
+    const targetPath = typeof current.project === 'string' ? current.project : current.path;
+    if (targetPath) {
+      const match = (entries || []).find((e) => {
+        if (e.path === targetPath || e.sessionPath === targetPath) return true;
+        if (e.folder && targetPath.toLowerCase().startsWith(e.folder.toLowerCase())) return true;
+        if (e.root && targetPath.toLowerCase().startsWith(e.root.toLowerCase())) return true;
+        return false;
+      });
+      if (match) {
+        goProject(match);
+        return;
+      }
+    }
+
+    // 3. Fallback: match by title / stem
+    if (current.name) {
+      const cleanName = current.name.toLowerCase();
+      const match = (entries || []).find((e) => {
+        const pName = (e.name || '').toLowerCase();
+        return pName && (cleanName.includes(pName) || pName.includes(cleanName));
+      });
+      if (match) {
+        goProject(match);
+      }
+    }
+  });
+}
 
 window.api.onBounce((bounce) => {
   toast('New bounce', `${bounce.label} · ${bounce.formats.join(' + ').toUpperCase()}`);
@@ -9242,12 +9723,70 @@ function timeAgo(ms) {
   return new Date(ms).toLocaleDateString();
 }
 
-function toast(title, body, isAlert?) {
+let currentToastNode: HTMLElement | null = null;
+let currentToastTimer: ReturnType<typeof setTimeout> | null = null;
+
+function toast(title: string, body: string, isAlert?: boolean) {
+  if (!toastsEl) return;
+
+  const prevToast = currentToastNode;
+  if (currentToastTimer) {
+    clearTimeout(currentToastTimer);
+    currentToastTimer = null;
+  }
+
   const node = el('div', `toast${isAlert ? ' toast--alert' : ''}`);
+  node.title = 'Click to dismiss';
   node.append(el('div', 'toast__title', title));
   node.append(el('div', 'toast__body', body));
+
+  const dismissThisToast = () => {
+    if (!node.isConnected) return;
+    if (currentToastTimer && currentToastNode === node) {
+      clearTimeout(currentToastTimer);
+      currentToastTimer = null;
+    }
+    node.classList.remove('toast--bump-in', 'toast--enter');
+    node.classList.add('toast--bump-out');
+    setTimeout(() => {
+      if (node.isConnected) node.remove();
+      if (currentToastNode === node) currentToastNode = null;
+    }, 280);
+  };
+
+  const closeBtn = el('button', 'toast__close', '✕');
+  closeBtn.title = 'Dismiss notification';
+  closeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dismissThisToast();
+  });
+  node.append(closeBtn);
+  node.addEventListener('click', dismissThisToast);
+
+  if (prevToast && prevToast.isConnected) {
+    // Bump out the old notification to the right
+    prevToast.classList.remove('toast--bump-in', 'toast--exit');
+    prevToast.classList.add('toast--bump-out');
+    setTimeout(() => {
+      if (prevToast.isConnected) prevToast.remove();
+    }, 320);
+
+    // Bump in the new notification from the left
+    node.classList.add('toast--bump-in');
+  }
+
+  currentToastNode = node;
   toastsEl.append(node);
-  setTimeout(() => node.remove(), 7000);
+
+  currentToastTimer = setTimeout(() => {
+    if (node.isConnected && currentToastNode === node) {
+      node.classList.add('toast--exit');
+      setTimeout(() => {
+        if (node.isConnected) node.remove();
+        if (currentToastNode === node) currentToastNode = null;
+      }, 250);
+    }
+  }, 5000);
 }
 
 /* ==================================================================
@@ -9554,5 +10093,14 @@ function attachDraggableAndSelectable(rowElement: HTMLElement, item: SelectedIte
     }
   });
 }
+
+// Low CPU idle mode: throttle when window is hidden/minimized
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    // When window is minimized, stop scale auditioning loops to free up AudioContext CPU
+    stopScalePlayback();
+  }
+});
+
 
 boot();

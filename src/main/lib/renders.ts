@@ -54,8 +54,21 @@ const RENDER_FOLDERS = new Set([
   'export',
   'masters',
   'master',
-  'audio'
+  'audio',
+  'outs',
+  'out',
+  'multitrack',
+  'multitracks',
+  'tracks'
 ]);
+
+function isRenderFolderName(name) {
+  if (!name || typeof name !== 'string') return false;
+  const lower = name.toLowerCase().trim();
+  if (RENDER_FOLDERS.has(lower)) return true;
+  // Match compound folder names like "DTS Stems", "KAKA Outs", "Vocal Stems", "Final Mixdowns", "Track Bounces", "Multitracks", "Outs"
+  return /\b(stems?|bounces?|mixdowns?|exports?|masters?|mix(?:es)?|outs?|multitracks?)\b/i.test(lower);
+}
 
 // Never worth walking for renders: source material, freeze files, device data.
 const SKIP = new Set([
@@ -84,6 +97,18 @@ const STEM_WORDS = [
  * @param root         the configured root, so the ancestor search stops there
  * @param extraFolders e.g. a stems folder the user pinned to this project
  */
+function sharesTitleWord(nameA, nameB) {
+  const cleanA = flatten(nameA);
+  const cleanB = flatten(nameB);
+  if (!cleanA || !cleanB) return false;
+  if (cleanA === cleanB || cleanA.startsWith(cleanB) || cleanB.startsWith(cleanA)) return true;
+
+  const wordsA = String(nameA).toLowerCase().split(/[^a-z0-9]+/i).filter((w) => w.length >= 3);
+  const wordsB = String(nameB).toLowerCase().split(/[^a-z0-9]+/i).filter((w) => w.length >= 3);
+  if (wordsA.length === 0 || wordsB.length === 0) return false;
+  return wordsA[0] === wordsB[0];
+}
+
 async function findRenders(sessionPath, root, extraFolders = [], siblings = []) {
   const stem = path.basename(sessionPath, path.extname(sessionPath));
   const family = projectFamily(stem, siblings);
@@ -112,12 +137,19 @@ async function findRenders(sessionPath, root, extraFolders = [], siblings = []) 
     // Exact name, or the same name once a version suffix is removed:
     // "Song_2.wav" belongs to "Song.als" when there's no "Song_2.als".
     const base = flatten(parseVersion(file.stem).base);
-    const matches = flat === wanted || base === wanted || flat.startsWith(wanted);
-    
-    // Audio files sitting directly inside this project's own folder/subfolder belong to this project
-    const isInsideProject = file.where === 'This folder' || isInsideOrEqual(path.dirname(file.path), projectFolder);
+    const matches =
+      flat === wanted ||
+      base === wanted ||
+      flat.startsWith(wanted) ||
+      wanted.startsWith(flat) ||
+      sharesTitleWord(family.name, file.stem);
 
-    if (!matches && !isInsideProject) return false;
+    // Audio files sitting directly inside this project's dedicated folder (only when no other projects share this directory)
+    const isDirectlyInFolder = samePath(path.dirname(file.path), projectFolder);
+    const isDedicatedFolder = !siblings || siblings.length === 0;
+    const isInsideDedicatedProject = isDirectlyInFolder && isDedicatedFolder;
+
+    if (!matches && !isInsideDedicatedProject) return false;
 
     // Hand it over if a sibling session claims it more specifically.
     return !rivals.some((rival) => flat === rival || flat.startsWith(rival));
@@ -428,6 +460,7 @@ function isInsideOrEqual(child, parent) {
 module.exports = {
   RENDER_FOLDER_NAMES: RENDER_FOLDERS,
   AUDIO_EXTS: AUDIO,
+  isRenderFolderName,
   findRenders,
   listAllAudio,
   groupRenders,

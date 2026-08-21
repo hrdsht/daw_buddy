@@ -574,7 +574,15 @@ const FORMATS = {
     name: 'REAPER',
     isPackage: false,
     readTempo: readReaperTempo,
-    isBackup: () => false,
+    isBackup: (filename) => {
+      const lower = filename.toLowerCase();
+      return (
+        lower.endsWith('.rpp-bak') ||
+        lower.endsWith('.rpp-undo') ||
+        /\.(wav|mp3|aiff?|flac|ogg|m4a|aac)\.rpp$/i.test(lower) ||
+        /\((?:autosaved|overwritten|backup)\b[^)]*\)\.rpp$/i.test(lower)
+      );
+    },
     countBackups: countReaperBackups
   },
   '.bwproject': {
@@ -634,13 +642,21 @@ const PACKAGE_EXTENSIONS = new Set(
     .filter((f) => f.isPackage)
     .map((f) => f.ext)
 );
+const AUDIO_MEDIA_EXTS = new Set(['.wav', '.mp3', '.aiff', '.aif', '.flac', '.ogg', '.m4a', '.aac', '.wma']);
 
 function formatFor(name) {
   return FORMATS[path.extname(name).toLowerCase()] || null;
 }
 
 function isSessionFile(name) {
-  return SESSION_EXTENSIONS.has(path.extname(name).toLowerCase());
+  const ext = path.extname(name).toLowerCase();
+  if (!SESSION_EXTENSIONS.has(ext)) return false;
+  // If the basename before the session extension is an audio extension (e.g. Bass.wav.rpp),
+  // it's an exported stem proxy or take subproject, not a primary project file.
+  const baseWithoutDaw = path.basename(name, ext);
+  const secondExt = path.extname(baseWithoutDaw).toLowerCase();
+  if (secondExt && AUDIO_MEDIA_EXTS.has(secondExt)) return false;
+  return true;
 }
 
 /** True for a folder that is really a project — Logic's .logicx. */

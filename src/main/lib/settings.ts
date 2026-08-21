@@ -37,6 +37,11 @@ const DEFAULTS = {
   // project root, and added to the skip list so the app never scans its own
   // output back in as renders.
   outputFolder: null,
+  // Crash logging & diagnostics preference
+  enableCrashLogs: true,
+  // Graphics & Animation Scale (Android-style snappy animation speed)
+  reducedAnimation: false,
+  animationScale: 1.0,
   // Regional and World Scales preferences
   region: 'indian',
   scaleTraditions: ['all'],

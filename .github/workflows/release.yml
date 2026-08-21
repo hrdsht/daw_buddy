@@ -15,9 +15,10 @@ name: Release
 # (workflow_dispatch) as a dry-run: it builds and uploads artifacts, no release.
 on:
   push:
+    branches:
+      - main
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+' # v0.4.2
-      - 'v[0-9]+.[0-9]+.[0-9]+-*' # v0.4.2-beta.1, v0.5.0-rc.1
+      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -58,11 +59,9 @@ jobs:
 
   build:
     needs: [create-release]
-    # create-release is skipped on a workflow_dispatch (no tag); still build then.
+    # create-release is skipped on push to main or workflow_dispatch (no tag); still build then.
     if: always() && (needs.create-release.result == 'success' || needs.create-release.result == 'skipped')
     strategy:
-      # Don't let one platform's failure cancel the others — a broken Windows
-      # build shouldn't throw away finished mac/Linux installers.
       fail-fast: false
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
@@ -82,10 +81,7 @@ jobs:
           npm run typecheck
           npm test
 
-      # electron-builder packages dist/ + prod deps into release/. We never let it
-      # publish (its GitHub provider derives the tag from package.json, which would
-      # fight pre-release suffixes); we attach to the pushed tag below instead.
-      - name: Build installers
+      - name: Build installers (exe, dmg, AppImage/deb/rpm)
         run: npm run dist -- --publish never
 
       - name: Attach installers to the release
@@ -99,11 +95,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload installers as artifacts (manual dry-run)
-        if: github.event_name == 'workflow_dispatch'
+      - name: Upload installers as artifacts (exe, dmg, linux packages)
         uses: actions/upload-artifact@v4
         with:
-          name: installers-${{ matrix.os }}
+          name: daw-buddy-${{ matrix.os }}
           path: |
             release/*.exe
             release/*.dmg

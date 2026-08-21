@@ -34,6 +34,22 @@ const { DICTIONARY } = require('./lib/instruments');
 const { UserDictionary, merge: mergeDict } = require('./lib/userdict');
 const renamelog = require('./lib/renamelog');
 const { features: extractFeatures } = require('./lib/features');
+const {
+  initCrashLogger,
+  recordCrash,
+  getLatestCrashReport,
+  dismissLatestCrashReport,
+  openCrashFolder,
+  setCrashLoggingEnabled,
+  isCrashLoggingEnabled
+} = require('./lib/crashlog');
+
+// Initialize Crash Logger immediately to catch any startup or lifecycle crashes
+initCrashLogger();
+
+// Hardware GPU Acceleration Optimizations (Chromium Hardware Rasterization & Zero-Copy)
+app.commandLine.appendSwitch('enable-gpu-rasterization');
+app.commandLine.appendSwitch('enable-zero-copy');
 
 let mainWindow: any = null;
 let splashWindow: any = null;
@@ -153,6 +169,13 @@ function createWindow({ splash = null, revealWhen = Promise.resolve() }: any = {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+  mainWindow.webContents.on('render-process-gone', (event: any, details: any) => {
+    console.error('[process] Renderer process crashed / gone:', details);
+    recordCrash('process-gone', `Renderer process crashed: ${details.reason} (Exit Code: ${details.exitCode})`, details);
+  });
+  mainWindow.on('unresponsive', () => {
+    console.warn('[window] Main window became unresponsive');
+  });
   // Windows and Linux expose extra mouse buttons as browser app commands.
   // DAW Buddy is a single-page app, so forward them to its own history.
   mainWindow.on('app-command', (event, command) => {
@@ -196,6 +219,7 @@ app.whenReady().then(async () => {
 
   settings = new Settings(path.join(dataDir(), 'settings.json'));
   settings.load();
+  setCrashLoggingEnabled(settings.get().enableCrashLogs !== false);
 
   store = new ProjectStore(path.join(dataDir(), 'notes.json'));
   await store.load();
@@ -1588,4 +1612,37 @@ ipcMain.handle('dedupe:link', async (event, groups) => {
   if (response !== 1) return { linked: 0, reclaimed: 0, cancelled: true };
 
   return dedupe.linkGroups(groups);
+});
+
+/* -------------------------------------------------------------------------- */
+/* CRASHLOG & DIAGNOSTICS RECOVERY IPC HANDLERS                               */
+/* -------------------------------------------------------------------------- */
+
+ipcMain.handle('crashlog:getLatest', () => {
+  return getLatestCrashReport();
+});
+
+ipcMain.handle('crashlog:dismiss', () => {
+  return dismissLatestCrashReport();
+});
+
+ipcMain.handle('crashlog:openFolder', async () => {
+  return await openCrashFolder();
+});
+
+ipcMain.handle('crashlog:reportRendererError', (_event, errorData: any) => {
+  if (!errorData) return null;
+  const msg = errorData.message || 'Renderer Error';
+  const err = new Error(msg);
+  if (errorData.stack) err.stack = errorData.stack;
+  if (errorData.name) err.name = errorData.name;
+  return recordCrash('renderer', err, errorData.context);
+});
+
+ipcMain.handle('crashlog:setEnabled', (_event, enabled: boolean) => {
+  setCrashLoggingEnabled(enabled);
+  if (settings) {
+    settings.update({ enableCrashLogs: Boolean(enabled) });
+  }
+  return isCrashLoggingEnabled();
 });

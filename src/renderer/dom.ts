@@ -81,14 +81,71 @@ export function timeAgo(ms: number | null | undefined): string {
   return new Date(ms).toLocaleDateString();
 }
 
+let currentToastNode: HTMLElement | null = null;
+let currentToastTimer: ReturnType<typeof setTimeout> | null = null;
+
 export function toast(title: string, body: string, isAlert = false) {
   const toastsEl = $('toasts');
   if (!toastsEl) return;
+
+  const prevToast = currentToastNode;
+  if (currentToastTimer) {
+    clearTimeout(currentToastTimer);
+    currentToastTimer = null;
+  }
+
   const node = el('div', `toast${isAlert ? ' toast--alert' : ''}`);
+  node.title = 'Click to dismiss';
   node.append(el('div', 'toast__title', title));
   node.append(el('div', 'toast__body', body));
+
+  const dismissThisToast = () => {
+    if (!node.isConnected) return;
+    if (currentToastTimer && currentToastNode === node) {
+      clearTimeout(currentToastTimer);
+      currentToastTimer = null;
+    }
+    node.classList.remove('toast--bump-in', 'toast--enter');
+    node.classList.add('toast--bump-out');
+    setTimeout(() => {
+      if (node.isConnected) node.remove();
+      if (currentToastNode === node) currentToastNode = null;
+    }, 280);
+  };
+
+  const closeBtn = el('button', 'toast__close', '✕');
+  closeBtn.title = 'Dismiss notification';
+  closeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dismissThisToast();
+  });
+  node.append(closeBtn);
+  node.addEventListener('click', dismissThisToast);
+
+  if (prevToast && prevToast.isConnected) {
+    // Bump out the old notification to the right
+    prevToast.classList.remove('toast--bump-in', 'toast--exit');
+    prevToast.classList.add('toast--bump-out');
+    setTimeout(() => {
+      if (prevToast.isConnected) prevToast.remove();
+    }, 320);
+
+    // Bump in the new notification from the left
+    node.classList.add('toast--bump-in');
+  }
+
+  currentToastNode = node;
   toastsEl.append(node);
-  setTimeout(() => node.remove(), 7000);
+
+  currentToastTimer = setTimeout(() => {
+    if (node.isConnected && currentToastNode === node) {
+      node.classList.add('toast--exit');
+      setTimeout(() => {
+        if (node.isConnected) node.remove();
+        if (currentToastNode === node) currentToastNode = null;
+      }, 250);
+    }
+  }, 5000);
 }
 
 export const THEME_STYLES = ['minimalist', 'ableton', 'classic'];
@@ -250,4 +307,36 @@ export function applyAppearance(accent?: string, surface?: string, themeStyle?: 
   localStorage.setItem('dawBuddyThemeStyle', themeStyle);
   localStorage.setItem('dawBuddyAccent', accent);
   localStorage.setItem('dawBuddySurface', surface);
+
+  applyThemeTuning();
+}
+
+export function applyThemeTuning(brightness?: number, contrast?: number) {
+  if (brightness === undefined || isNaN(brightness)) {
+    const saved = localStorage.getItem('dawBuddyBrightness');
+    brightness = saved !== null ? Number(saved) : 100;
+  }
+  if (contrast === undefined || isNaN(contrast)) {
+    const saved = localStorage.getItem('dawBuddyContrast');
+    contrast = saved !== null ? Number(saved) : 100;
+  }
+
+  const bVal = Math.max(50, Math.min(150, Math.round(brightness)));
+  const cVal = Math.max(50, Math.min(150, Math.round(contrast)));
+
+  document.documentElement.style.setProperty('--theme-brightness', String(bVal / 100));
+  document.documentElement.style.setProperty('--theme-contrast', String(cVal / 100));
+
+  localStorage.setItem('dawBuddyBrightness', String(bVal));
+  localStorage.setItem('dawBuddyContrast', String(cVal));
+
+  const bSlider = $('themeBrightnessSlider') as HTMLInputElement | null;
+  const bText = $('themeBrightnessValue');
+  if (bSlider) bSlider.value = String(bVal);
+  if (bText) bText.textContent = `${bVal}%`;
+
+  const cSlider = $('themeContrastSlider') as HTMLInputElement | null;
+  const cText = $('themeContrastValue');
+  if (cSlider) cSlider.value = String(cVal);
+  if (cText) cText.textContent = `${cVal}%`;
 }

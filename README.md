@@ -7,6 +7,7 @@
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/hrdsht/daw_buddy/blob/main/LICENSE)
 [![Version](https://img.shields.io/badge/version-v0.4.3-orange.svg)](https://github.com/hrdsht/daw_buddy/releases)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-ba55ick-FFDD00.svg?style=flat&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/ba55ick)
+[![Buy Me A Coffee (Shreyas)](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-ksshreyas-FFDD00.svg?style=flat&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/ksshreyas)
 
 <p align="center">
   <img src="docs/assets/daw-buddy-dashboard.png" alt="DAW Buddy Studio Dashboard" width="100%" />
@@ -22,7 +23,7 @@ Standard operating system file explorers (Windows Explorer, macOS Finder, Linux 
 
 **DAW Buddy was built to solve this exact problem.** 
 
-Inspired by custom in-house tools built by world-class producers like KSHMR, DAW Buddy is a fast, lightweight, and **100% private** desktop workstation companion. It reads musical metadata straight out of raw session files (`.als`, `.flp`, `.logicx`, `.ptx`, `.cpr`, `.rpp`, `.bwproject`), organizes your discography, and provides a powerful suite of lossless audio and music theory tools.
+Inspired by custom in-house tools discussed by world-class producers like [KSHMR](https://www.youtube.com/channel/UCFMjkrMT7Gvg84v0av-DIwA) on the [XLNT Podcast](https://www.youtube.com/@XLNTSOUND), DAW Buddy is a fast, lightweight, and **100% private** desktop workstation companion. It reads musical metadata straight out of raw session files (`.als`, `.flp`, `.logicx`, `.ptx`, `.cpr`, `.rpp`, `.bwproject`), organizes your discography, and provides a powerful suite of lossless audio and music theory tools.
 
 ---
 
@@ -318,6 +319,22 @@ account details anywhere.
 
 ---
 
+## 🛡️ Zero-Knowledge Crash Diagnostics & Privacy Guarantee
+
+DAW Buddy is designed from the ground up for artists and producers working on unreleased, confidential music:
+
+1. **Zero Raw Filepaths or Personal Names**: When an unexpected error occurs, diagnostic crash logs **never** record user folder paths, personal usernames (`C:\Users\<username>`), album titles, song titles, stem names, or plugin license keys.
+2. **Structural Diagnostic Metrics**: If a filepath issue triggered a bug (such as an unusually deep folder hierarchy or a path exceeding the OS limit), the engine automatically transforms the path into safe structural dimensions:
+   - **Directory Nesting Depth**: e.g., `depth: 6 folders` (e.g. `(folders in folders in folders x 6)`).
+   - **Path Character Length**: e.g., `length: 278 chars`.
+   - **OS Limit Flags**: e.g., `exceeds MAX_PATH (260): YES`.
+   - **File Extension**: e.g., `.als`, `.wav`, `.mp3`.
+   - *Example sanitized output in log*: `<path: depth=6 folders, len=84 chars, ext=.wav, exceedsMaxPath=false>`
+3. **Draggable Crash Recovery Window & Direct Email Support**: If an unexpected crash occurs, reopening the app shows a recovery window with a draggable `.log` file pill and a copyable support email: `ba55icklistens@gmail.com`. You can drag & drop the log directly into an email, Discord, or GitHub issue without revealing sensitive session names or private folder hierarchies.
+4. **Completely Local & Toggleable**: Crash logging can be enabled/disabled anytime in Settings → *Crash Logging & Diagnostics*, and logs remain strictly on your local disk (`userData/crashes/`).
+
+---
+
 ## When something goes wrong
 
 - **`npm` is not recognised** — Node didn't install, or you need a fresh terminal.
@@ -345,14 +362,24 @@ npm run dist     package an installer
 See `docs/BUILD_NOTES.md` and `docs/proposals/` for the architecture, roadmap,
 and design decisions.
 
+## 🤝 Authors & Credits
+
+- **Vision, Direction & Artist:** [BA55ICK](https://github.com/ba55ick) — Conceived, designed, and envisioned DAW Buddy from firsthand studio production workflows.
+- **Software Engineering & Collaboration:** [Shreyas Bhat](https://github.com/shreyasbhat0) — Enabled that dream by taking time off from his office work and providing deep software engineering insights, desktop architecture, and development time.
+- **Inspiration & Special Thanks:** [KSHMR](https://www.youtube.com/channel/UCFMjkrMT7Gvg84v0av-DIwA) & [XLNT Sound](https://www.youtube.com/@XLNTSOUND) — The idea for DAW Buddy germinated from their insightful podcast discussing in-house producer workflow tools and project cataloging.
+
 ---
 
 ## ☕ Support the Project
 
-If DAW Buddy saves you hours in your creative workflow, consider buying a coffee to support continued development:
+If DAW Buddy saves you hours in your creative workflow, consider buying us a coffee to support continued open-source development:
 
 <p align="left">
   <a href="https://buymeacoffee.com/ba55ick" target="_blank">
-    <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 50px !important; width: 180px !important;" />
+    <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy BA55ICK A Coffee" style="height: 48px !important; width: 175px !important;" />
+  </a>
+  &nbsp;&nbsp;
+  <a href="https://buymeacoffee.com/ksshreyas" target="_blank">
+    <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Shreyas A Coffee" style="height: 48px !important; width: 175px !important;" />
   </a>
 </p>

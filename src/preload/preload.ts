@@ -135,5 +135,11 @@ contextBridge.exposeInMainWorld('api', {
   onPlayerSync: (callback: any) => subscribe('player:sync', callback),
   sendPlayerCommand: (cmd: string, arg?: any) => ipcRenderer.send('player:command', { cmd, arg }),
   onPlayerCommand: (callback: any) => subscribe('player:command', callback),
-  toggleMiniPlayer: () => ipcRenderer.invoke('tray:toggleMini')
+  toggleMiniPlayer: () => ipcRenderer.invoke('tray:toggleMini'),
+
+  crashlogGetLatest: () => ipcRenderer.invoke('crashlog:getLatest'),
+  crashlogDismiss: () => ipcRenderer.invoke('crashlog:dismiss'),
+  crashlogOpenFolder: () => ipcRenderer.invoke('crashlog:openFolder'),
+  crashlogReportRendererError: (errorData: any) => ipcRenderer.invoke('crashlog:reportRendererError', errorData),
+  crashlogSetEnabled: (enabled: boolean) => ipcRenderer.invoke('crashlog:setEnabled', enabled)
 });
