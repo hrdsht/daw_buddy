@@ -4059,12 +4059,12 @@ function ensureAnalysisWorker() {
   return analysisWorker;
 }
 
-function analyseDecodedInBackground(decoded) {
+function analyseDecodedInBackground(decoded: AudioBuffer): Promise<any> {
   const worker = ensureAnalysisWorker();
   const id = ++analysisRequestId;
   const samples = new Float32Array(decoded.getChannelData(0));
 
-  return new Promise((resolve, reject) => {
+  return new Promise<any>((resolve, reject) => {
     pendingAnalysis.set(id, { resolve, reject });
     worker.postMessage(
       { id, type: 'analyse', samples, sampleRate: decoded.sampleRate },
