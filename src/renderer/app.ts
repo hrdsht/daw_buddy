@@ -1617,7 +1617,7 @@ function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
             b.classList.remove('pill--solid');
           });
           resetModalScaleUi();
-          previewBtn.textContent = '⏹ Stop';
+          previewBtn.textContent = '⏸ Pause';
           previewBtn.classList.add('pill--solid');
           const asc = scaleMatch.ascendingPhrase || scaleMatch.degrees;
           const desc = scaleMatch.descendingPhrase || [...asc].reverse();
@@ -1736,7 +1736,7 @@ function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
         resetModalScaleUi();
         return;
       }
-      playScaleBtn.textContent = '⏹ Stop Scale';
+      playScaleBtn.textContent = '⏸ Pause Preview';
       playScaleBtn.classList.add('pill--active');
       playFullScale(tonicPc, degrees, selectedTuningA4, modalScaleSessionId, resetModalScaleUi);
     });
@@ -7387,7 +7387,7 @@ function renderScaleMidiTool() {
         resetToolScaleUi();
         return;
       }
-      playScaleBtn.textContent = '⏹ Stop Scale';
+      playScaleBtn.textContent = '⏸ Pause Scale';
       playScaleBtn.classList.add('pill--active');
       playFullScale(tonicPc, degrees, tuningA4, toolScaleSessionId, resetToolScaleUi);
     });
@@ -7521,7 +7521,7 @@ function renderScaleMidiTool() {
             b.classList.remove('pill--solid');
           });
           resetToolScaleUi();
-          previewBtn.textContent = '⏹ Stop';
+          previewBtn.textContent = '⏸ Pause';
           previewBtn.classList.add('pill--solid');
           const asc = scaleMatch.ascendingPhrase || scaleMatch.degrees;
           const desc = scaleMatch.descendingPhrase || [...asc].reverse();
@@ -7938,9 +7938,9 @@ function renderRandomizerTool(entry: any = null) {
       b.textContent = '▶ Audition';
       b.classList.remove('pill--solid');
     });
-    playKeyBtn.textContent = '⏹ Stop Scale';
+    playKeyBtn.textContent = '⏸ Pause Scale';
     playKeyBtn.classList.add('pill--solid');
-    playScaleBtn.textContent = '⏹ Stop Scale';
+    playScaleBtn.textContent = '⏸ Pause Scale';
     playScaleBtn.classList.add('pill--active');
 
     if (currentWorldDef && (currentWorldDef.ascendingPhrase || currentWorldDef.degrees)) {
@@ -8225,7 +8225,7 @@ function renderRandomizerTool(entry: any = null) {
           b.classList.remove('pill--solid');
         });
         resetScaleUi();
-        previewBtn.textContent = '⏹ Stop';
+        previewBtn.textContent = '⏸ Pause';
         previewBtn.classList.add('pill--solid');
         const asc = scaleMatch.ascendingPhrase || scaleMatch.degrees;
         const desc = scaleMatch.descendingPhrase || [...asc].reverse();

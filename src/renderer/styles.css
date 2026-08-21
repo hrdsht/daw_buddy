@@ -4141,8 +4141,8 @@ body.multi-select-mode .filerow__select-handle {
 
 .raga-card__thaat {
   font-size: 11px;
-  font-weight: 500;
-  color: var(--dim);
+  font-weight: 600;
+  color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -4155,8 +4155,8 @@ body.multi-select-mode .filerow__select-handle {
   font-family: var(--mono);
   padding: 3px 6px;
   border-radius: 4px;
-  background: rgba(0, 0, 0, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .raga-card__phrase--aaroh .raga-phrase__tag {
@@ -4182,10 +4182,15 @@ body.multi-select-mode .filerow__select-handle {
 .raga-card__meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  font-size: 10.5px;
-  color: var(--dim);
-  margin-top: 2px;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.raga-card__meta span {
+  color: var(--text);
+  opacity: 0.9;
 }
 
 .raga-card__actions {
