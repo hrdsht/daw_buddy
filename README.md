@@ -68,6 +68,39 @@ Whether you are mixing a multi-platinum album or producing your very first beat,
 - **⚡ Zero-Friction Export**: Drag `[ WAV ]`, `[ MP3 ]`, and `[ FLAC ]` pills directly from the session browser straight into Discord, Telegram, or your DAW tracks.
 
 
+## ⬇️ Download & Install (easiest)
+
+Grab a ready-to-run installer from the **[Releases page](https://github.com/hrdsht/daw_buddy/releases)** — no Node, no terminal:
+
+| Platform | File to download |
+|---|---|
+| **Windows** | `DAW.Buddy.Setup.<version>.exe` |
+| **macOS — Apple Silicon** | `DAW.Buddy-<version>-arm64.dmg` |
+| **macOS — Intel** | `DAW.Buddy-<version>.dmg` |
+| **Linux** | `.AppImage` (portable), or `.deb` / `.rpm` for your package manager |
+
+Then run it:
+
+- **Windows** — run the `.exe`. It's **unsigned**, so SmartScreen warns on first launch: click **More info → Run anyway**.
+- **macOS** — open the `.dmg`, drag the app to Applications, then **right-click the app → Open** the first time (this clears Gatekeeper's warning for unsigned apps).
+- **Linux** — make the AppImage executable and run it:
+
+  ```
+  chmod +x DAW.Buddy-*.AppImage
+  ./DAW.Buddy-*.AppImage
+  ```
+
+  If it mentions FUSE, run `./DAW.Buddy-*.AppImage --appimage-extract-and-run`, or just install the `.deb` / `.rpm` instead.
+
+> Installers are **unsigned** for now, so that one-time OS warning is expected. Code signing is planned — see `docs/proposals/0008-code-signing.md`.
+
+---
+
+## 🛠 Run from source (for developers)
+
+The steps below run DAW Buddy **from source** with Node — for hacking on it or
+tracking the very latest `main`. Most users can stop after the download above.
+
 ## Part 1 — Install Node.js (once)
 
 Go to <https://nodejs.org> and download the **LTS** version. Run the installer
