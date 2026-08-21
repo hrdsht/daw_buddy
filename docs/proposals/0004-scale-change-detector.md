@@ -1,4 +1,4 @@
-# 0005 — Musical Scale Change & Key Modulation Detector
+# 0004 — Musical Scale Change & Key Modulation Detector
 
 - **Status:** Proposed
 - **Date:** 2026-08-20

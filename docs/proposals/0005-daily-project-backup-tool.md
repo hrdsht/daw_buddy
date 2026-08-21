@@ -1,4 +1,4 @@
-# 0006 — Automated Daily Project Backup & External Drive Mirroring Tool
+# 0005 — Automated Daily Project Backup & External Drive Mirroring Tool
 
 - **Status:** Proposed
 - **Date:** 2026-08-20

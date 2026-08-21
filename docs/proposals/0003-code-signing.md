@@ -1,4 +1,4 @@
-# 0004 — Code signing & notarization
+# 0003 — Code signing & notarization
 
 - **Status:** Planned
 - **Date:** 2026-08-20

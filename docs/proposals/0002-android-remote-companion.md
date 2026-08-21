@@ -1,4 +1,4 @@
-# 0003 — Android remote companion
+# 0002 — Android remote companion
 
 - **Status:** Proposed
 - **Date:** 2026-08-16
