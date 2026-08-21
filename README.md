@@ -372,9 +372,29 @@ and design decisions.
 
 ## ☕ Support the Project
 
-If DAW Buddy saves you hours in your creative workflow, consider buying us a coffee to support continued open-source development:
+**DAW Buddy is free, local-first, and ad-free** — no subscriptions, no telemetry, no upsells, ever. It's built and maintained by two people on nights and weekends, and every feature we ship stays free for everyone.
 
-| **BA55ICK** *(Vision & Lead Creator)* | **Shreyas Bhat** *(Engineering & Architecture)* |
-| :---: | :---: |
-| <a href="https://buymeacoffee.com/ba55ick" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy BA55ICK A Coffee" height="44" width="160" /></a> | <a href="https://buymeacoffee.com/ksshreyas" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Shreyas A Coffee" height="44" width="160" /></a> |
-| [☕ buymeacoffee.com/ba55ick](https://buymeacoffee.com/ba55ick) | [☕ buymeacoffee.com/ksshreyas](https://buymeacoffee.com/ksshreyas) |
+If it's earned a spot in your studio, a coffee keeps the late-night commits (and the caffeine ☕) flowing — thank you. 🙏
+
+<table align="center">
+  <tr>
+    <td align="center" width="280">
+      <a href="https://buymeacoffee.com/ba55ick" target="_blank">
+        <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy BA55ICK a coffee" height="48" />
+      </a>
+      <br />
+      <b>BA55ICK</b><br />
+      <sub>Vision &amp; Lead Creator</sub>
+    </td>
+    <td align="center" width="280">
+      <a href="https://buymeacoffee.com/ksshreyas" target="_blank">
+        <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Shreyas a coffee" height="48" />
+      </a>
+      <br />
+      <b>Shreyas Bhat</b><br />
+      <sub>Engineering &amp; Architecture</sub>
+    </td>
+  </tr>
+</table>
+
+<p align="center"><i>Every coffee funds another feature that stays free for everyone. ❤️</i></p>
