@@ -519,6 +519,23 @@ async function id3EditingNeverChangesAudioBytes() {
   });
 }
 
+async function audioCopiedToProjectFolderRootIsListed() {
+  await withTempDir(async (dir) => {
+    const projectFolder = path.join(dir, 'Guruji Song Project');
+    await fs.mkdir(projectFolder, { recursive: true });
+
+    const session = path.join(projectFolder, 'Guruji Song.als');
+    await fs.writeFile(session, 'project');
+    await fs.writeFile(path.join(projectFolder, 'Guruji_Rough (1).mp3'), 'mp3-data');
+
+    const result = await renders.findRenders(session, dir);
+    assert.equal(result.renders.length, 1);
+    assert.equal(result.renders[0].base, 'Guruji_Rough');
+    assert.equal(result.renders[0].version, 1);
+    assert.equal(result.renders[0].primary.name, 'Guruji_Rough (1).mp3');
+  });
+}
+
 async function run() {
   const tests = [
     scannerKeepsSessionFactsSeparate,
@@ -530,6 +547,7 @@ async function run() {
     vocalRoundTripIsSampleAccurate,
     vocalRebuildFlagsDurationCollision,
     renderFinderRecognisesProjectVersions,
+    audioCopiedToProjectFolderRootIsListed,
     studioHistoryIsCountedButNotListed,
     bitwigBackupsAreCountedButNotListed,
     proToolsBackupsAndSourceAudioStayOutOfResults,

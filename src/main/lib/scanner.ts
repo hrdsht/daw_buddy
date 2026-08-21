@@ -292,10 +292,12 @@ function audioStatsFor(sessionName, projectFolder, root, options) {
   let latestMtime = 0;
   for (const [audioFolder, items] of options.audioIndex) {
     if (!audioFolderBelongsToProject(audioFolder, projectFolder, root)) continue;
+    const isInsideProject = isInsideOrEqual(audioFolder, projectFolder);
     for (const item of items) {
       const itemStem = typeof item === 'object' && item ? item.stem : item;
       const itemMtime = typeof item === 'object' && item ? item.mtime : 0;
-      if (itemStem === wanted || (typeof itemStem === 'string' && itemStem.startsWith(wanted))) {
+      const matches = itemStem === wanted || (typeof itemStem === 'string' && itemStem.startsWith(wanted));
+      if (matches || isInsideProject) {
         count += 1;
         if (itemMtime > latestMtime) latestMtime = itemMtime;
       }

@@ -1518,6 +1518,315 @@ export const GENRE_DATABASE: GenreDefinition[] = [
   { id: 'chiptune', name: 'Chiptune / 8-Bit', category: 'Electronic & Experimental', typicalBpm: [125, 160], description: 'Vintage game-console synth waveforms (square, triangle, noise), rapid arpeggios, and retro nostalgia.' }
 ];
 
+export interface ScaleSegment {
+  startSec: number;
+  endSec: number;
+  durationSec: number;
+  percentStart: number;
+  percentWidth: number;
+  key: string | null;
+  note: string | null;
+  mode: string | null;
+  scale: string | null;
+  camelot: string | null;
+  confidence: number;
+  color: string;
+  badgeBg: string;
+  textColor: string;
+  ragas: RagaSuggestion[];
+  transitionFromPrev?: {
+    semitoneDelta: number;
+    shiftLabel: string;
+    type: string;
+    camelotShift?: string;
+  } | null;
+}
+
+export interface ScaleModulationReport {
+  duration: number;
+  hasModulation: boolean;
+  segmentCount: number;
+  segments: ScaleSegment[];
+  uniqueKeys: string[];
+}
+
+const MAJOR_PALETTE = [
+  { color: '#00f0ff', badgeBg: 'rgba(0, 240, 255, 0.22)', textColor: '#00f0ff' }, // Electric Cyan
+  { color: '#ffd600', badgeBg: 'rgba(255, 214, 0, 0.22)', textColor: '#ffd600' }, // Solar Yellow
+  { color: '#22c55e', badgeBg: 'rgba(34, 197, 94, 0.22)', textColor: '#4ade80' }, // Vibrant Emerald
+  { color: '#ff7849', badgeBg: 'rgba(255, 120, 73, 0.22)', textColor: '#ff8a5b' }, // Bright Coral
+  { color: '#38bdf8', badgeBg: 'rgba(56, 189, 248, 0.22)', textColor: '#7dd3fc' }, // Sky Blue
+  { color: '#f43f5e', badgeBg: 'rgba(244, 63, 94, 0.22)', textColor: '#fb7185' }  // Neon Rose
+];
+
+const MINOR_PALETTE = [
+  { color: '#6366f1', badgeBg: 'rgba(99, 102, 241, 0.25)', textColor: '#a5b4fc' }, // Deep Indigo
+  { color: '#9333ea', badgeBg: 'rgba(147, 51, 234, 0.25)', textColor: '#c084fc' }, // Midnight Violet
+  { color: '#d97706', badgeBg: 'rgba(217, 119, 6, 0.25)', textColor: '#fcd34d' }, // Dark Amber
+  { color: '#be123c', badgeBg: 'rgba(190, 18, 60, 0.25)', textColor: '#fda4af' }, // Crimson
+  { color: '#059669', badgeBg: 'rgba(5, 150, 105, 0.25)', textColor: '#6ee7b7' }, // Dark Forest
+  { color: '#475569', badgeBg: 'rgba(71, 85, 105, 0.30)', textColor: '#cbd5e1' }  // Deep Slate
+];
+
+export function detectScaleModulations(
+  samples: Float32Array | Float64Array,
+  sampleRate: number,
+  options: { windowSec?: number; hopSec?: number } = {}
+): ScaleModulationReport {
+  const totalDuration = samples.length / sampleRate;
+  if (totalDuration < 2) {
+    return {
+      duration: totalDuration,
+      hasModulation: false,
+      segmentCount: 0,
+      segments: [],
+      uniqueKeys: []
+    };
+  }
+
+  // Adaptive window sizing: 6-12s windows for robust harmonic integration
+  const windowSec = options.windowSec || Math.max(6, Math.min(12, totalDuration / 6));
+  const hopSec = options.hopSec || windowSec * 0.5;
+  const windowSamples = Math.floor(windowSec * sampleRate);
+  const hopSamples = Math.floor(hopSec * sampleRate);
+
+  interface RawWindowResult {
+    startSec: number;
+    endSec: number;
+    key: string | null;
+    note: string | null;
+    mode: string | null;
+    scale: string | null;
+    camelot: string | null;
+    confidence: number;
+    tonicPc: number;
+    ragas: RagaSuggestion[];
+  }
+
+  const rawWindows: RawWindowResult[] = [];
+
+  for (let offset = 0; offset + windowSamples * 0.5 <= samples.length; offset += hopSamples) {
+    const end = Math.min(samples.length, offset + windowSamples);
+    const winSlice = samples.subarray(offset, end);
+    const { frames, binHz } = spectra(winSlice, sampleRate);
+    if (frames.length === 0) continue;
+
+    const keyRes = detectKey(frames, binHz);
+    const startSec = Math.round((offset / sampleRate) * 10) / 10;
+    const endSec = Math.round((end / sampleRate) * 10) / 10;
+
+    rawWindows.push({
+      startSec,
+      endSec,
+      key: keyRes.key || (keyRes.tonic ? `${keyRes.tonic} ${keyRes.scale || ''}`.trim() : null),
+      note: keyRes.note || keyRes.tonic,
+      mode: keyRes.mode,
+      scale: keyRes.scale,
+      camelot: keyRes.camelot,
+      confidence: keyRes.confidence,
+      tonicPc: keyRes.tonicPc || 0,
+      ragas: keyRes.ragas || []
+    });
+  }
+
+  if (rawWindows.length === 0) {
+    return {
+      duration: totalDuration,
+      hasModulation: false,
+      segmentCount: 0,
+      segments: [],
+      uniqueKeys: []
+    };
+  }
+
+  // Temporal smoothing & contiguous segment merging
+  interface MergedSegment {
+    startSec: number;
+    endSec: number;
+    key: string | null;
+    note: string | null;
+    mode: string | null;
+    scale: string | null;
+    camelot: string | null;
+    confidenceSum: number;
+    count: number;
+    tonicPc: number;
+    ragas: RagaSuggestion[];
+  }
+
+  const merged: MergedSegment[] = [];
+
+  for (let i = 0; i < rawWindows.length; i += 1) {
+    const cur = rawWindows[i];
+    if (!cur.key) continue;
+
+    const last = merged[merged.length - 1];
+    const isSameKey = last && last.key === cur.key;
+
+    if (isSameKey) {
+      last.endSec = cur.endSec;
+      last.confidenceSum += cur.confidence;
+      last.count += 1;
+      if (cur.ragas && cur.ragas.length > 0 && last.ragas.length === 0) {
+        last.ragas = cur.ragas;
+      }
+    } else {
+      // Lookahead check: Ignore 1-frame spurious flutter if adjacent windows match
+      if (last && i + 1 < rawWindows.length && rawWindows[i + 1].key === last.key) {
+        last.endSec = rawWindows[i + 1].endSec;
+        last.confidenceSum += rawWindows[i + 1].confidence;
+        last.count += 1;
+        i += 1; // skip transient flutter
+        continue;
+      }
+
+      merged.push({
+        startSec: cur.startSec,
+        endSec: cur.endSec,
+        key: cur.key,
+        note: cur.note,
+        mode: cur.mode,
+        scale: cur.scale,
+        camelot: cur.camelot,
+        confidenceSum: cur.confidence,
+        count: 1,
+        tonicPc: cur.tonicPc,
+        ragas: cur.ragas
+      });
+    }
+  }
+
+  if (merged.length === 0) {
+    return {
+      duration: totalDuration,
+      hasModulation: false,
+      segmentCount: 0,
+      segments: [],
+      uniqueKeys: []
+    };
+  }
+
+  // Adjust contiguous time boundaries so segments seamlessly tile 0 -> totalDuration
+  merged[0].startSec = 0;
+  for (let i = 0; i < merged.length - 1; i += 1) {
+    const boundary = Math.round(((merged[i].endSec + merged[i + 1].startSec) / 2) * 10) / 10;
+    merged[i].endSec = boundary;
+    merged[i + 1].startSec = boundary;
+  }
+  merged[merged.length - 1].endSec = Math.round(totalDuration * 10) / 10;
+
+  // Filter out tiny noise segments (< 4 seconds unless it is the only segment)
+  const filteredMerged = merged.filter((seg, idx, arr) => {
+    const segDur = seg.endSec - seg.startSec;
+    return arr.length === 1 || segDur >= 4.0;
+  });
+
+  const finalSegmentsList = filteredMerged.length > 0 ? filteredMerged : merged;
+  finalSegmentsList[0].startSec = 0;
+  for (let i = 0; i < finalSegmentsList.length - 1; i += 1) {
+    finalSegmentsList[i].endSec = finalSegmentsList[i + 1].startSec;
+  }
+  finalSegmentsList[finalSegmentsList.length - 1].endSec = Math.round(totalDuration * 10) / 10;
+
+  // Extract unique keys
+  const uniqueKeySet = new Set<string>();
+  finalSegmentsList.forEach((s) => {
+    if (s.key) uniqueKeySet.add(s.key);
+  });
+  const uniqueKeys = Array.from(uniqueKeySet);
+
+  // Assign distinct colors per unique key (brighter for major, darker for minor)
+  const keyColorMap = new Map<string, { color: string; badgeBg: string; textColor: string }>();
+  let majorIdx = 0;
+  let minorIdx = 0;
+
+  uniqueKeys.forEach((k) => {
+    const isMajor = k.toLowerCase().includes('maj');
+    if (isMajor) {
+      keyColorMap.set(k, MAJOR_PALETTE[majorIdx % MAJOR_PALETTE.length]);
+      majorIdx += 1;
+    } else {
+      keyColorMap.set(k, MINOR_PALETTE[minorIdx % MINOR_PALETTE.length]);
+      minorIdx += 1;
+    }
+  });
+
+  const outputSegments: ScaleSegment[] = finalSegmentsList.map((seg, idx) => {
+    const dur = Math.max(0.1, seg.endSec - seg.startSec);
+    const pStart = Math.max(0, Math.min(100, (seg.startSec / totalDuration) * 100));
+    const pWidth = Math.max(0.1, Math.min(100 - pStart, (dur / totalDuration) * 100));
+    const palette = keyColorMap.get(seg.key || '') || (seg.mode === 'maj' ? MAJOR_PALETTE[0] : MINOR_PALETTE[0]);
+
+    let transitionFromPrev = null;
+    if (idx > 0) {
+      const prev = finalSegmentsList[idx - 1];
+      const deltaSt = ((seg.tonicPc - prev.tonicPc + 12) % 12);
+      let shiftLabel = '';
+      let modType = 'Modulation';
+
+      if (deltaSt === 1) {
+        shiftLabel = '+1 st (Half-step lift)';
+        modType = 'Gear-Shift Lift (+1 st)';
+      } else if (deltaSt === 2) {
+        shiftLabel = '+2 st (Whole-step lift)';
+        modType = 'Gear-Shift Lift (+2 st)';
+      } else if (deltaSt === 11) {
+        shiftLabel = '-1 st (Half-step drop)';
+        modType = 'Key Drop (-1 st)';
+      } else if (deltaSt === 10) {
+        shiftLabel = '-2 st (Whole-step drop)';
+        modType = 'Key Drop (-2 st)';
+      } else if (deltaSt === 3 || deltaSt === 9) {
+        shiftLabel = deltaSt === 3 ? '+3 st' : '-3 st';
+        modType = 'Relative Major / Minor Shift';
+      } else if (deltaSt === 7 || deltaSt === 5) {
+        shiftLabel = deltaSt === 7 ? '+7 st (Dominant 5th)' : '+5 st (Subdominant 4th)';
+        modType = 'Circle of Fifths Modulation';
+      } else if (deltaSt === 0 && prev.mode !== seg.mode) {
+        shiftLabel = 'Parallel mode switch';
+        modType = 'Parallel Key Modulation';
+      } else {
+        shiftLabel = `+${deltaSt} st`;
+        modType = `Modulation (+${deltaSt} st)`;
+      }
+
+      transitionFromPrev = {
+        semitoneDelta: deltaSt,
+        shiftLabel,
+        type: modType,
+        camelotShift: prev.camelot && seg.camelot ? `${prev.camelot} ➔ ${seg.camelot}` : undefined
+      };
+    }
+
+    return {
+      startSec: seg.startSec,
+      endSec: seg.endSec,
+      durationSec: dur,
+      percentStart: pStart,
+      percentWidth: pWidth,
+      key: seg.key,
+      note: seg.note,
+      mode: seg.mode,
+      scale: seg.scale,
+      camelot: seg.camelot,
+      confidence: Math.round((seg.confidenceSum / seg.count) * 100) / 100,
+      color: palette.color,
+      badgeBg: palette.badgeBg,
+      textColor: palette.textColor,
+      ragas: seg.ragas || [],
+      transitionFromPrev
+    };
+  });
+
+  return {
+    duration: totalDuration,
+    hasModulation: uniqueKeys.length > 1,
+    segmentCount: outputSegments.length,
+    segments: outputSegments,
+    uniqueKeys
+  };
+}
+
 export const DSP = {
   analyse,
   detectKey,
@@ -1525,6 +1834,7 @@ export const DSP = {
   detectMeter,
   detectTuning,
   detectDroneAndBass,
+  detectScaleModulations,
   fftMagnitudes,
   chromaFromSpectrum,
   suppressHarmonics,
@@ -1540,3 +1850,4 @@ export const DSP = {
   GENRE_DATABASE,
   RECOMMENDED_FFT
 };
+

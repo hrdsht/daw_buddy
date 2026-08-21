@@ -10,7 +10,7 @@ import { parseQuery, hasQuery, matchesQuery } from './search';
 import { findMatches } from './matching';
 import { droneNoteFor } from './drone';
 import { NavigationHistory } from './navigation';
-import { DSP } from './dsp';
+import { DSP, ScaleSegment, ScaleModulationReport } from './dsp';
 import {
   layout as kbLayoutFn,
   highlight as kbHighlightFn,
@@ -69,8 +69,14 @@ if (!savedSurface) {
 }
 applyAppearance(savedAccent, savedSurface, savedStyle);
 
-// Topbar button: quick flip between dark and light (preserves active theme style and accent).
-themeToggleEl.addEventListener('click', () => {
+// Topbar button: quick flip between dark and light (preserves active theme style and accent) or open Theme Lab if clicking gear
+themeToggleEl.addEventListener('click', (e: MouseEvent) => {
+  const target = e.target as HTMLElement;
+  if (target && target.closest('.pill-gear-hint')) {
+    e.stopPropagation();
+    toggleThemeComicBubble();
+    return;
+  }
   const next = currentSurface() === 'light' ? 'dark' : 'light';
   applyAppearance(document.body.dataset.accent, next, currentThemeStyle());
 });
@@ -1409,6 +1415,182 @@ function playRagaSequence(tonicPc: number, aarohanaDegrees: number[], avarohanaD
   return true;
 }
 
+/* ==================================================================
+   Scale Change & Modulation Detector Functions
+   ================================================================== */
+
+const projectScaleModCache = new Map<string, ScaleModulationReport>();
+
+function fmtClock(sec: number): string {
+  if (!Number.isFinite(sec)) return '0:00';
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function renderScaleModBar(report: ScaleModulationReport | null, entry?: any) {
+  const barEl = $('scaleModBar');
+  if (!barEl) return;
+
+  if (!report || !report.segments || report.segments.length === 0) {
+    barEl.style.display = 'none';
+    barEl.innerHTML = '';
+    return;
+  }
+
+  barEl.style.display = 'flex';
+  barEl.innerHTML = '';
+
+  report.segments.forEach((seg, idx) => {
+    const segEl = el('div', 'scale-mod-segment');
+    segEl.style.width = `${seg.percentWidth}%`;
+    segEl.style.backgroundColor = seg.badgeBg;
+    segEl.style.borderBottom = `2px solid ${seg.color}`;
+
+    let titleText = `Section ${idx + 1}: ${seg.key || seg.note || 'Scale'} (${fmtClock(seg.startSec)} – ${fmtClock(seg.endSec)})`;
+    if (seg.transitionFromPrev) {
+      titleText += ` · ${seg.transitionFromPrev.type} (${seg.transitionFromPrev.shiftLabel})`;
+    }
+    titleText += ' — Click to view relative raagas & audition';
+    segEl.title = titleText;
+
+    const label = el('span', 'scale-mod-segment__label');
+    label.style.color = seg.textColor;
+
+    const keySpan = el('span', 'scale-mod-segment__key', seg.key || seg.note || 'Scale');
+    const timeSpan = el('span', 'scale-mod-segment__time', `${fmtClock(seg.startSec)}–${fmtClock(seg.endSec)}`);
+    label.append(keySpan, timeSpan);
+
+    if (seg.transitionFromPrev) {
+      const tag = el('span', 'scale-mod-segment__tag', seg.transitionFromPrev.shiftLabel);
+      tag.title = seg.transitionFromPrev.type;
+      label.append(tag);
+    }
+
+    segEl.append(label);
+
+    segEl.addEventListener('click', (e: MouseEvent) => {
+      e.stopPropagation();
+      Player.seek(seg.startSec);
+      openScaleModulationModal(seg, report, entry);
+    });
+
+    barEl.append(segEl);
+  });
+}
+
+function openScaleModulationModal(segment: ScaleSegment, report: ScaleModulationReport, entry?: any) {
+  document.querySelectorAll('.scale-mod-modal-overlay').forEach((n) => n.remove());
+
+  const overlay = el('div', 'scale-mod-modal-overlay');
+  const dialog = el('div', 'scale-mod-modal');
+
+  // Header
+  const header = el('div', 'scale-mod-modal__header');
+  const titles = el('div');
+  const title = el('h2', 'scale-mod-modal__title');
+  title.innerHTML = `🎼 Scale &amp; Modulation Inspector <span style="font-size:13px; font-weight:normal; opacity:0.85; color:${segment.textColor};">(${segment.key || segment.note})</span>`;
+  const sub = el('p', 'scale-mod-modal__subtitle', `Section Timestamp: ${fmtClock(segment.startSec)} – ${fmtClock(segment.endSec)} (${Math.round(segment.durationSec)}s) · Track Total: ${Math.round(report.duration)}s`);
+  titles.append(title, sub);
+
+  const closeBtn = el('button', 'scale-mod-modal__close', '✕');
+  closeBtn.title = 'Close (Esc)';
+  closeBtn.addEventListener('click', () => overlay.remove());
+  header.append(titles, closeBtn);
+  dialog.append(header);
+
+  // Body
+  const body = el('div', 'scale-mod-modal__body');
+
+  // Main Card
+  const mainCard = el('div', 'scale-mod-inspect-card');
+  const row1 = el('div', 'scale-mod-inspect__row');
+
+  const badge = el('div', 'scale-mod-pill-badge');
+  badge.style.background = segment.badgeBg;
+  badge.style.color = segment.textColor;
+  badge.style.border = `1px solid ${segment.color}`;
+  badge.innerHTML = `<strong>${segment.key || segment.note || 'Detected Scale'}</strong> ${segment.camelot ? `(${segment.camelot})` : ''} · ${segment.mode === 'maj' ? '☀️ Bright Major' : '🌙 Deep Minor'}`;
+
+  const auditionBtn = el('button', 'pill pill--solid pill--sm', '▶ Audition Section');
+  auditionBtn.title = 'Play audio starting at this section timestamp';
+  auditionBtn.addEventListener('click', () => {
+    Player.seek(segment.startSec);
+    Player.toggle();
+  });
+
+  row1.append(badge, auditionBtn);
+  mainCard.append(row1);
+
+  // Transition banner if this section modulated from previous
+  if (segment.transitionFromPrev) {
+    const banner = el('div');
+    banner.style.padding = '8px 12px';
+    banner.style.borderRadius = '6px';
+    banner.style.background = 'color-mix(in srgb, var(--amber) 15%, transparent)';
+    banner.style.border = '1px solid var(--amber)';
+    banner.style.fontSize = '12px';
+    banner.style.color = 'var(--text)';
+    banner.innerHTML = `⚡ <strong>${segment.transitionFromPrev.type}</strong>: <code>${segment.transitionFromPrev.shiftLabel}</code> ${segment.transitionFromPrev.camelotShift ? `· Camelot Shift: <strong>${segment.transitionFromPrev.camelotShift}</strong>` : ''}`;
+    mainCard.append(banner);
+  }
+
+  body.append(mainCard);
+
+  // Relative Indian Classical Raagas & World Scales section
+  const raagasHead = el('div');
+  raagasHead.style.display = 'flex';
+  raagasHead.style.alignItems = 'center';
+  raagasHead.style.justifyContent = 'space-between';
+  raagasHead.style.marginTop = '4px';
+
+  const raagasTitle = el('h3', null, 'Relative Raagas & Scales in this Section');
+  raagasTitle.style.margin = '0';
+  raagasTitle.style.fontSize = '13.5px';
+  raagasTitle.style.color = 'var(--text)';
+  raagasHead.append(raagasTitle);
+  body.append(raagasHead);
+
+  if (segment.ragas && segment.ragas.length > 0) {
+    const list = el('div', 'scale-mod-raagas-list');
+    segment.ragas.slice(0, 6).forEach((raga) => {
+      const item = el('div', 'scale-mod-raga-item');
+      const itemHead = el('div', 'scale-mod-raga-item__head');
+      const name = el('span', 'scale-mod-raga-item__name', raga.name);
+      const pct = el('span', 'scale-mod-raga-item__pct', `${raga.matchPercent}% match`);
+      itemHead.append(name, pct);
+
+      const sargam = el('div', 'scale-mod-raga-item__sargam', `Aarohana: ${raga.aarohana || raga.sargam || '—'}`);
+      const meta = el('div', 'scale-mod-raga-item__meta', `Thaat: ${raga.thaat} · Mood: ${raga.mood || 'Classic'} · Time: ${raga.time || 'Anytime'}`);
+
+      item.append(itemHead, sargam, meta);
+      list.append(item);
+    });
+    body.append(list);
+  } else {
+    const emptyMsg = el('p', 'muted', 'No specific regional scale suggestions mapped for this window.');
+    emptyMsg.style.fontSize = '12px';
+    body.append(emptyMsg);
+  }
+
+  dialog.append(body);
+  overlay.append(dialog);
+
+  overlay.addEventListener('click', (e: MouseEvent) => {
+    if (e.target === overlay) overlay.remove();
+  });
+
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      overlay.remove();
+      window.removeEventListener('keydown', onKey);
+    }
+  };
+  window.addEventListener('keydown', onKey);
+
+  document.body.append(overlay);
+}
+
 function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
   document.querySelectorAll('.camelot-modal-overlay').forEach((node) => node.remove());
 
@@ -2731,6 +2913,97 @@ function renderProjectPage() {
   metroGroup.append(metroBtn, metroSigWrap);
   actions.append(metroGroup);
   updateMetroUI();
+
+  /* Scale Modulation / Change Detector Button */
+  const cachedScaleMod = projectScaleModCache.get(entry.path) || null;
+  const scaleModBtn = el('button', `pill pill--scale-mod ${cachedScaleMod ? 'is-on' : ''}`);
+  scaleModBtn.innerHTML = cachedScaleMod
+    ? `🎼 Scale changes (${cachedScaleMod.uniqueKeys.length} ${cachedScaleMod.uniqueKeys.length === 1 ? 'key' : 'keys'})`
+    : '🎼 Detect scale changes';
+  scaleModBtn.title = 'Deliberately scan for scale changes, key modulations, and relative raagas across track timeline';
+
+  // If there is already a cached report for this project, display the bar above the waveform
+  renderScaleModBar(cachedScaleMod, entry);
+
+  scaleModBtn.addEventListener('click', async () => {
+    scaleModBtn.classList.add('is-loading');
+    scaleModBtn.textContent = '⏳ Analyzing scale changes...';
+
+    try {
+      let channelData: Float32Array | null = null;
+      let sampleRate = 44100;
+
+      // 1. Check if audio is already decoded in player for this project
+      const currentLoaded = Player.getCurrent();
+      const decodedBuf = Player.getDecoded();
+
+      if (decodedBuf && currentLoaded && (currentLoaded.project === entry.name || currentLoaded.path.includes(entry.name) || currentLoaded.path.startsWith(entry.path))) {
+        channelData = decodedBuf.getChannelData(0);
+        sampleRate = decodedBuf.sampleRate;
+      } else {
+        // 2. Otherwise find the main render/audio file in this project
+        const renderRes = await window.api.findRenders(
+          entry.sessionPath,
+          entry.root,
+          stemsFolderFor(entry),
+          siblingsOf(entry)
+        );
+
+        let audioFileToAnalyze = renderRes.renders && renderRes.renders.length > 0
+          ? renderRes.renders[0].path
+          : null;
+
+        if (!audioFileToAnalyze && entry.sessionPath) {
+          const siblings = siblingsOf(entry);
+          const firstAudio = siblings.find((s: string) => /\.(wav|mp3|flac|aif|aiff)$/i.test(s));
+          if (firstAudio) audioFileToAnalyze = firstAudio;
+        }
+
+        if (!audioFileToAnalyze) {
+          toast('Scale Change Detector', 'No audio file or bounce found in this project to analyze.');
+          scaleModBtn.classList.remove('is-loading');
+          scaleModBtn.innerHTML = '🎼 Detect scale changes';
+          return;
+        }
+
+        const bytes = await window.api.readMedia(audioFileToAnalyze);
+        const ac = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const decoded = await ac.decodeAudioData(bytes);
+        channelData = decoded.getChannelData(0);
+        sampleRate = decoded.sampleRate;
+      }
+
+      if (!channelData || channelData.length === 0) {
+        toast('Scale Change Detector', 'Could not decode audio samples for scale change analysis.', true);
+        scaleModBtn.classList.remove('is-loading');
+        scaleModBtn.innerHTML = '🎼 Detect scale changes';
+        return;
+      }
+
+      // Run sliding-window scale modulation analysis
+      const report = DSP.detectScaleModulations(channelData, sampleRate);
+      projectScaleModCache.set(entry.path, report);
+
+      scaleModBtn.classList.remove('is-loading');
+      scaleModBtn.classList.add('is-on');
+      scaleModBtn.innerHTML = `🎼 Scale changes (${report.uniqueKeys.length} ${report.uniqueKeys.length === 1 ? 'key' : 'keys'})`;
+
+      renderScaleModBar(report, entry);
+
+      if (report.hasModulation) {
+        toast('Scale Changes Detected', `Found modulations: ${report.uniqueKeys.join(' ➔ ')}! Click sections above waveform to inspect.`);
+      } else {
+        toast('Scale Analysis', `Steady tonal center detected in ${report.uniqueKeys[0] || 'track'}. Scale line displayed above waveform.`);
+      }
+    } catch (err: any) {
+      console.error('Scale modulation analysis failed:', err);
+      toast('Scale Detector Error', err.message || String(err), true);
+      scaleModBtn.classList.remove('is-loading');
+      scaleModBtn.innerHTML = '🎼 Detect scale changes';
+    }
+  });
+
+  actions.append(scaleModBtn);
 
   Player.onChange(() => {
     updateMetroUI();
@@ -8803,6 +9076,7 @@ Player.onChange(({ path: playing }) => {
 window.api.onBounce((bounce) => {
   toast('New bounce', `${bounce.label} · ${bounce.formats.join(' + ').toUpperCase()}`);
   if (view === 'list') refresh();
+  else if (view === 'project') render();
 });
 
 window.api.onSilenceProgress(({ done, total, phase }) => {

@@ -122,14 +122,7 @@ html, body.mini-body {
 }
 
 .mini-playhead {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 2px;
-  background: var(--amber, #9dde64);
-  box-shadow: 0 0 6px var(--amber, #9dde64);
-  pointer-events: none;
+  display: none;
 }
 
 .mini-controls {

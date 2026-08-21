@@ -48,7 +48,8 @@ Whether you are mixing a multi-platinum album or producing your very first beat,
 - 🎹 **Scale & Raaga Detector**: Drop any raw audio sample or MIDI file to instantly detect key, scale, tuning deviation in cents, and discover matching cultural traditions.
 - 🎼 **Live Phrase Audition & Drag-to-DAW MIDI**: Audition authentic ascending (*Aaroh*) and descending (*Avaroh*) melodic phrases in real-time, and drag SMF MIDI guide tracks directly into your DAW's piano roll.
 - ❓ **Interactive Tool Tutorials**: Built-in non-intrusive step-by-step interactive walkthrough tours for every studio tool, re-playable anytime with one click.
-- 🎨 **Comic Speech Bubble Theme Lab**: Right-click the theme button to choose from Dark, Light, AMOLED, Minimalist, Ableton-style, and Studio Classic surfaces with 14+ accent colors.
+- 🎨 **Comic Speech Bubble Theme Lab**: Right-click the theme button (or click its `⚙` gear) to choose from Dark, Light, AMOLED, Minimalist, Ableton-style, and Studio Classic surfaces with 14+ accent colors.
+- ⚙️ **Visual Settings & Right-Click Indicators**: Buttons and pills with advanced settings (like **Theme** for Theme Lab and **Verb** for Reverb DSP shaping) feature a subtle gear icon (`⚙`) and respond to both right-click and direct gear clicks to reveal deep parameter controls.
 
 <p align="center">
   <img src="docs/assets/daw-buddy-randomizer.png" alt="Producer Randomizer & Genre Challenge" width="48%" />
@@ -67,6 +68,7 @@ Whether you are mixing a multi-platinum album or producing your very first beat,
 - **🎙️ Vocal Reconstruction Suite**: Split continuous vocal takes into isolated blocks for third-party pitch-correction or voice transformation (Melodyne, Auto-Tune, ElevenLabs), and re-assemble them with sample-accurate timing.
 - **💾 Duplicate Sample Auditor**: Reclaims drive space via non-destructive hard-linking.
 - **⚡ Zero-Friction Export**: Drag `[ WAV ]`, `[ MP3 ]`, and `[ FLAC ]` pills directly from the session browser straight into Discord, Telegram, or your DAW tracks.
+- **🗕 Floating Mini Player with Loop & DAW Drag**: Compact floating companion with interactive waveform scrubbing, continuous track repeat (`🔁 Repeat`), DAW minimization shortcut, and direct track drag.
 
 
 ## ⬇️ Download & Install (easiest)

@@ -30,6 +30,7 @@ const Player = (() => {
   const playBtn = document.getElementById('playPause');
   const volumeEl = document.getElementById('volume') as HTMLInputElement;
   const metroBtn = document.getElementById('metroBtn');
+  const repeatBtn = document.getElementById('repeatBtn');
   const verbBtn = document.getElementById('verbBtn');
   const reverbPanel = document.getElementById('reverbPanel');
   const reverbReset = document.getElementById('reverbReset');
@@ -67,6 +68,7 @@ const Player = (() => {
   let listeners = [];
   let loadSerial = 0;
   let reverbEnabled = false;
+  let repeatEnabled = false;
   let impulseTimer = null;
   let reverbSettings = loadReverbSettings();
 
@@ -368,11 +370,23 @@ const Player = (() => {
     if (reverbInputs.decay) reverbInputs.decay.focus();
   }
 
-  verbBtn.addEventListener('contextmenu', (event) => {
-    event.preventDefault();
-    if (reverbPanel.hidden) openReverbPanel();
-    else closeReverbPanel();
-  });
+  if (verbBtn) {
+    verbBtn.addEventListener('click', (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (target && target.closest('.chip-gear-hint')) {
+        event.stopPropagation();
+        event.preventDefault();
+        if (reverbPanel.hidden) openReverbPanel();
+        else closeReverbPanel();
+      }
+    }, { capture: true });
+
+    verbBtn.addEventListener('contextmenu', (event) => {
+      event.preventDefault();
+      if (reverbPanel.hidden) openReverbPanel();
+      else closeReverbPanel();
+    });
+  }
 
   Object.entries(reverbInputs).forEach(([name, input]) => {
     input.addEventListener('input', () => updateReverbFromControls(name));
@@ -637,6 +651,7 @@ const Player = (() => {
       decoded = nextDecoded;
       peaks = buildPeaks(nextDecoded, 900);
       draw();
+      broadcastState();
     } catch (err) {
       if (serial === loadSerial) timeEl.textContent = 'Cannot decode this format';
     }
@@ -822,9 +837,14 @@ const Player = (() => {
     const elapsedSec = (now - demoStartTime) / 1000;
     demoProgress = elapsedSec / DEMO_DURATION;
     if (demoProgress >= 1) {
-      demoProgress = 0;
-      stopDemoPlayback();
-      return;
+      if (repeatEnabled) {
+        demoProgress = 0;
+        demoStartTime = performance.now();
+      } else {
+        demoProgress = 0;
+        stopDemoPlayback();
+        return;
+      }
     }
     if (timeEl) {
       timeEl.textContent = `${clock(demoProgress * DEMO_DURATION)} / ${clock(DEMO_DURATION)}`;
@@ -838,8 +858,23 @@ const Player = (() => {
     // A plain play is always the whole file — drop any trim region first.
     clearRegion();
     if (audioContext && audioContext.state === 'suspended') audioContext.resume();
+    audio.loop = repeatEnabled;
     audio.play().catch(() => {
       /* a load was cancelled by another load — harmless */
+    });
+  }
+
+  function setRepeat(enabled: boolean) {
+    repeatEnabled = Boolean(enabled);
+    audio.loop = repeatEnabled;
+    if (repeatBtn) repeatBtn.classList.toggle('is-on', repeatEnabled);
+    emit();
+    broadcastState();
+  }
+
+  if (repeatBtn) {
+    repeatBtn.addEventListener('click', () => {
+      setRepeat(!repeatEnabled);
     });
   }
 
@@ -897,13 +932,14 @@ const Player = (() => {
   function broadcastState() {
     if (window.api && window.api.broadcastPlayerState) {
       window.api.broadcastPlayerState({
-        playing: !audio.paused,
-        name: current ? current.name : 'No audio loaded',
+        playing: !audio.paused || isDemoPlaying,
+        name: current ? current.name : (isDemoPlaying ? 'Demo Track' : 'No audio loaded'),
         project: current ? current.project || current.where || '' : '',
         path: current ? current.path : '',
-        currentTime: audio.currentTime,
-        duration: duration(),
-        peaks: peaks ? Array.from(peaks).slice(0, 160) : null,
+        currentTime: current ? audio.currentTime : (demoProgress * DEMO_DURATION),
+        duration: current ? duration() : DEMO_DURATION,
+        peaks: peaks ? Array.from(peaks) : (isDemoPlaying || !current ? Array.from(demoPeaks) : null),
+        repeat: repeatEnabled,
         reverb: reverbEnabled,
         drone: Boolean(droneOsc)
       });
@@ -1006,6 +1042,11 @@ const Player = (() => {
     broadcastState();
   });
   audio.addEventListener('ended', () => {
+    if (repeatEnabled) {
+      audio.currentTime = 0;
+      audio.play().catch(() => {});
+      return;
+    }
     lastMetronomeTickIndex = -1;
     playBtn.innerHTML = '&#9654;';
     stopTick();
@@ -1034,6 +1075,8 @@ const Player = (() => {
           draw();
           broadcastState();
         }
+      } else if (cmd === 'toggleRepeat') {
+        setRepeat(typeof arg === 'boolean' ? arg : !repeatEnabled);
       } else if (cmd === 'toggleVerb') {
         setReverb(!reverbEnabled);
         if (verbBtn) verbBtn.classList.toggle('is-on', reverbEnabled);
@@ -1051,6 +1094,8 @@ const Player = (() => {
   return {
     load,
     toggle,
+    setRepeat,
+    isRepeat: () => repeatEnabled,
     setReverb,
     setSoftClip,
     startDrone,

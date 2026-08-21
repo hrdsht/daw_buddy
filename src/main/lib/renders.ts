@@ -69,7 +69,7 @@ const SKIP = new Set([
   'audio files'
 ]);
 
-const VERSION = /^(.*?)[ _.-]v?(\d+)$/i;
+const VERSION = /^(.*?)[ _.-]?(?:v?(\d+)|\((\d+)\))$/i;
 
 const STEM_WORDS = [
   'instrumental', 'vocals', 'vocal', 'bass', 'drums', 'drum', 'synths',
@@ -113,7 +113,11 @@ async function findRenders(sessionPath, root, extraFolders = [], siblings = []) 
     // "Song_2.wav" belongs to "Song.als" when there's no "Song_2.als".
     const base = flatten(parseVersion(file.stem).base);
     const matches = flat === wanted || base === wanted || flat.startsWith(wanted);
-    if (!matches) return false;
+    
+    // Audio files sitting directly inside this project's own folder/subfolder belong to this project
+    const isInsideProject = file.where === 'This folder' || isInsideOrEqual(path.dirname(file.path), projectFolder);
+
+    if (!matches && !isInsideProject) return false;
 
     // Hand it over if a sibling session claims it more specifically.
     return !rivals.some((rival) => flat === rival || flat.startsWith(rival));
@@ -329,7 +333,11 @@ function groupRenders(files) {
 function parseVersion(stem) {
   const match = stem.match(VERSION);
   if (!match) return { base: stem, version: null };
-  return { base: match[1], version: Number(match[2]) };
+  const v = match[2] || match[3];
+  return {
+    base: match[1].replace(/[ _.-]+$/, ''),
+    version: v !== undefined ? Number(v) : null
+  };
 }
 
 function detectPart(stem) {

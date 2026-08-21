@@ -34,7 +34,7 @@ const STEM_WORDS = [
   'other'
 ];
 
-const VERSION = /^(.*?)[ _.-]v?(\d+)$/i;
+const VERSION = /^(.*?)[ _.-]?(?:v?(\d+)|\((\d+)\))$/i;
 
 const SKIP_FOLDERS = new Set(['backup', 'samples', 'freeze', 'ableton project info']);
 
@@ -143,7 +143,11 @@ function groupRenders(files) {
 function parseVersion(stem) {
   const match = stem.match(VERSION);
   if (!match) return { base: stem, version: null };
-  return { base: match[1], version: Number(match[2]) };
+  const v = match[2] || match[3];
+  return {
+    base: match[1].replace(/[ _.-]+$/, ''),
+    version: v !== undefined ? Number(v) : null
+  };
 }
 
 // "Demo_Lead Synth" -> "lead". Used to label stems.

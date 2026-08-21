@@ -49,8 +49,9 @@
             <button id="miniToggle" class="pill" title="Open floating Mini Player">
               Mini player
             </button>
-            <button id="themeToggle" class="pill theme-toggle" title="Change colour theme (Right-click for Theme Lab)">
-              Light mode
+            <button id="themeToggle" class="pill theme-toggle has-gear-hint" title="Change colour theme · Right-click or click ⚙ for Theme Lab">
+              <span class="theme-text">Light mode</span>
+              <span class="pill-gear-hint" id="themeGearHint" title="Theme Lab (Right-click or click ⚙)">⚙</span>
             </button>
             <button id="favFilter" class="pill" title="Favourites only">
               Favourites
@@ -77,7 +78,10 @@
           </div>
         </div>
 
-        <canvas id="wave" class="wave" height="88"></canvas>
+        <div class="player__middle">
+          <div id="scaleModBar" class="project-scale-mod-bar" style="display: none;"></div>
+          <canvas id="wave" class="wave" height="88"></canvas>
+        </div>
 
         <div class="player__right">
           <button id="metroBtn" class="chip-btn" title="Audio-synced metronome click">
@@ -88,12 +92,13 @@
           </button>
           <button
             id="verbBtn"
-            class="chip-btn"
-            title="Click to toggle reverb · Right-click to shape it"
+            class="chip-btn has-gear-hint"
+            title="Click to toggle reverb · Right-click or click ⚙ for Reverb settings"
             aria-haspopup="dialog"
             aria-expanded="false"
           >
-            Verb
+            <span>Verb</span>
+            <span class="chip-gear-hint" id="verbGearHint" title="Reverb settings (Right-click or click ⚙)">⚙</span>
           </button>
           <button id="clipBtn" class="chip-btn" title="Soft clipper">
             Clip

@@ -386,6 +386,10 @@ ipcMain.on('player:command', (event, { cmd, arg }) => {
       mainWindow.show();
       mainWindow.focus();
     }
+  } else if (cmd === 'minimizeMain') {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.minimize();
+    }
   } else if (cmd === 'closeMini') {
     if (miniPlayerWindow && !miniPlayerWindow.isDestroyed()) {
       miniPlayerWindow.hide();

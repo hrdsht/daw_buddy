@@ -216,7 +216,13 @@ export function applyAppearance(accent?: string, surface?: string, themeStyle?: 
   const themeToggleEl = $('themeToggle');
   const light = surface === 'light';
   if (themeToggleEl) {
-    themeToggleEl.textContent = light ? 'Dark mode' : 'Light mode';
+    const textSpan = themeToggleEl.querySelector('.theme-text');
+    const label = light ? 'Dark mode' : 'Light mode';
+    if (textSpan) {
+      textSpan.textContent = label;
+    } else {
+      themeToggleEl.innerHTML = `<span class="theme-text">${label}</span><span class="pill-gear-hint" id="themeGearHint" title="Theme Lab (Right-click or click ⚙)">⚙</span>`;
+    }
     themeToggleEl.setAttribute('aria-pressed', String(light));
   }
 

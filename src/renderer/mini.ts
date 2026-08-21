@@ -9,11 +9,11 @@ const titleEl = document.getElementById('miniTitle') as HTMLElement;
 const projectEl = document.getElementById('miniProject') as HTMLElement;
 const timeEl = document.getElementById('miniTime') as HTMLElement;
 const playBtn = document.getElementById('miniPlayPause') as HTMLButtonElement;
-const verbBtn = document.getElementById('miniVerb') as HTMLButtonElement;
-const droneBtn = document.getElementById('miniDrone') as HTMLButtonElement;
+const repeatBtn = document.getElementById('miniRepeat') as HTMLButtonElement;
 const dragBtn = document.getElementById('miniDragBtn') as HTMLButtonElement;
-const closeBtn = document.getElementById('miniClose') as HTMLButtonElement;
+const minimizeMainBtn = document.getElementById('miniMinimizeMain') as HTMLButtonElement;
 const expandBtn = document.getElementById('miniExpand') as HTMLButtonElement;
+const closeBtn = document.getElementById('miniClose') as HTMLButtonElement;
 const waveWrap = document.getElementById('miniWaveWrap') as HTMLElement;
 const canvas = document.getElementById('miniWave') as HTMLCanvasElement;
 const playhead = document.getElementById('miniPlayhead') as HTMLElement;
@@ -22,7 +22,45 @@ const ctx = canvas.getContext('2d');
 let currentTrackPath = '';
 let currentDuration = 0;
 let currentPeaks: number[] | null = null;
+let currentProgress = 0;
 let isPlaying = false;
+
+function generateDemoPeaks(buckets = 300): number[] {
+  const out: number[] = new Array(buckets);
+  for (let i = 0; i < buckets; i++) {
+    const norm = i / buckets;
+    let env = 0.5;
+    if (norm < 0.15) {
+      env = 0.2 + 0.6 * (norm / 0.15);
+    } else if (norm < 0.35) {
+      env = 0.65 + 0.15 * Math.sin(norm * 40);
+    } else if (norm < 0.55) {
+      env = 0.85 + 0.12 * Math.cos(norm * 50);
+    } else if (norm < 0.7) {
+      env = 0.45 + 0.2 * Math.sin(norm * 30);
+    } else {
+      env = 0.3 + 0.3 * (1 - norm);
+    }
+    out[i] = Math.max(0.04, Math.min(0.98, env * (0.4 + 0.6 * Math.abs(Math.sin(i * 0.7)))));
+  }
+  return out;
+}
+
+const fallbackDemoPeaks = generateDemoPeaks(300);
+
+let cachedAmberHex = '';
+let cachedAmberTime = 0;
+function getAmberColor(): string {
+  const now = Date.now();
+  if (!cachedAmberHex || now - cachedAmberTime > 1000) {
+    cachedAmberHex =
+      (typeof window !== 'undefined'
+        ? getComputedStyle(document.body).getPropertyValue('--amber').trim()
+        : '') || '#00f0ff';
+    cachedAmberTime = now;
+  }
+  return cachedAmberHex;
+}
 
 function formatTime(sec: number): string {
   if (!sec || isNaN(sec)) return '0:00';
@@ -49,52 +87,69 @@ function drawWaveform(peaks: number[] | null, progress: number) {
   const mid = height / 2;
 
   // Center line
-  ctx.strokeStyle = isLight ? 'rgba(0, 0, 0, 0.14)' : 'rgba(255, 255, 255, 0.1)';
+  ctx.strokeStyle = isLight ? 'rgba(0, 0, 0, 0.14)' : 'rgba(255, 255, 255, 0.08)';
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(0, mid);
   ctx.lineTo(width, mid);
   ctx.stroke();
 
-  if (!peaks || peaks.length === 0) return;
+  const effectivePeaks = (peaks && peaks.length > 0) ? peaks : fallbackDemoPeaks;
+  if (!effectivePeaks || effectivePeaks.length === 0) return;
 
-  const playedX = width * progress;
+  const playedX = width * Math.max(0, Math.min(1, progress));
 
-  // Symmetric waveform shape
-  const len = peaks.length;
+  // Sample-accurate symmetric waveform shape
+  const path = new Path2D();
+  const len = effectivePeaks.length;
   const step = width / Math.max(1, len - 1);
-  const amp = mid * 0.9;
+  const amp = mid * 0.92;
 
-  ctx.beginPath();
-  ctx.moveTo(0, mid - Math.max(0.02, peaks[0]) * amp);
+  // Top half: 0 -> len - 1
+  path.moveTo(0, mid - Math.max(0.015, effectivePeaks[0]) * amp);
   for (let i = 1; i < len; i += 1) {
     const x = i * step;
-    const y = mid - Math.max(0.02, peaks[i]) * amp;
-    ctx.lineTo(x, y);
+    const y = mid - Math.max(0.015, effectivePeaks[i]) * amp;
+    path.lineTo(x, y);
   }
+
+  // Bottom half: len - 1 -> 0
   for (let i = len - 1; i >= 0; i -= 1) {
     const x = i * step;
-    const y = mid + Math.max(0.02, peaks[i]) * amp;
-    ctx.lineTo(x, y);
+    const y = mid + Math.max(0.015, effectivePeaks[i]) * amp;
+    path.lineTo(x, y);
   }
-  ctx.closePath();
+  path.closePath();
 
   // Unplayed background wave
-  ctx.fillStyle = isLight ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.22)';
-  ctx.fill();
+  ctx.save();
+  ctx.fillStyle = isLight ? 'rgba(0, 0, 0, 0.18)' : 'rgba(255, 255, 255, 0.22)';
+  ctx.fill(path);
+  ctx.restore();
 
-  // Played progress wave (clipped)
+  // Played progress wave (clipped to left of playhead)
   if (playedX > 0) {
     ctx.save();
     ctx.beginPath();
     ctx.rect(0, 0, playedX, height);
     ctx.clip();
-    const amberColor = getComputedStyle(document.body).getPropertyValue('--amber').trim() || '#00f0ff';
+    const amberColor = getAmberColor();
     ctx.fillStyle = amberColor;
-    ctx.fill();
+    ctx.fill(path);
     ctx.restore();
   }
+
+  // Playhead line
+  ctx.strokeStyle = isLight ? '#121714' : '#f3f2f0';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(playedX, 1);
+  ctx.lineTo(playedX, height - 1);
+  ctx.stroke();
 }
+
+// Initial draw with fallback waveform
+drawWaveform(currentPeaks, currentProgress);
 
 // Receive sync updates from main process
 if (window.api && window.api.onPlayerSync) {
@@ -109,17 +164,15 @@ if (window.api && window.api.onPlayerSync) {
       isPlaying = data.playing;
       playBtn.textContent = isPlaying ? '⏸' : '▶';
     }
-    if (typeof data.reverb === 'boolean') {
-      verbBtn.classList.toggle('is-on', data.reverb);
-    }
-    if (typeof data.drone === 'boolean') {
-      droneBtn.classList.toggle('is-on', data.drone);
+    if (typeof data.repeat === 'boolean' && repeatBtn) {
+      repeatBtn.classList.toggle('is-on', data.repeat);
     }
     if (typeof data.currentTime === 'number') {
       timeEl.textContent = `${formatTime(data.currentTime)} / ${formatTime(currentDuration)}`;
-      const progress = currentDuration > 0 ? data.currentTime / currentDuration : 0;
-      playhead.style.left = `${Math.min(100, Math.max(0, progress * 100))}%`;
-      drawWaveform(currentPeaks, progress);
+      currentProgress = currentDuration > 0 ? data.currentTime / currentDuration : 0;
+      drawWaveform(currentPeaks, currentProgress);
+    } else {
+      drawWaveform(currentPeaks, currentProgress);
     }
   });
 }
@@ -131,17 +184,21 @@ playBtn.addEventListener('click', () => {
   }
 });
 
-verbBtn.addEventListener('click', () => {
-  if (window.api && window.api.sendPlayerCommand) {
-    window.api.sendPlayerCommand('toggleVerb');
-  }
-});
+if (repeatBtn) {
+  repeatBtn.addEventListener('click', () => {
+    if (window.api && window.api.sendPlayerCommand) {
+      window.api.sendPlayerCommand('toggleRepeat');
+    }
+  });
+}
 
-droneBtn.addEventListener('click', () => {
-  if (window.api && window.api.sendPlayerCommand) {
-    window.api.sendPlayerCommand('toggleDrone');
-  }
-});
+if (minimizeMainBtn) {
+  minimizeMainBtn.addEventListener('click', () => {
+    if (window.api && window.api.sendPlayerCommand) {
+      window.api.sendPlayerCommand('minimizeMain');
+    }
+  });
+}
 
 expandBtn.addEventListener('click', () => {
   if (window.api && window.api.sendPlayerCommand) {
@@ -181,5 +238,5 @@ dragBtn.addEventListener('dragstart', async (e: DragEvent) => {
 });
 
 window.addEventListener('resize', () => {
-  drawWaveform(currentPeaks, 0);
+  drawWaveform(currentPeaks, currentProgress);
 });
