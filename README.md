@@ -374,12 +374,7 @@ and design decisions.
 
 If DAW Buddy saves you hours in your creative workflow, consider buying us a coffee to support continued open-source development:
 
-<p align="left">
-  <a href="https://buymeacoffee.com/ba55ick" target="_blank">
-    <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy BA55ICK A Coffee" style="height: 48px !important; width: 175px !important;" />
-  </a>
-  &nbsp;&nbsp;
-  <a href="https://buymeacoffee.com/ksshreyas" target="_blank">
-    <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Shreyas A Coffee" style="height: 48px !important; width: 175px !important;" />
-  </a>
-</p>
+| **BA55ICK** *(Vision & Lead Creator)* | **Shreyas Bhat** *(Engineering & Architecture)* |
+| :---: | :---: |
+| <a href="https://buymeacoffee.com/ba55ick" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy BA55ICK A Coffee" height="44" width="160" /></a> | <a href="https://buymeacoffee.com/ksshreyas" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Shreyas A Coffee" height="44" width="160" /></a> |
+| [☕ buymeacoffee.com/ba55ick](https://buymeacoffee.com/ba55ick) | [☕ buymeacoffee.com/ksshreyas](https://buymeacoffee.com/ksshreyas) |
