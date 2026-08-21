@@ -94,6 +94,10 @@ Then run it:
 
 > Installers are **unsigned** for now, so that one-time OS warning is expected. Code signing is planned — see `docs/proposals/0008-code-signing.md`.
 
+> [!NOTE]
+> **📢 Help Test macOS & Linux Builds!**
+> DAW Buddy has been developed and tested thoroughly on **Windows 10/11**. While **macOS** (*Apple Silicon / Intel*) and **Linux** (*AppImage, .deb, .rpm*) cross-platform engines are fully implemented, we'd love community testing and feedback! If you run DAW Buddy on a Mac or Linux machine, please test your workflows and file any suggestions or findings in [GitHub Issues](https://github.com/hrdsht/daw_buddy/issues).
+
 ---
 
 ## 🛠 Run from source (for developers)
