@@ -59,7 +59,7 @@ function startWatching(
 
   watcher = chokidar.watch(roots, {
     ignoreInitial: true,
-    depth: 6,
+    depth: 16,
     ignored: (candidate) => {
       if (/(^|[\\/])\.[^\\/]/.test(candidate)) return true; // dotfiles
       if (/\.txt$/i.test(candidate)) return true; // note files rename constantly
@@ -74,7 +74,7 @@ function startWatching(
     binaryInterval: 2000,
 
     awaitWriteFinish: {
-      stabilityThreshold: 2000,
+      stabilityThreshold: 1500,
       pollInterval: 200
     }
   });

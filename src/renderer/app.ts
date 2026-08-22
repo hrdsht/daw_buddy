@@ -1278,9 +1278,9 @@ function buildRow(entry) {
     const badge = el(
       'button',
       'badge badge--inside',
-      `${open ? '▾' : '▸'} ${entry.versionCount} versions`
+      `${open ? '▾' : '▸'} ${entry.versionCount} variations`
     );
-    badge.title = 'Every version of this in the same folder';
+    badge.title = 'Every variation of this project in the same folder';
     badge.addEventListener('click', (event) => {
       event.stopPropagation();
       if (open) expanded.delete(entry.path);
@@ -1289,7 +1289,7 @@ function buildRow(entry) {
     });
     line.append(badge);
   } else if (!entry.isGroup && entry.siblingCount > 1 && !groupVersionsOn) {
-    line.append(el('span', 'badge', `${entry.siblingCount} in folder`));
+    line.append(el('span', 'badge', `${entry.siblingCount} variations in folder`));
   }
   main.append(line);
   main.append(el('div', 'row__sub', entry.location || basename(entry.root)));
@@ -3334,7 +3334,7 @@ function renderProjectPage() {
     ['projectfiles', 'Project files'],
     ['renders', 'Renders'],
     ['stems', 'Stems'],
-    ['notes', 'Notes & versions'],
+    ['notes', 'Notes & variations'],
     ['tools', 'Tools'],
     ['allaudio', 'All audio']
   ];
@@ -4419,7 +4419,7 @@ function renderNotesTab(entry) {
   if (mates.length > 0) {
     const others = el('div');
     others.style.marginTop = '22px';
-    others.append(el('div', 'page__kicker', `${mates.length} other version(s) here`));
+    others.append(el('div', 'page__kicker', `${mates.length} other variation(s) here`));
     entries
       .filter((other) => other.folder === entry.folder && other.path !== entry.path)
       .forEach((other) => {

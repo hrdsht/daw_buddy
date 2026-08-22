@@ -275,7 +275,8 @@ function addAudio(options, dir, stem, mtime = 0) {
   const key = normalisePath(dir);
   if (!options.audioIndex.has(key)) options.audioIndex.set(key, []);
   options.audioIndex.get(key).push({
-    stem: flatten(stem),
+    stem: String(stem || ''),
+    flat: flatten(String(stem || '')),
     mtime: Number(mtime) || 0
   });
 }
@@ -286,10 +287,12 @@ function sharesTitleWord(nameA, nameB) {
   if (!cleanA || !cleanB) return false;
   if (cleanA === cleanB || cleanA.startsWith(cleanB) || cleanB.startsWith(cleanA)) return true;
 
-  const wordsA = String(nameA).toLowerCase().split(/[^a-z0-9]+/i).filter((w) => w.length >= 3);
-  const wordsB = String(nameB).toLowerCase().split(/[^a-z0-9]+/i).filter((w) => w.length >= 3);
+  const wordsA = String(nameA).toLowerCase().split(/[^a-z0-9]+/i).filter((w) => w.length >= 2);
+  const wordsB = String(nameB).toLowerCase().split(/[^a-z0-9]+/i).filter((w) => w.length >= 2);
   if (wordsA.length === 0 || wordsB.length === 0) return false;
-  return wordsA[0] === wordsB[0];
+  if (wordsA[0] === wordsB[0]) return true;
+  if (wordsA.length >= 2 && wordsB.length >= 2 && wordsA[1] === wordsB[1]) return true;
+  return false;
 }
 
 /**
@@ -305,15 +308,16 @@ function audioStatsFor(sessionName, projectFolder, root, options) {
   for (const [audioFolder, items] of options.audioIndex) {
     if (!audioFolderBelongsToProject(audioFolder, projectFolder, root)) continue;
     for (const item of items) {
-      const itemStem = typeof item === 'object' && item ? item.stem : item;
+      const rawStem = typeof item === 'object' && item ? (item.stem || '') : String(item || '');
+      const itemFlat = typeof item === 'object' && item && item.flat ? item.flat : flatten(rawStem);
       const itemMtime = typeof item === 'object' && item ? item.mtime : 0;
-      if (typeof itemStem !== 'string') continue;
+      if (!itemFlat) continue;
 
       const matches =
-        itemStem === wanted ||
-        itemStem.startsWith(wanted) ||
-        wanted.startsWith(itemStem) ||
-        sharesTitleWord(sessionName, itemStem);
+        itemFlat === wanted ||
+        itemFlat.startsWith(wanted) ||
+        wanted.startsWith(itemFlat) ||
+        sharesTitleWord(sessionName, rawStem);
 
       if (matches) {
         count += 1;
