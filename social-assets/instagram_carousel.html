@@ -1137,8 +1137,8 @@
         ctx.font = '600 13.5px "IBM Plex Mono", monospace';
         ctx.fillText('Swipe Next →', 950, 1310);
 
-        if (videoTrack && typeof (videoTrack as any).requestFrame === 'function') {
-          (videoTrack as any).requestFrame();
+        if (videoTrack && typeof videoTrack.requestFrame === 'function') {
+          videoTrack.requestFrame();
         }
 
         requestAnimationFrame(renderFrame);
