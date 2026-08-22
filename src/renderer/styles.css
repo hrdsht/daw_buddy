@@ -4365,6 +4365,28 @@ body[data-anim-scale="0"] *::after {
   font-family: var(--face);
 }
 
+.smart-audio-insight-pill {
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: var(--r-sm);
+  background: rgba(45, 212, 191, 0.12);
+  border: 1px dashed var(--accent);
+  color: var(--accent);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  transition: all 120ms ease;
+}
+
+.smart-audio-insight-pill:hover {
+  background: var(--accent);
+  color: #0b110e;
+  font-weight: 600;
+  transform: translateY(-1px);
+}
+
 .smart-input {
   background: var(--bg);
   color: var(--text);

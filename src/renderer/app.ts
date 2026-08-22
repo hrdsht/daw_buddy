@@ -5152,7 +5152,7 @@ async function renderSmartRenameTab(entry: any = null) {
     let measured = 0;
     for (const item of smartItems) {
       const isWav = item.name.toLowerCase().endsWith('.wav');
-      if (isWav && (!item.matched || item.confidence < 0.8)) {
+      if (isWav) {
         try {
           const res = await window.api.smartAudioFeatures(item.path);
           if (res && res.ok) {
@@ -5174,7 +5174,7 @@ async function renderSmartRenameTab(entry: any = null) {
       }
     }
     restoreBtn();
-    toast('Audio Analysis', `Extracted features for ${measured} file(s)`);
+    toast('Audio Analysis', `Extracted features & verified ${measured} file(s)`);
     renderPanes();
   }
 
@@ -5210,7 +5210,38 @@ async function renderSmartRenameTab(entry: any = null) {
         continue;
       }
 
-      const key = sub ? `${cat}_${sub}` : cat;
+      let key = sub ? `${cat}_${sub}` : cat;
+
+      // Smart vocal modifier / artist preservation (e.g. "vox lals", "vox ritesh", "vocal lalasa")
+      if (cat === 'vox' || cat === 'vocal') {
+        const cleanStem = item.name.replace(/\.[^.]+$/, '');
+        const tokens = cleanStem
+          .split(/[^a-zA-Z0-9]+/)
+          .map((t: string) => t.toLowerCase())
+          .filter((t: string) => t.length >= 3 && !/^\d+$/.test(t));
+        const ignoredTokens = new Set([
+          'vox',
+          'vocal',
+          'vocals',
+          'leadvox',
+          'lead',
+          'main',
+          'raw',
+          'dry',
+          'wet',
+          'take',
+          'comp',
+          'audio',
+          'track',
+          'stem',
+          'consolidated'
+        ]);
+        const artistToken = tokens.find((t: string) => !ignoredTokens.has(t));
+        if (artistToken) {
+          key = sub && sub !== 'lead' ? `${cat}_${artistToken}_${sub}` : `${cat}_${artistToken}`;
+        }
+      }
+
       const currentCount = (counts.get(key) || 0) + 1;
       counts.set(key, currentCount);
 
@@ -5439,13 +5470,40 @@ async function renderSmartRenameTab(entry: any = null) {
         }
       });
 
+      // Cross-verification pill if audio analysis suggests a distinct instrument
+      let audioInsightPill: HTMLElement | null = null;
+      if (item.audioCategory) {
+        const audioFull = item.audioSubtype ? `${item.audioCategory} / ${item.audioSubtype}` : item.audioCategory;
+        const currentFull = sub ? `${cat} / ${sub}` : (cat || '');
+        if (audioFull !== currentFull) {
+          audioInsightPill = el('button', 'smart-audio-insight-pill', `⚡ Sounds like: ${audioFull}`);
+          audioInsightPill.title = `Audio analysis detected ${audioFull}. Click to apply.`;
+          audioInsightPill.addEventListener('click', (e) => {
+            e.stopPropagation();
+            item.userCategory = item.audioCategory;
+            item.userSubtype = item.audioSubtype;
+            item.customName = null;
+            item.confidence = 1.0;
+            renderPanes();
+          });
+        }
+      }
+
       let reasonText = '';
       if (item.userCategory || item.customName) reasonText = 'Manual override';
       else if (item.matchedOn) reasonText = `Matched "${item.matchedOn}"`;
       else if (item.audioFeatures) reasonText = `Audio centroid ${item.audioFeatures.centroid}Hz`;
       const rReason = el('span', 'smart-reason', reasonText);
 
-      rRow.append(rName, rowCombobox, rReason);
+      const rightControls = el('div', null);
+      rightControls.style.display = 'flex';
+      rightControls.style.alignItems = 'center';
+      rightControls.style.gap = '6px';
+      rightControls.append(rowCombobox);
+      if (audioInsightPill) rightControls.append(audioInsightPill);
+      rightControls.append(rReason);
+
+      rRow.append(rName, rightControls);
 
       rRow.addEventListener('click', (e) => {
         if (e.target && ((e.target as HTMLElement).closest('.smart-combobox'))) return;

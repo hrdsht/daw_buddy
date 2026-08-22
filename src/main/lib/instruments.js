@@ -115,10 +115,11 @@ const DICTIONARY = {
     tsuzumi: ['tsuzumi'],
 
     // General and studio
-    shaker: ['shaker', 'shakers', 'shk'],
+    shaker: ['shaker', 'shakers', 'shk', 'egg', 'egg shaker', 'eggshaker'],
     tambourine: ['tambourine', 'tamb', 'tambo'],
     cowbell: ['cowbell', 'cow bell', 'bell'],
     woodblock: ['woodblock', 'wood block', 'block', 'clave block'],
+    click: ['click', 'metronome', 'clave click'],
     triangle: ['triangle'],
     castanet: ['castanet', 'castanets'],
     sleighbell: ['sleighbell', 'sleigh bell', 'jinglebell'],
@@ -126,6 +127,7 @@ const DICTIONARY = {
     vibraslap: ['vibraslap', 'vibra slap'],
     guiro_scrape: ['scraper', 'ratchet'],
     foley: ['foley', 'foot', 'stomp', 'stomps'],
+    beatbox: ['beatbox', 'beatboxing', 'vocal perc', 'mouth perc'],
     generic: ['perc', 'percs', 'percussion', 'percussive', 'prc', 'hand percussion', 'ethnic']
   },
 
@@ -144,9 +146,9 @@ const DICTIONARY = {
 
   /* ============================================================== */
   keys: {
-    piano: ['piano', 'pno', 'grandpiano', 'grand piano', 'uprightpiano', 'keys piano'],
+    piano: ['piano', 'pno', 'grandpiano', 'grand piano', 'uprightpiano', 'keys piano', 'keyscape'],
     rhodes: ['rhodes', 'wurli', 'wurlitzer', 'epiano', 'e piano', 'electricpiano', 'electric piano'],
-    organ: ['organ', 'hammond', 'b3', 'leslie', 'churchorgan', 'harmonium'],
+    organ: ['organ', 'hammond', 'b3', 'leslie', 'churchorgan', 'harmonium', 'mellotron'],
     clav: ['clav', 'clavinet', 'clavichord'],
     harpsichord: ['harpsichord', 'cembalo'],
     celesta: ['celesta', 'celeste'],
@@ -158,7 +160,7 @@ const DICTIONARY = {
   synth: {
     lead: ['lead', 'leads', 'ld', 'supersaw', 'super saw', 'saw lead'],
     pad: ['pad', 'pads', 'warmpad', 'strings pad', 'atmos', 'atmosphere'],
-    pluck: ['synthpluck', 'synth pluck', 'plk'],
+    pluck: ['synthpluck', 'synth pluck', 'plk', 'pluck', 'plucks'],
     arp: ['arp', 'arps', 'arpeggio', 'arpeggiator', 'sequence', 'seq'],
     chord: ['chord', 'chords', 'stab', 'stabs', 'hit'],
     bell: ['synthbell', 'fmbell', 'bells'],
