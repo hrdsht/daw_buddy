@@ -1180,10 +1180,39 @@ ipcMain.handle('tools:smartAudioFeatures', async (event, filePath) => {
     const sampleRate = fmt.sampleRate || 44100;
     const bytesPerSample = Math.floor(fmt.bitsPerSample / 8);
     const blockAlign = fmt.blockAlign || (fmt.numChannels * bytesPerSample);
-    const totalFrames = Math.min(Math.floor(dataSize / blockAlign), sampleRate * 5);
+    const totalFrames = Math.floor(dataSize / blockAlign);
 
-    const pcm = new Float32Array(totalFrames);
-    for (let frame = 0; frame < totalFrames; frame++) {
+    if (totalFrames <= 0) {
+      return { ok: false, error: 'Empty WAV data' };
+    }
+
+    // Scan across the file in strides to find the loudest active audio window (avoids silent intros)
+    const stride = Math.max(1, Math.floor(totalFrames / 50000));
+    let maxPeak = 0;
+    let peakFrame = 0;
+
+    for (let f = 0; f < totalFrames; f += stride) {
+      let sum = 0;
+      for (let ch = 0; ch < fmt.numChannels; ch++) {
+        const off = dataOffset + f * blockAlign + ch * bytesPerSample;
+        if (off + bytesPerSample <= buf.length) {
+          sum += silence.readMagnitude(buf, off, fmt);
+        }
+      }
+      const mag = sum / fmt.numChannels;
+      if (mag > maxPeak) {
+        maxPeak = mag;
+        peakFrame = f;
+      }
+    }
+
+    // Extract a 3-second active window centered around the peak
+    const windowFrames = Math.min(totalFrames, sampleRate * 3);
+    const startFrame = Math.max(0, Math.min(peakFrame - Math.floor(sampleRate * 0.2), totalFrames - windowFrames));
+
+    const pcm = new Float32Array(windowFrames);
+    for (let i = 0; i < windowFrames; i++) {
+      const frame = startFrame + i;
       let sum = 0;
       for (let channel = 0; channel < fmt.numChannels; channel++) {
         const offset = dataOffset + frame * blockAlign + channel * bytesPerSample;
@@ -1191,7 +1220,7 @@ ipcMain.handle('tools:smartAudioFeatures', async (event, filePath) => {
           sum += silence.readMagnitude(buf, offset, fmt);
         }
       }
-      pcm[frame] = sum / fmt.numChannels;
+      pcm[i] = sum / fmt.numChannels;
     }
 
     const feats = extractFeatures(pcm, sampleRate);
@@ -1200,19 +1229,31 @@ ipcMain.handle('tools:smartAudioFeatures', async (event, filePath) => {
     let guessedSub: string | null = null;
     let confidence = 0;
 
-    if (feats.lowRatio120 > 0.90 && feats.t60ms > 800) {
-      guessedCat = 'bass'; guessedSub = 'sub'; confidence = 0.85;
-    } else if (feats.lowRatio150 > 0.75 && feats.crestDb > 18 && feats.activeMs < 350) {
-      guessedCat = 'bass'; guessedSub = 'plucky'; confidence = 0.80;
-    } else if (feats.lowRatio150 > 0.60) {
-      guessedCat = 'bass'; guessedSub = 'reese'; confidence = 0.75;
-    } else if (feats.centroid < 350 && feats.t60ms < 900 && feats.crestDb > 12) {
+    if (feats.t60ms < 30 && feats.crestDb > 25 && feats.activeMs < 50) {
+      guessedCat = 'drums'; guessedSub = 'rim'; confidence = 0.85;
+    } else if (feats.lowRatio120 > 0.85 || (feats.lowRatio150 > 0.75 && feats.centroid < 250)) {
+      guessedCat = 'bass'; guessedSub = 'sub'; confidence = 0.90;
+    } else if (feats.lowRatio150 > 0.55 && feats.centroid < 450) {
+      guessedCat = 'bass'; guessedSub = 'synth'; confidence = 0.85;
+    } else if (feats.centroid < 350 && feats.lowRatio150 > 0.50 && feats.crestDb > 8) {
       guessedCat = 'drums'; guessedSub = 'kick'; confidence = 0.85;
+    } else if (feats.centroid > 9000 && feats.crestDb > 18) {
+      if (feats.t60ms > 100) {
+        guessedCat = 'percs'; guessedSub = 'shaker'; confidence = 0.85;
+      } else {
+        guessedCat = 'drums'; guessedSub = 'hihat'; confidence = 0.85;
+      }
     } else if (feats.centroid > 7000 && feats.t60ms < 250) {
       guessedCat = 'drums'; guessedSub = 'hihat'; confidence = 0.85;
-    } else if (feats.centroid > 5000 && feats.t60ms >= 200 && feats.t60ms <= 1000) {
-      guessedCat = 'drums'; guessedSub = 'snare'; confidence = 0.80;
-    } else if (feats.centroid >= 200 && feats.centroid <= 2500 && feats.t60ms > 1000 && feats.crestDb < 12) {
+    } else if (feats.centroid >= 4500 && feats.centroid <= 7500 && feats.crestDb > 18 && feats.t60ms < 350) {
+      guessedCat = 'drums'; guessedSub = 'clap'; confidence = 0.80;
+    } else if (feats.centroid >= 1500 && feats.centroid <= 4500 && feats.crestDb > 18 && feats.t60ms < 400) {
+      guessedCat = 'drums'; guessedSub = 'snare'; confidence = 0.75;
+    } else if (feats.centroid >= 200 && feats.centroid <= 1200 && feats.crestDb > 16 && feats.t60ms < 600) {
+      guessedCat = 'drums'; guessedSub = 'tom'; confidence = 0.75;
+    } else if (feats.centroid > 4000 && feats.t60ms > 1200 && feats.crestDb > 12) {
+      guessedCat = 'drums'; guessedSub = 'cymbal'; confidence = 0.75;
+    } else if (feats.t60ms > 1200 && feats.crestDb < 15 && feats.centroid >= 300 && feats.centroid <= 4000) {
       guessedCat = 'synth'; guessedSub = 'pad'; confidence = 0.70;
     } else if (feats.zcr > 10000 && feats.t60ms > 1200) {
       guessedCat = 'fx'; guessedSub = 'riser'; confidence = 0.65;

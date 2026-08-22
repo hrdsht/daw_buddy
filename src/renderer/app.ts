@@ -3836,6 +3836,16 @@ function renderStemsTab(entry) {
     }
   });
   controls.append(choose);
+
+  if (rec.stemsPath) {
+    const renameStemsBtn = el('button', 'pill', '⚡ Smart Rename stems');
+    renameStemsBtn.title = 'Open Smart Renamer with this stems folder';
+    renameStemsBtn.addEventListener('click', () => {
+      smartRenameFolder = rec.stemsPath;
+      navigate({ kind: 'project-tab', tab: 'tools', project: entry });
+    });
+    controls.append(renameStemsBtn);
+  }
   section.append(controls);
 
   if (!rec.stemsPath) {
@@ -3850,23 +3860,124 @@ function renderStemsTab(entry) {
     return;
   }
 
+  /* Stems Search & Quick Filter Controls */
+  const searchWrap = el('div', 'stems-search-bar');
+  const searchInput = document.createElement('input');
+  searchInput.type = 'text';
+  searchInput.className = 'stems-search-input';
+  searchInput.placeholder = '🔍 Search stems (e.g. Battery, Keyscape, Omnisphere, GTR, Vox)…';
+
+  const clearSearchBtn = el('button', 'pill pill--sm', 'Clear');
+  clearSearchBtn.style.display = 'none';
+
+  const searchCount = el('span', 'stems-search-count', '');
+  searchWrap.append(searchInput, clearSearchBtn, searchCount);
+  section.append(searchWrap);
+
+  const quickFilters = el('div', 'stems-quick-filters');
+  section.append(quickFilters);
+
   const list = el('div');
   list.append(el('p', 'muted', 'Reading stems folder…'));
   section.append(list);
   viewEl.append(section);
-  loadStems(entry, rec.stemsPath, list);
+
+  loadStems(entry, rec.stemsPath, list, searchInput, searchCount, clearSearchBtn as HTMLButtonElement, quickFilters);
 }
 
-async function loadStems(entry, folder, container) {
+async function loadStems(
+  entry: any,
+  folder: string,
+  container: HTMLElement,
+  searchInput: HTMLInputElement,
+  searchCount: HTMLElement,
+  clearSearchBtn: HTMLButtonElement,
+  quickFilters: HTMLElement
+) {
   const files = await window.api.listAllAudio(folder);
   container.innerHTML = '';
 
   if (!files.length) {
     container.append(el('p', 'muted', 'No WAV, MP3, AIFF, FLAC or OGG files found in this folder.'));
+    searchCount.textContent = '0 stems';
     return;
   }
 
-  files.forEach((file) => container.append(buildStemRow(entry, file)));
+  // Extract unique instrument / stem prefixes for quick filter tags
+  const prefixCounts = new Map<string, number>();
+  for (const f of files) {
+    const clean = f.name.replace(/\.[^.]+$/, '');
+    const tokens = clean.split(/[^a-zA-Z0-9]+/).filter((t: string) => t.length >= 3 && !/^\d+$/.test(t));
+    if (tokens.length > 0) {
+      const topToken = tokens[0];
+      prefixCounts.set(topToken, (prefixCounts.get(topToken) || 0) + 1);
+    }
+  }
+
+  // Build quick filter buttons
+  quickFilters.innerHTML = '';
+  const allPill = el('button', 'pill pill--sm is-active', `All (${files.length})`) as HTMLButtonElement;
+  quickFilters.append(allPill);
+
+  const topPrefixes = [...prefixCounts.entries()]
+    .filter(([_, count]) => count >= 2)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10);
+
+  const filterButtons: HTMLButtonElement[] = [allPill];
+
+  topPrefixes.forEach(([name, count]) => {
+    const pill = el('button', 'pill pill--sm', `${name} (${count})`) as HTMLButtonElement;
+    pill.addEventListener('click', () => {
+      searchInput.value = name;
+      applyFilter();
+      searchInput.focus();
+    });
+    quickFilters.append(pill);
+    filterButtons.push(pill);
+  });
+
+  allPill.addEventListener('click', () => {
+    searchInput.value = '';
+    applyFilter();
+    searchInput.focus();
+  });
+
+  function applyFilter() {
+    const q = (searchInput.value || '').trim().toLowerCase();
+    clearSearchBtn.style.display = q ? 'inline-block' : 'none';
+
+    // Update active state on filter pills
+    filterButtons.forEach((b) => {
+      const bText = (b.textContent || '').split(' ')[0].toLowerCase();
+      if (!q && b === allPill) b.classList.add('is-active');
+      else if (q && bText === q) b.classList.add('is-active');
+      else b.classList.remove('is-active');
+    });
+
+    const filtered = q
+      ? files.filter((f: any) => f.name.toLowerCase().includes(q) || (f.relPath && f.relPath.toLowerCase().includes(q)))
+      : files;
+
+    searchCount.textContent = `Showing ${filtered.length} of ${files.length} stems`;
+
+    container.innerHTML = '';
+    if (!filtered.length) {
+      container.append(el('p', 'muted', `No stems matching "${q}".`));
+      return;
+    }
+
+    filtered.forEach((file: any) => container.append(buildStemRow(entry, file)));
+  }
+
+  searchInput.addEventListener('input', () => applyFilter());
+  clearSearchBtn.addEventListener('click', () => {
+    searchInput.value = '';
+    searchInput.focus();
+    applyFilter();
+  });
+
+  applyFilter();
 }
 
 function buildStemRow(entry, file) {
