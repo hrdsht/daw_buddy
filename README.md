@@ -5,13 +5,19 @@
 [![Tests](https://img.shields.io/badge/tests-21%20passing-brightgreen.svg)](https://github.com/hrdsht/daw_buddy/actions)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue.svg)](https://github.com/hrdsht/daw_buddy/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/hrdsht/daw_buddy/blob/main/LICENSE)
-[![Version](https://img.shields.io/badge/version-v0.4.3-orange.svg)](https://github.com/hrdsht/daw_buddy/releases)
+[![Version](https://img.shields.io/badge/version-v0.4.6--beta-orange.svg)](https://github.com/hrdsht/daw_buddy/releases)
+[![Gumroad](https://img.shields.io/badge/Gumroad-Get%20Free%20Download-ff90e8.svg?logo=gumroad&logoColor=white)](https://7675947827359.gumroad.com/l/daw_buddy)
+[![Website](https://img.shields.io/badge/Webpage-dawbuddy.ba55ick.com-2dd4bf.svg)](https://dawbuddy.ba55ick.com)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-ba55ick-FFDD00.svg?style=flat&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/ba55ick)
 [![Buy Me A Coffee (Shreyas)](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-ksshreyas-FFDD00.svg?style=flat&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/ksshreyas)
 
 <p align="center">
   <img src="docs/assets/daw-buddy-dashboard.png" alt="DAW Buddy Studio Dashboard" width="100%" />
 </p>
+
+> 🌐 **Official Webpage:** [https://dawbuddy.ba55ick.com](https://dawbuddy.ba55ick.com)  
+> ⚡ **Gumroad 1-Click Package:** [https://7675947827359.gumroad.com/l/daw_buddy](https://7675947827359.gumroad.com/l/daw_buddy)  
+> 🏠 **Main Ecosystem:** [https://ba55ick.com](https://ba55ick.com)
 
 ---
 
@@ -78,10 +84,11 @@ Grab a ready-to-run installer from the **[Releases page](https://github.com/hrds
 
 | Platform | File to download |
 |---|---|
-| **Windows** | `DAW.Buddy.Setup.<version>.exe` |
-| **macOS — Apple Silicon** | `DAW.Buddy-<version>-arm64.dmg` |
+| **1-Click Free Package (All OS)** | **[Get on Gumroad](https://7675947827359.gumroad.com/l/daw_buddy)** |
+| **Windows** | `DAW.Buddy.Setup.<version>.exe` (or run `scripts/DAW Buddy.bat`) |
+| **macOS — Apple Silicon** | `DAW.Buddy-<version>-arm64.dmg` (or run `scripts/DAW Buddy.command`) |
 | **macOS — Intel** | `DAW.Buddy-<version>.dmg` |
-| **Linux** | `.AppImage` (portable), or `.deb` / `.rpm` for your package manager |
+| **Linux** | `.AppImage` (portable), or `.deb` / `.rpm` (or run `scripts/DAW Buddy.sh`) |
 
 Then run it:
 
