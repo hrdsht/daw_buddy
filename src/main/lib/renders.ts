@@ -103,10 +103,12 @@ function sharesTitleWord(nameA, nameB) {
   if (!cleanA || !cleanB) return false;
   if (cleanA === cleanB || cleanA.startsWith(cleanB) || cleanB.startsWith(cleanA)) return true;
 
-  const wordsA = String(nameA).toLowerCase().split(/[^a-z0-9]+/i).filter((w) => w.length >= 3);
-  const wordsB = String(nameB).toLowerCase().split(/[^a-z0-9]+/i).filter((w) => w.length >= 3);
+  const wordsA = String(nameA).toLowerCase().split(/[^a-z0-9]+/i).filter((w) => w.length >= 2);
+  const wordsB = String(nameB).toLowerCase().split(/[^a-z0-9]+/i).filter((w) => w.length >= 2);
   if (wordsA.length === 0 || wordsB.length === 0) return false;
-  return wordsA[0] === wordsB[0];
+  if (wordsA[0] === wordsB[0]) return true;
+  if (wordsA.length >= 2 && wordsB.length >= 2 && wordsA[1] === wordsB[1]) return true;
+  return false;
 }
 
 async function findRenders(sessionPath, root, extraFolders = [], siblings = []) {
@@ -119,9 +121,9 @@ async function findRenders(sessionPath, root, extraFolders = [], siblings = []) 
   const files = [];
   const seen = new Set();
 
-  for (const place of places) {
-    await gather(place.dir, place.label, place.deep, files, seen, 0);
-  }
+  await Promise.all(
+    places.map((place) => gather(place.dir, place.label, place.deep, files, seen, 0))
+  );
 
   // Competing session names, longest first. "Bangalore entry 1.wav" should
   // belong to "Bangalore entry 1.als", not to "Bangalore entry.als" — the
@@ -144,12 +146,13 @@ async function findRenders(sessionPath, root, extraFolders = [], siblings = []) 
       wanted.startsWith(flat) ||
       sharesTitleWord(family.name, file.stem);
 
-    // Audio files sitting directly inside this project's dedicated folder (only when no other projects share this directory)
+    // Audio files sitting directly inside this project's dedicated folder or subfolders
     const isDirectlyInFolder = samePath(path.dirname(file.path), projectFolder);
+    const isInsideProjectFolder = isInsideOrEqual(file.path, projectFolder);
     const isDedicatedFolder = !siblings || siblings.length === 0;
-    const isInsideDedicatedProject = isDirectlyInFolder && isDedicatedFolder;
+    const isInsideDedicatedProject = isInsideProjectFolder && (isDedicatedFolder || family.grouped);
 
-    if (!matches && !isInsideDedicatedProject) return false;
+    if (!matches && !isInsideDedicatedProject && !isDirectlyInFolder) return false;
 
     // Hand it over if a sibling session claims it more specifically.
     return !rivals.some((rival) => flat === rival || flat.startsWith(rival));
@@ -206,31 +209,29 @@ async function collectPlaces(projectFolder, root, extraFolders) {
     if (extra) places.push({ dir: extra, label: 'Stems folder', deep: true });
   }
 
+  const ancestors = [];
   let current = projectFolder;
   let guard = 0;
 
   while (guard < 16) {
     guard += 1;
-
-    for (const found of await renderFoldersIn(current)) {
-      places.push({ dir: found.dir, label: found.name, deep: true });
-    }
+    ancestors.push(current);
 
     const parent = path.dirname(current);
     if (parent === current) break;
     if (root && !isInsideOrEqual(parent, root)) break;
 
-    // The ancestor folder itself, shallow — loose renders live directly in
-    // Suraag, but we don't want to walk every sibling project looking.
     places.push({ dir: parent, label: path.basename(parent), deep: false });
-
     current = parent;
 
-    if (root && samePath(current, root)) {
-      for (const found of await renderFoldersIn(current)) {
-        places.push({ dir: found.dir, label: found.name, deep: true });
-      }
-      break;
+    if (root && samePath(current, root)) break;
+  }
+
+  // Inspect render subfolders across all ancestors in parallel
+  const renderFolderResults = await Promise.all(ancestors.map((dir) => renderFoldersIn(dir)));
+  for (const list of renderFolderResults) {
+    for (const found of list) {
+      places.push({ dir: found.dir, label: found.name, deep: true });
     }
   }
 
@@ -257,7 +258,7 @@ async function renderFoldersIn(dir) {
   return contents
     .filter(
       (entry) =>
-        entry.isDirectory() && RENDER_FOLDERS.has(entry.name.toLowerCase())
+        entry.isDirectory() && isRenderFolderName(entry.name)
     )
     .map((entry) => ({ dir: path.join(dir, entry.name), name: entry.name }));
 }
@@ -272,6 +273,9 @@ async function gather(dir, label, deep, out, seen, depth) {
     return;
   }
 
+  const dirTasks = [];
+  const fileTasks = [];
+
   for (const entry of contents) {
     if (entry.name.startsWith('.')) continue;
     const full = path.join(dir, entry.name);
@@ -279,7 +283,7 @@ async function gather(dir, label, deep, out, seen, depth) {
     if (entry.isDirectory()) {
       if (!deep) continue;
       if (SKIP.has(entry.name.toLowerCase())) continue;
-      await gather(full, label, deep, out, seen, depth + 1);
+      dirTasks.push(gather(full, label, deep, out, seen, depth + 1));
       continue;
     }
 
@@ -290,22 +294,27 @@ async function gather(dir, label, deep, out, seen, depth) {
     if (seen.has(key)) continue;
     seen.add(key);
 
-    try {
-      const stat = await fs.stat(full);
-      out.push({
-        path: full,
-        name: entry.name,
-        stem: path.basename(entry.name, ext),
-        ext,
-        size: stat.size,
-        modified: stat.mtimeMs,
-        where: label,
-        folder: path.basename(path.dirname(full))
-      });
-    } catch {
-      /* vanished */
-    }
+    fileTasks.push(
+      fs.stat(full)
+        .then((stat) => {
+          out.push({
+            path: full,
+            name: entry.name,
+            stem: path.basename(entry.name, ext),
+            ext,
+            size: stat.size,
+            modified: stat.mtimeMs,
+            where: label,
+            folder: path.basename(path.dirname(full))
+          });
+        })
+        .catch(() => {
+          /* vanished */
+        })
+    );
   }
+
+  await Promise.all([...dirTasks, ...fileTasks]);
 }
 
 /**

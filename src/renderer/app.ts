@@ -1385,23 +1385,64 @@ function buildRow(entry) {
   return row;
 }
 
-async function playNewest(entry) {
+async function playNewest(entry: any) {
   // The Play button stops the row click from bubbling. Record the project
   // explicitly so the drone follows this audio, not an older highlighted row.
   selected = entry.path;
   activeAuditionPath = entry.path;
-  const result = await window.api.findRenders(
-    entry.sessionPath,
-    entry.root,
-    stemsFolderFor(entry),
-    siblingsOf(entry)
-  );
-  if (!result.renders.length) {
+
+  let file: any = null;
+
+  // 1. Try finding renders for this specific session
+  try {
+    const result = await window.api.findRenders(
+      entry.sessionPath,
+      entry.root,
+      stemsFolderFor(entry),
+      siblingsOf(entry)
+    );
+    if (result && result.renders && result.renders.length > 0) {
+      file = result.renders[0].primary || result.renders[0].files?.[0];
+    }
+  } catch (err) {
+    console.warn('[playNewest] findRenders error:', err);
+  }
+
+  // 2. If it is a grouped project, check variations in the group
+  if (!file && entry.isGroup && Array.isArray(entry.versions)) {
+    for (const ver of entry.versions) {
+      if (ver.sessionPath === entry.sessionPath) continue;
+      try {
+        const verRes = await window.api.findRenders(
+          ver.sessionPath,
+          ver.root || entry.root,
+          stemsFolderFor(ver),
+          siblingsOf(ver)
+        );
+        if (verRes && verRes.renders && verRes.renders.length > 0) {
+          file = verRes.renders[0].primary || verRes.renders[0].files?.[0];
+          if (file) break;
+        }
+      } catch {}
+    }
+  }
+
+  // 3. Fallback: Search all audio files in the project folder and take the newest
+  if (!file && entry.folder) {
+    try {
+      const allAudio = await window.api.listAllAudio(entry.folder);
+      if (allAudio && allAudio.length > 0) {
+        file = allAudio[0];
+      }
+    } catch {}
+  }
+
+  if (!file) {
     toast('No audio', `No render found for ${entry.name}`, true);
     return;
   }
-  const file = result.renders[0].primary;
-  await Player.load(file, { project: entry });
+
+  await Player.load(file, { autoplay: true, project: entry });
 }
 
 let isPreloadingRender = false;
@@ -1413,6 +1454,7 @@ async function preloadLatestRender({ autoplay = false } = {}) {
   try {
     // 1. If viewing a specific project, try its newest render first
     if (view === 'project' && openProject && openProject.audioCount > 0) {
+      let file: any = null;
       const result = await window.api.findRenders(
         openProject.sessionPath,
         openProject.root,
@@ -1420,13 +1462,17 @@ async function preloadLatestRender({ autoplay = false } = {}) {
         siblingsOf(openProject)
       );
       if (result && result.renders && result.renders.length > 0) {
-        const file = result.renders[0].primary;
-        if (file) {
-          selected = openProject.path;
-          activeAuditionPath = openProject.path;
-          await Player.load(file, { autoplay, project: openProject });
-          return;
-        }
+        file = result.renders[0].primary || result.renders[0].files?.[0];
+      }
+      if (!file && openProject.folder) {
+        const allAudio = await window.api.listAllAudio(openProject.folder);
+        if (allAudio && allAudio.length > 0) file = allAudio[0];
+      }
+      if (file) {
+        selected = openProject.path;
+        activeAuditionPath = openProject.path;
+        await Player.load(file, { autoplay, project: openProject });
+        return;
       }
     }
 
@@ -1434,6 +1480,7 @@ async function preloadLatestRender({ autoplay = false } = {}) {
     const candidates = (entries || []).filter((e) => e.audioCount > 0);
     for (const entry of candidates) {
       if (Player.getCurrent()) return;
+      let file: any = null;
       const result = await window.api.findRenders(
         entry.sessionPath,
         entry.root,
@@ -1441,13 +1488,31 @@ async function preloadLatestRender({ autoplay = false } = {}) {
         siblingsOf(entry)
       );
       if (result && result.renders && result.renders.length > 0) {
-        const file = result.renders[0].primary;
-        if (file) {
-          selected = entry.path;
-          activeAuditionPath = entry.path;
-          await Player.load(file, { autoplay, project: entry });
-          return;
+        file = result.renders[0].primary || result.renders[0].files?.[0];
+      }
+      if (!file && entry.isGroup && Array.isArray(entry.versions)) {
+        for (const ver of entry.versions) {
+          const verRes = await window.api.findRenders(
+            ver.sessionPath,
+            ver.root || entry.root,
+            stemsFolderFor(ver),
+            siblingsOf(ver)
+          );
+          if (verRes && verRes.renders && verRes.renders.length > 0) {
+            file = verRes.renders[0].primary || verRes.renders[0].files?.[0];
+            if (file) break;
+          }
         }
+      }
+      if (!file && entry.folder) {
+        const allAudio = await window.api.listAllAudio(entry.folder);
+        if (allAudio && allAudio.length > 0) file = allAudio[0];
+      }
+      if (file) {
+        selected = entry.path;
+        activeAuditionPath = entry.path;
+        await Player.load(file, { autoplay, project: entry });
+        return;
       }
     }
   } catch (err) {
