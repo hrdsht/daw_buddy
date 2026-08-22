@@ -9,6 +9,15 @@ is auto-generated on each GitHub Release; this file is the curated summary.
 
 - _Nothing yet._
 
+## [0.4.8-beta] — 2026-08-22
+
+### Added & Optimized (Performance Enhancements)
+- **Instant Audio Playback**: Priority-1 playback starts audio streaming immediately via zero-copy Blob buffer creation without waiting on synchronous decoding or analysis.
+- **Asynchronous Adaptive Waveform Generation**: Subsampled peak calculation (~1ms) scheduled off the critical playback path so waveform populates smoothly with a 60fps progressive scan sweep.
+- **Zero-Latency Transport Controls**: Transport play button and Spacebar instantly load and play the latest available render if clicked before a track is selected.
+- **Waveform Contrast in Light Mode**: Clean, high-contrast visual styling for waveform fills and played regions across dark, AMOLED, and light themes.
+- **Decoupled Background Tasks**: File system watching, directory scanning, and audio DSP key/BPM analysis remain strictly isolated on worker/background threads so UI and playback never hitch.
+
 ## [0.4.2] — 2026-08-21
 
 ### Added

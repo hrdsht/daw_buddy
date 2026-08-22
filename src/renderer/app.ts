@@ -10497,6 +10497,10 @@ Player.onChange(({ path: playing }) => {
   });
 });
 
+Player.onNeedTrack(() => {
+  preloadLatestRender({ autoplay: true });
+});
+
 const nowPlayingTitleEl = document.getElementById('nowPlaying');
 if (nowPlayingTitleEl) {
   nowPlayingTitleEl.addEventListener('click', () => {

@@ -756,35 +756,37 @@ const Player = (() => {
       }
       if (serial !== loadSerial) return null;
 
-      // One copy for the audio element, one for decoding — decodeAudioData
-      // takes ownership of the buffer it's given and leaves it empty.
-      const forPlayback = bytes.slice(0);
-      const blob = new Blob([forPlayback], { type: guessType(file.name) });
+      // Direct zero-copy Blob creation from ArrayBuffer
+      const blob = new Blob([bytes], { type: guessType(file.name) });
       const newUrl = URL.createObjectURL(blob);
       addToLruMap(blobUrlCache, file.path, newUrl, BLOB_URL_CACHE_LIMIT, (_, oldUrl) => URL.revokeObjectURL(oldUrl));
       audio.src = newUrl;
 
-      // Start audio playback IMMEDIATELY without waiting for decoding or analysis
+      // Priority 1: Start audio playback IMMEDIATELY without waiting for decoding or analysis
       if (autoplay) play();
 
+      // Priority 2: Asynchronous decoding & waveform generation (scheduled so playback starts instantly)
       if (!cachedDecoded) {
-        try {
-          if (!audioContext) audioContext = new AudioContext();
-          if (audioContext.state === 'suspended') audioContext.resume();
-          const nextDecoded = await audioContext.decodeAudioData(bytes);
-          if (serial !== loadSerial) return null;
-          decoded = nextDecoded;
-          addToLruMap(decodedCache, file.path, nextDecoded, DECODED_CACHE_LIMIT);
+        const forDecoding = bytes.slice(0);
+        setTimeout(async () => {
+          if (serial !== loadSerial) return;
+          try {
+            if (!audioContext) audioContext = new AudioContext();
+            if (audioContext.state === 'suspended') audioContext.resume();
+            const nextDecoded = await audioContext.decodeAudioData(forDecoding);
+            if (serial !== loadSerial) return;
+            decoded = nextDecoded;
+            addToLruMap(decodedCache, file.path, nextDecoded, DECODED_CACHE_LIMIT);
 
-          if (!cachedPeaks) {
-            const rawPeaks = buildPeaks(nextDecoded, 900);
-            addToLruMap(peaksCache, file.path, rawPeaks, PEAKS_CACHE_LIMIT);
-            // Visually sweep and reveal the waveform from left to right as analysis completes
-            startSweepAnimation(rawPeaks);
+            if (!cachedPeaks) {
+              const rawPeaks = buildPeaks(nextDecoded, 900);
+              addToLruMap(peaksCache, file.path, rawPeaks, PEAKS_CACHE_LIMIT);
+              startSweepAnimation(rawPeaks);
+            }
+          } catch (err) {
+            if (serial === loadSerial && !cachedPeaks) timeEl.textContent = 'Cannot decode this format';
           }
-        } catch (err) {
-          if (serial === loadSerial && !cachedPeaks) timeEl.textContent = 'Cannot decode this format';
-        }
+        }, 0);
       }
     }
 
@@ -802,22 +804,20 @@ const Player = (() => {
   }
 
   /**
-   * Reduces millions of samples to a few hundred min/max pairs — one per
-   * horizontal pixel bucket. Drawing every sample would be both slower and
-   * less readable.
+   * Ultra-fast peak extraction with adaptive subsampling.
    */
   function buildPeaks(buffer, buckets) {
     const channel = buffer.getChannelData(0);
-    const size = Math.floor(channel.length / buckets);
+    const len = channel.length;
+    const size = Math.floor(len / buckets);
     const out = new Float32Array(buckets);
+    const step = Math.max(1, Math.floor(size / 32));
 
     for (let b = 0; b < buckets; b += 1) {
       const start = b * size;
-      const end = Math.min(start + size, channel.length);
+      const end = Math.min(start + size, len);
       let peak = 0;
-      // Step through rather than reading every sample; at this resolution
-      // the difference is invisible and it's several times faster.
-      for (let i = start; i < end; i += 4) {
+      for (let i = start; i < end; i += step) {
         const v = channel[i] < 0 ? -channel[i] : channel[i];
         if (v > peak) peak = v;
       }
@@ -1077,10 +1077,14 @@ const Player = (() => {
     broadcastState();
   }
 
+  let onNeedTrackHandler: (() => void) | null = null;
+
   function toggle() {
     if (current) {
       if (audio.paused) play();
       else audio.pause();
+    } else if (onNeedTrackHandler) {
+      onNeedTrackHandler();
     }
   }
 
@@ -1183,6 +1187,13 @@ const Player = (() => {
     audio.volume = Number(volumeEl.value);
   });
 
+  audio.addEventListener('loadedmetadata', () => {
+    if (current && !peaks) {
+      timeEl.textContent = `${clock(audio.currentTime)} / ${clock(duration())}`;
+      draw();
+    }
+  });
+
   audio.addEventListener('play', () => {
     lastMetronomeTickIndex = -1;
     playBtn.innerHTML = '&#10074;&#10074;';
@@ -1272,7 +1283,8 @@ const Player = (() => {
     stopRegion,
     seek,
     draw,
-    onChange: (fn) => listeners.push(fn)
+    onChange: (fn) => listeners.push(fn),
+    onNeedTrack: (fn: () => void) => { onNeedTrackHandler = fn; }
   };
 })();
 
