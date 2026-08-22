@@ -8724,7 +8724,7 @@ function renderScaleMidiTool() {
         resetToolScaleUi();
         return;
       }
-      playScaleBtn.textContent = '⏸ Pause Scale';
+      playScaleBtn.textContent = '■ Stop Scale';
       playScaleBtn.classList.add('pill--active');
       playFullScale(tonicPc, degrees, tuningA4, toolScaleSessionId, resetToolScaleUi);
     });
@@ -8849,7 +8849,7 @@ function renderScaleMidiTool() {
         }
 
         isProgPlaying = true;
-        playProgBtn.textContent = '⏸ Stop Playback';
+        playProgBtn.textContent = '■ Stop Progression';
         playProgBtn.classList.add('pill--active');
 
         let step = 0;
