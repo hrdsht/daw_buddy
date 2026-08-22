@@ -858,11 +858,15 @@ const Player = (() => {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
 
-    const isLight = typeof document !== 'undefined' && document.body.classList.contains('theme-light');
+    const isLight =
+      typeof document !== 'undefined' &&
+      (document.body.classList.contains('theme-light') ||
+        document.body.getAttribute('data-surface') === 'light' ||
+        document.body.dataset.surface === 'light');
     const mid = height / 2;
 
     // Centre line, always visible so an empty player still looks intentional
-    ctx.strokeStyle = isLight ? 'rgba(0, 0, 0, 0.14)' : 'rgba(255, 255, 255, 0.08)';
+    ctx.strokeStyle = isLight ? 'rgba(18, 23, 20, 0.16)' : 'rgba(255, 255, 255, 0.08)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(0, mid);
@@ -925,9 +929,9 @@ const Player = (() => {
       ctx.clip();
     }
 
-    // Unplayed portion (adaptive fill contrast for light & dark surfaces)
+    // Unplayed portion (crisp high-contrast fill for both light & dark surfaces)
     ctx.fillStyle = isLight
-      ? 'rgba(0, 0, 0, 0.18)'
+      ? 'rgba(18, 23, 20, 0.28)'
       : 'rgba(255, 255, 255, 0.22)';
     ctx.fill(path);
 
@@ -962,7 +966,7 @@ const Player = (() => {
       // Subtle sweep trail
       const glow = ctx.createLinearGradient(Math.max(0, sweepLimitX - 24), 0, sweepLimitX, 0);
       glow.addColorStop(0, 'rgba(0, 240, 255, 0)');
-      glow.addColorStop(1, isLight ? 'rgba(0, 160, 210, 0.22)' : 'rgba(0, 240, 255, 0.3)');
+      glow.addColorStop(1, isLight ? 'rgba(0, 143, 160, 0.25)' : 'rgba(0, 240, 255, 0.3)');
       ctx.fillStyle = glow;
       ctx.fillRect(Math.max(0, sweepLimitX - 24), 2, 24, height - 4);
 
@@ -982,14 +986,38 @@ const Player = (() => {
 
   let cachedAmberHex = '';
   let cachedAmberTime = 0;
+  let cachedAmberIsLight = false;
   function getAmberColor(): string {
+    const isLight =
+      typeof document !== 'undefined' &&
+      (document.body.classList.contains('theme-light') ||
+        document.body.getAttribute('data-surface') === 'light' ||
+        document.body.dataset.surface === 'light');
     const now = Date.now();
-    if (!cachedAmberHex || now - cachedAmberTime > 1000) {
-      cachedAmberHex =
+    if (!cachedAmberHex || now - cachedAmberTime > 500 || cachedAmberIsLight !== isLight) {
+      let val =
         (typeof window !== 'undefined'
           ? getComputedStyle(document.body).getPropertyValue('--amber').trim()
-          : '') || '#00f0ff';
+          : '') || (isLight ? '#008fa0' : '#00f0ff');
+
+      // Guard: in light mode, if --amber is white/near-white (e.g. from mono theme or unapplied override), use high-contrast dark charcoal
+      if (isLight) {
+        const lower = val.toLowerCase();
+        if (
+          lower === '#ffffff' ||
+          lower === '#fff' ||
+          lower === 'white' ||
+          lower === 'rgb(255, 255, 255)' ||
+          lower === 'rgba(255, 255, 255, 1)' ||
+          lower === '#f5f9f6' ||
+          lower === '#f4f7f5'
+        ) {
+          val = '#121714';
+        }
+      }
+      cachedAmberHex = val;
       cachedAmberTime = now;
+      cachedAmberIsLight = isLight;
     }
     return cachedAmberHex;
   }

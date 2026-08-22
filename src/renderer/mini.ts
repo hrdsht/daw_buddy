@@ -50,14 +50,37 @@ const fallbackDemoPeaks = generateDemoPeaks(300);
 
 let cachedAmberHex = '';
 let cachedAmberTime = 0;
+let cachedAmberIsLight = false;
 function getAmberColor(): string {
+  const isLight =
+    typeof document !== 'undefined' &&
+    (document.body.classList.contains('theme-light') ||
+      document.body.getAttribute('data-surface') === 'light' ||
+      document.body.dataset.surface === 'light');
   const now = Date.now();
-  if (!cachedAmberHex || now - cachedAmberTime > 1000) {
-    cachedAmberHex =
+  if (!cachedAmberHex || now - cachedAmberTime > 500 || cachedAmberIsLight !== isLight) {
+    let val =
       (typeof window !== 'undefined'
         ? getComputedStyle(document.body).getPropertyValue('--amber').trim()
-        : '') || '#00f0ff';
+        : '') || (isLight ? '#008fa0' : '#00f0ff');
+
+    if (isLight) {
+      const lower = val.toLowerCase();
+      if (
+        lower === '#ffffff' ||
+        lower === '#fff' ||
+        lower === 'white' ||
+        lower === 'rgb(255, 255, 255)' ||
+        lower === 'rgba(255, 255, 255, 1)' ||
+        lower === '#f5f9f6' ||
+        lower === '#f4f7f5'
+      ) {
+        val = '#121714';
+      }
+    }
+    cachedAmberHex = val;
     cachedAmberTime = now;
+    cachedAmberIsLight = isLight;
   }
   return cachedAmberHex;
 }
@@ -83,11 +106,15 @@ function drawWaveform(peaks: number[] | null, progress: number) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, width, height);
 
-  const isLight = typeof document !== 'undefined' && document.body.classList.contains('theme-light');
+  const isLight =
+    typeof document !== 'undefined' &&
+    (document.body.classList.contains('theme-light') ||
+      document.body.getAttribute('data-surface') === 'light' ||
+      document.body.dataset.surface === 'light');
   const mid = height / 2;
 
   // Center line
-  ctx.strokeStyle = isLight ? 'rgba(0, 0, 0, 0.14)' : 'rgba(255, 255, 255, 0.08)';
+  ctx.strokeStyle = isLight ? 'rgba(18, 23, 20, 0.16)' : 'rgba(255, 255, 255, 0.08)';
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(0, mid);
@@ -122,7 +149,7 @@ function drawWaveform(peaks: number[] | null, progress: number) {
 
   // Unplayed background wave
   ctx.save();
-  ctx.fillStyle = isLight ? 'rgba(0, 0, 0, 0.18)' : 'rgba(255, 255, 255, 0.22)';
+  ctx.fillStyle = isLight ? 'rgba(18, 23, 20, 0.28)' : 'rgba(255, 255, 255, 0.22)';
   ctx.fill(path);
   ctx.restore();
 

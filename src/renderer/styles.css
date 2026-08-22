@@ -49,8 +49,8 @@ body[data-theme-style="minimalist"][data-accent="lime"],
 body:not([data-theme-style])[data-accent="lime"] { --amber: #9dde64; --amber-ink: #0e170a; --sage: #74d7ae; --accent-glow: 0 0 14px rgba(157, 222, 100, 0.35); }
 body[data-theme-style="minimalist"][data-accent="pink"],
 body:not([data-theme-style])[data-accent="pink"] { --amber: #ff2d78; --amber-ink: #ffffff; --sage: #ff659c; --accent-glow: 0 0 14px rgba(255, 45, 120, 0.35); }
-body[data-theme-style="minimalist"][data-accent="mono"],
-body:not([data-theme-style])[data-accent="mono"] { --amber: #ffffff; --amber-ink: #000000; --sage: #cbd5e1; --accent-glow: 0 0 14px rgba(255, 255, 255, 0.3); }
+body[data-theme-style="minimalist"]:not(.theme-light)[data-accent="mono"],
+body:not([data-theme-style]):not(.theme-light)[data-accent="mono"] { --amber: #ffffff; --amber-ink: #000000; --sage: #cbd5e1; --accent-glow: 0 0 14px rgba(255, 255, 255, 0.3); }
 
 /* ---- Light Minimalist ------------------------------------------------ */
 body.theme-light,
@@ -72,11 +72,16 @@ body[data-theme-style="minimalist"].theme-light {
   --accent-glow: 0 2px 8px rgba(0, 143, 160, 0.2);
 }
 
-body[data-theme-style="minimalist"].theme-light[data-accent="cyan"] { --amber: #008fa0; --amber-ink: #ffffff; --sage: #0284c7; }
-body[data-theme-style="minimalist"].theme-light[data-accent="mint"] { --amber: #059669; --amber-ink: #ffffff; --sage: #059669; }
-body[data-theme-style="minimalist"].theme-light[data-accent="lime"] { --amber: #559124; --amber-ink: #ffffff; --sage: #15803d; }
-body[data-theme-style="minimalist"].theme-light[data-accent="pink"] { --amber: #e11d48; --amber-ink: #ffffff; --sage: #db2777; }
-body[data-theme-style="minimalist"].theme-light[data-accent="mono"] { --amber: #18181b; --amber-ink: #ffffff; --sage: #475569; }
+body[data-theme-style="minimalist"].theme-light[data-accent="cyan"],
+body.theme-light[data-accent="cyan"] { --amber: #008fa0; --amber-ink: #ffffff; --sage: #0284c7; }
+body[data-theme-style="minimalist"].theme-light[data-accent="mint"],
+body.theme-light[data-accent="mint"] { --amber: #059669; --amber-ink: #ffffff; --sage: #059669; }
+body[data-theme-style="minimalist"].theme-light[data-accent="lime"],
+body.theme-light[data-accent="lime"] { --amber: #559124; --amber-ink: #ffffff; --sage: #15803d; }
+body[data-theme-style="minimalist"].theme-light[data-accent="pink"],
+body.theme-light[data-accent="pink"] { --amber: #e11d48; --amber-ink: #ffffff; --sage: #db2777; }
+body[data-theme-style="minimalist"].theme-light[data-accent="mono"],
+body.theme-light[data-accent="mono"] { --amber: #18181b; --amber-ink: #ffffff; --sage: #475569; }
 
 /* ---- AMOLED Minimalist ----------------------------------------------- */
 body.theme-amoled,
