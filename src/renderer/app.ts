@@ -1497,7 +1497,36 @@ function isScalePlaying(id?: string): boolean {
   return true;
 }
 
+let activeChordGain: GainNode | null = null;
+let activeChordOscs: OscillatorNode[] = [];
+
+function stopActiveChord(fadeSec = 0.045): void {
+  if (!activeChordGain) return;
+  try {
+    const ctx = getAudioContext();
+    if (ctx) {
+      const now = ctx.currentTime;
+      activeChordGain.gain.cancelScheduledValues(now);
+      const currentVal = Math.max(0.0001, activeChordGain.gain.value);
+      activeChordGain.gain.setValueAtTime(currentVal, now);
+      activeChordGain.gain.linearRampToValueAtTime(0.0001, now + fadeSec);
+      const oscs = activeChordOscs;
+      setTimeout(() => {
+        oscs.forEach((osc) => {
+          try {
+            osc.stop();
+            osc.disconnect();
+          } catch (_) {}
+        });
+      }, Math.ceil(fadeSec * 1000) + 15);
+    }
+  } catch (_) {}
+  activeChordGain = null;
+  activeChordOscs = [];
+}
+
 function stopScalePlayback() {
+  stopActiveChord(0.045);
   if (!currentScaleSession) return;
   const sess = currentScaleSession;
   currentScaleSession = null;
@@ -1558,14 +1587,21 @@ function playSynthChord(midiNotes: number[], a4 = 440, duration = 1.35): void {
     if (ctx.state === 'suspended') {
       ctx.resume().catch(() => {});
     }
+
+    // Smoothly de-click & fade out any previously playing chord before starting the new one
+    stopActiveChord(0.045);
+
     const now = ctx.currentTime;
     const masterGain = ctx.createGain();
     const gainPerNote = 0.28 / Math.sqrt(midiNotes.length);
-    masterGain.gain.setValueAtTime(0.001, now);
-    masterGain.gain.exponentialRampToValueAtTime(gainPerNote, now + 0.03);
+    masterGain.gain.setValueAtTime(0.0001, now);
+    masterGain.gain.linearRampToValueAtTime(gainPerNote, now + 0.035);
     masterGain.gain.linearRampToValueAtTime(gainPerNote * 0.75, now + duration * 0.4);
     masterGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
     masterGain.connect(ctx.destination);
+
+    activeChordGain = masterGain;
+    activeChordOscs = [];
 
     midiNotes.forEach((midi) => {
       const freq = a4 * Math.pow(2, (midi - 69) / 12);
@@ -1574,7 +1610,8 @@ function playSynthChord(midiNotes: number[], a4 = 440, duration = 1.35): void {
       osc.frequency.setValueAtTime(freq, now);
       osc.connect(masterGain);
       osc.start(now);
-      osc.stop(now + duration + 0.05);
+      osc.stop(now + duration + 0.06);
+      activeChordOscs.push(osc);
     });
   } catch (err) {
     console.error('Chord synth error:', err);
@@ -8822,8 +8859,16 @@ function renderScaleMidiTool() {
 
         // Click to audition chord
         chordCard.addEventListener('click', () => {
+          if (isProgPlaying) {
+            isProgPlaying = false;
+            if (progPlayTimeout) clearTimeout(progPlayTimeout);
+            playProgBtn.textContent = '▶ Play Progression';
+            playProgBtn.classList.remove('pill--active');
+          }
+          const allCards = timelineStrip.querySelectorAll('.chord-card');
+          allCards.forEach((c) => c.classList.remove('chord-card--active', 'chord-card--playing'));
           chordCard.classList.add('chord-card--active');
-          setTimeout(() => chordCard.classList.remove('chord-card--active'), 800);
+          setTimeout(() => chordCard.classList.remove('chord-card--active'), Math.min(1200, (seg.duration || 1.2) * 1000));
           playSynthChord(seg.midiNotes, tuningA4, Math.min(2.0, Math.max(0.8, seg.duration || 1.2)));
         });
 
@@ -8841,6 +8886,7 @@ function renderScaleMidiTool() {
         if (isProgPlaying) {
           isProgPlaying = false;
           if (progPlayTimeout) clearTimeout(progPlayTimeout);
+          stopActiveChord(0.045);
           playProgBtn.textContent = '▶ Play Progression';
           playProgBtn.classList.remove('pill--active');
           const cards = timelineStrip.querySelectorAll('.chord-card');
