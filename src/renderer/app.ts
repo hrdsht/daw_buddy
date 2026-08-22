@@ -4609,12 +4609,209 @@ let smartItems: Array<{
 }> = [];
 let smartCategoriesList: Array<{ category: string; subtypes: string[] }> = [];
 let smartSelectedPath: string | null = null;
+let smartSelectedSet = new Set<string>();
 let smartSortMode: 'priority' | 'name' = 'priority';
 let smartManifests: any[] = [];
 
 function renderStandaloneSmartRename() {
   viewEl.innerHTML = '';
   renderSmartRenameTab(null);
+}
+
+/**
+ * Reusable Typable Combobox for Category selection & custom name input with live suggestions.
+ */
+function createSmartCombobox(options: {
+  currentCategory: string | null;
+  currentSubtype: string | null;
+  currentCustomName?: string | null;
+  placeholder?: string;
+  categoriesList: Array<{ category: string; subtypes: string[] }>;
+  isBatch?: boolean;
+  onApply: (result: { category: string | null; subtype: string | null; customName?: string | null }) => void;
+}): HTMLElement {
+  const wrap = el('div', `smart-combobox${options.isBatch ? ' smart-combobox--batch' : ''}`);
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'smart-combobox__input';
+  input.placeholder = options.placeholder || 'Type category or custom…';
+
+  let initialDisplay = '';
+  if (options.currentCustomName) {
+    initialDisplay = options.currentCustomName;
+  } else if (options.currentCategory && options.currentSubtype) {
+    initialDisplay = `${options.currentCategory} / ${options.currentSubtype}`;
+  } else if (options.currentCategory) {
+    initialDisplay = `${options.currentCategory} (generic)`;
+  }
+  input.value = initialDisplay;
+
+  const arrow = document.createElement('button');
+  arrow.type = 'button';
+  arrow.className = 'smart-combobox__arrow';
+  arrow.innerHTML = '▼';
+  arrow.title = 'Choose or search categories';
+
+  const menu = el('div', 'smart-combobox__menu');
+  wrap.append(input, arrow, menu);
+
+  function parseInput(val: string): { category: string | null; subtype: string | null; customName?: string | null } {
+    const raw = (val || '').trim();
+    if (!raw || raw === '— Unresolved —' || raw.toLowerCase() === 'unresolved' || raw === '-') {
+      return { category: null, subtype: null, customName: null };
+    }
+
+    // 1. Check exact category / subtype match (e.g. "drums / kick", "drums:kick", "drums_kick")
+    const slashMatch = raw.split(/[\/:]/).map((s) => s.trim());
+    if (slashMatch.length === 2) {
+      const [c, s] = slashMatch;
+      const foundCat = options.categoriesList.find((x) => x.category.toLowerCase() === c.toLowerCase());
+      if (foundCat) {
+        const foundSub = foundCat.subtypes.find((x) => x.toLowerCase() === s.toLowerCase());
+        return { category: foundCat.category, subtype: foundSub || s.toLowerCase(), customName: null };
+      }
+    }
+
+    // 2. Check exact category match (e.g. "drums", "percs", "percs (generic)")
+    const cleanCat = raw.replace(/\s*\(generic\)\s*/i, '').trim().toLowerCase();
+    const foundCat = options.categoriesList.find((x) => x.category.toLowerCase() === cleanCat);
+    if (foundCat) {
+      return { category: foundCat.category, subtype: null, customName: null };
+    }
+
+    // 3. Check if input matches any known subtype across categories (e.g. "tom", "snare", "tabla", "808", "lead")
+    for (const c of options.categoriesList) {
+      const foundSub = c.subtypes.find((s) => s.toLowerCase() === cleanCat);
+      if (foundSub) {
+        return { category: c.category, subtype: foundSub, customName: null };
+      }
+    }
+
+    // 4. Check if user typed an exact filename ending with an audio extension
+    if (/\.[a-zA-Z0-9]{2,5}$/.test(raw)) {
+      return { category: null, subtype: null, customName: raw };
+    }
+
+    // 5. Otherwise treat as custom category / stem prefix
+    return { category: raw, subtype: null, customName: null };
+  }
+
+  function renderMenuItems(filterQuery: string = '') {
+    menu.innerHTML = '';
+    const q = (filterQuery || '').trim().toLowerCase();
+
+    // 1. Reset / Unresolved option
+    const unresItem = el('div', 'smart-combobox__item is-unresolved');
+    unresItem.innerHTML = '<span>— Unresolved —</span><span class="smart-combobox__item-tag">Reset</span>';
+    unresItem.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      input.value = '';
+      closeMenu();
+      options.onApply({ category: null, subtype: null, customName: null });
+    });
+    menu.append(unresItem);
+
+    // 2. Filtered Predefined Categories & Subtypes
+    let exactMatchFound = false;
+    for (const c of options.categoriesList) {
+      const catMatches = !q || c.category.toLowerCase().includes(q);
+      const matchingSubtypes = c.subtypes.filter(
+        (s) => !q || s.toLowerCase().includes(q) || `${c.category} ${s}`.toLowerCase().includes(q)
+      );
+
+      if (catMatches || matchingSubtypes.length > 0) {
+        const groupTitle = el('div', 'smart-combobox__group', c.category);
+        menu.append(groupTitle);
+
+        if (catMatches) {
+          if (c.category.toLowerCase() === q) exactMatchFound = true;
+          const genericItem = el('div', 'smart-combobox__item');
+          genericItem.innerHTML = `<span>${c.category} (generic)</span><span class="smart-combobox__item-tag">Main</span>`;
+          genericItem.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            input.value = `${c.category} (generic)`;
+            closeMenu();
+            options.onApply({ category: c.category, subtype: null, customName: null });
+          });
+          menu.append(genericItem);
+        }
+
+        for (const s of matchingSubtypes) {
+          if (`${c.category} / ${s}`.toLowerCase() === q || s.toLowerCase() === q) exactMatchFound = true;
+          const subItem = el('div', 'smart-combobox__item');
+          subItem.innerHTML = `<span>${c.category} / <strong>${s}</strong></span><span class="smart-combobox__item-tag">${s}</span>`;
+          subItem.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            input.value = `${c.category} / ${s}`;
+            closeMenu();
+            options.onApply({ category: c.category, subtype: s, customName: null });
+          });
+          menu.append(subItem);
+        }
+      }
+    }
+
+    // 3. Custom text suggestion if user typed something not explicitly identical to a standard category
+    if (q && q !== 'unresolved' && !exactMatchFound) {
+      const customItem = el('div', 'smart-combobox__item is-custom');
+      customItem.innerHTML = `<span>⚡ Use custom: "<strong>${filterQuery}</strong>"</span><span class="smart-combobox__item-tag">Custom</span>`;
+      customItem.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        const parsed = parseInput(filterQuery);
+        closeMenu();
+        options.onApply(parsed);
+      });
+      menu.append(customItem);
+    }
+  }
+
+  function openMenu() {
+    renderMenuItems(input.value);
+    menu.classList.add('is-open');
+  }
+
+  function closeMenu() {
+    menu.classList.remove('is-open');
+  }
+
+  arrow.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (menu.classList.contains('is-open')) {
+      closeMenu();
+    } else {
+      openMenu();
+      input.focus();
+      input.select();
+    }
+  });
+
+  input.addEventListener('focus', () => {
+    openMenu();
+  });
+
+  input.addEventListener('input', () => {
+    renderMenuItems(input.value);
+    menu.classList.add('is-open');
+  });
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const parsed = parseInput(input.value);
+      closeMenu();
+      options.onApply(parsed);
+    } else if (e.key === 'Escape') {
+      closeMenu();
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!wrap.contains(e.target as Node)) {
+      closeMenu();
+    }
+  });
+
+  return wrap;
 }
 
 async function renderSmartRenameTab(entry: any = null) {
@@ -4653,6 +4850,7 @@ async function renderSmartRenameTab(entry: any = null) {
     if (chosen) {
       smartRenameFolder = chosen;
       smartSelectedPath = null;
+      smartSelectedSet.clear();
       render();
     }
   });
@@ -4664,6 +4862,7 @@ async function renderSmartRenameTab(entry: any = null) {
     useProject.addEventListener('click', () => {
       smartRenameFolder = entry.folder;
       smartSelectedPath = null;
+      smartSelectedSet.clear();
       render();
     });
     bar.append(useProject);
@@ -4703,12 +4902,28 @@ async function renderSmartRenameTab(entry: any = null) {
   toolbar.append(analyseNamesBtn, analyseAudioBtn, sortToggle);
   section.append(toolbar);
 
+  /* Batch Actions Container */
+  const batchContainer = el('div');
+  section.append(batchContainer);
+
   /* Panes container */
   const panes = el('div', 'smart-panes');
 
   const leftPane = el('div', 'smart-pane smart-pane--left');
   const leftHead = el('div', 'smart-pane__header');
-  const leftTitle = el('span', null, 'Original files');
+  const leftTitle = el('div', null);
+  leftTitle.style.display = 'flex';
+  leftTitle.style.alignItems = 'center';
+  leftTitle.style.gap = '8px';
+
+  const leftCheckAll = document.createElement('input');
+  leftCheckAll.type = 'checkbox';
+  leftCheckAll.className = 'smart-check';
+  leftCheckAll.title = 'Select / Deselect all files';
+
+  const leftTitleText = el('span', null, 'Original files');
+  leftTitle.append(leftCheckAll, leftTitleText);
+
   const leftSub = el('span', 'smart-pane__sub', 'Click to arm audio');
   leftHead.append(leftTitle, leftSub);
   const leftBody = el('div', 'smart-pane__body');
@@ -4797,6 +5012,7 @@ async function renderSmartRenameTab(entry: any = null) {
   async function runNameAnalysis() {
     if (smartFiles.length === 0) {
       smartItems = [];
+      smartSelectedSet.clear();
       renderPanes();
       return;
     }
@@ -4815,6 +5031,7 @@ async function renderSmartRenameTab(entry: any = null) {
       userSubtype: null,
       customName: null
     }));
+    smartSelectedSet.clear();
     renderPanes();
   }
 
@@ -4913,11 +5130,106 @@ async function renderSmartRenameTab(entry: any = null) {
   function renderPanes() {
     leftBody.innerHTML = '';
     rightBody.innerHTML = '';
+    batchContainer.innerHTML = '';
 
     const planRows = computeOutputNames();
     const rowsByPath = new Map(planRows.map((r) => [r.path, r]));
 
-    leftTitle.textContent = `Original files (${smartItems.length})`;
+    leftTitleText.textContent = `Original files (${smartItems.length})${smartSelectedSet.size > 0 ? ` · ${smartSelectedSet.size} selected` : ''}`;
+
+    // Update Header Select All Checkbox state
+    leftCheckAll.checked = smartItems.length > 0 && smartSelectedSet.size === smartItems.length;
+    leftCheckAll.indeterminate = smartSelectedSet.size > 0 && smartSelectedSet.size < smartItems.length;
+    leftCheckAll.onchange = () => {
+      if (leftCheckAll.checked) {
+        smartItems.forEach((it) => smartSelectedSet.add(it.path));
+      } else {
+        smartSelectedSet.clear();
+      }
+      renderPanes();
+    };
+
+    /* Render Batch Bar if 1 or more files are selected */
+    if (smartSelectedSet.size > 0) {
+      const batchBar = el('div', 'smart-batch-bar');
+      const batchInfo = el('div', 'smart-batch-bar__info');
+      batchInfo.innerHTML = `<span>☑ <strong>${smartSelectedSet.size}</strong> of ${smartItems.length} files selected</span>`;
+
+      const batchActions = el('div', 'smart-batch-bar__actions');
+
+      let currentBatchChoice: { category: string | null; subtype: string | null; customName?: string | null } = {
+        category: null,
+        subtype: null,
+        customName: null
+      };
+
+      const batchCombobox = createSmartCombobox({
+        currentCategory: null,
+        currentSubtype: null,
+        placeholder: 'Batch category (e.g. percs, drums / tom)…',
+        categoriesList: smartCategoriesList,
+        isBatch: true,
+        onApply: (res) => {
+          currentBatchChoice = res;
+          applyBatchChoice(res);
+        }
+      });
+
+      const applyBtn = el('button', 'pill pill--solid pill--sm', `Apply to ${smartSelectedSet.size} files`);
+      applyBtn.addEventListener('click', () => {
+        applyBatchChoice(currentBatchChoice);
+      });
+
+      async function applyBatchChoice(choice: { category: string | null; subtype: string | null; customName?: string | null }) {
+        let count = 0;
+        for (const item of smartItems) {
+          if (smartSelectedSet.has(item.path)) {
+            item.userCategory = choice.category;
+            item.userSubtype = choice.subtype;
+            item.customName = choice.customName || null;
+            item.confidence = 1.0;
+            count++;
+
+            if (choice.category) {
+              const tokens = (item.name || '').split(/[^a-zA-Z0-9]+/).filter((t: string) => t.length > 2);
+              await window.api.userDictLearn(tokens, choice.category, choice.subtype || null);
+            }
+          }
+        }
+        const label = choice.category ? (choice.subtype ? `${choice.category}_${choice.subtype}` : choice.category) : choice.customName || 'Unresolved';
+        toast('Batch Rename Applied', `Set "${label}" for ${count} selected files`);
+        renderPanes();
+      }
+
+      const selectUnresolvedBtn = el('button', 'pill pill--sm', 'Select Unresolved');
+      selectUnresolvedBtn.addEventListener('click', () => {
+        smartSelectedSet.clear();
+        smartItems.forEach((it) => {
+          const cat = it.userCategory !== undefined && it.userCategory !== null ? it.userCategory : it.category;
+          if (!cat) smartSelectedSet.add(it.path);
+        });
+        renderPanes();
+      });
+
+      const invertBtn = el('button', 'pill pill--sm', 'Invert');
+      invertBtn.addEventListener('click', () => {
+        smartItems.forEach((it) => {
+          if (smartSelectedSet.has(it.path)) smartSelectedSet.delete(it.path);
+          else smartSelectedSet.add(it.path);
+        });
+        renderPanes();
+      });
+
+      const clearBtn = el('button', 'pill pill--sm', 'Clear Selection');
+      clearBtn.addEventListener('click', () => {
+        smartSelectedSet.clear();
+        renderPanes();
+      });
+
+      batchActions.append(batchCombobox, applyBtn, selectUnresolvedBtn, invertBtn, clearBtn);
+      batchBar.append(batchInfo, batchActions);
+      batchContainer.append(batchBar);
+    }
 
     let displayItems = [...smartItems];
     if (smartSortMode === 'priority') {
@@ -4942,6 +5254,7 @@ async function renderSmartRenameTab(entry: any = null) {
     for (const item of displayItems) {
       const planRow = rowsByPath.get(item.path);
       const isSelected = item.path === smartSelectedPath;
+      const isChecked = smartSelectedSet.has(item.path);
       const cat = item.userCategory !== undefined && item.userCategory !== null ? item.userCategory : item.category;
       const sub = item.userSubtype !== undefined && item.userSubtype !== null ? item.userSubtype : item.subtype;
       const isChanged = planRow ? planRow.changed : false;
@@ -4949,7 +5262,21 @@ async function renderSmartRenameTab(entry: any = null) {
       if (!cat) unresolvedCount++;
 
       /* Left Row */
-      const lRow = el('div', `smart-row${isSelected ? ' is-selected' : ''}${cat ? ' is-matched' : ' is-unresolved'}`);
+      const lRow = el('div', `smart-row${isSelected ? ' is-selected' : ''}${isChecked ? ' is-checked' : ''}${cat ? ' is-matched' : ' is-unresolved'}`);
+
+      const check = document.createElement('input');
+      check.type = 'checkbox';
+      check.className = 'smart-check';
+      check.checked = isChecked;
+      check.addEventListener('click', (e) => {
+        e.stopPropagation();
+      });
+      check.addEventListener('change', () => {
+        if (check.checked) smartSelectedSet.add(item.path);
+        else smartSelectedSet.delete(item.path);
+        renderPanes();
+      });
+
       const lName = el('span', 'smart-row__name', item.name);
       lName.title = item.name;
 
@@ -4965,7 +5292,7 @@ async function renderSmartRenameTab(entry: any = null) {
         }
       }
       const lBadge = el('span', `smart-badge ${badgeType}`, badgeText);
-      lRow.append(lName, lBadge);
+      lRow.append(check, lName, lBadge);
 
       lRow.addEventListener('click', () => {
         smartSelectedPath = item.path;
@@ -4975,67 +5302,42 @@ async function renderSmartRenameTab(entry: any = null) {
       leftBody.append(lRow);
 
       /* Right Row */
-      const rRow = el('div', `smart-row${isSelected ? ' is-selected' : ''}`);
+      const rRow = el('div', `smart-row${isSelected ? ' is-selected' : ''}${isChecked ? ' is-checked' : ''}`);
       const suggestedText = planRow ? planRow.to : item.name;
       const rName = el('span', 'smart-row__name', suggestedText);
       rName.title = suggestedText;
       rName.style.fontWeight = isChanged ? '600' : 'normal';
       if (isChanged) rName.style.color = 'var(--amber)';
 
-      const select = document.createElement('select');
-      select.className = 'smart-select';
-      const defOpt = document.createElement('option');
-      defOpt.value = '';
-      defOpt.textContent = '— Unresolved —';
-      select.appendChild(defOpt);
-
-      for (const c of smartCategoriesList) {
-        const opt = document.createElement('option');
-        opt.value = c.category;
-        opt.textContent = `${c.category} (generic)`;
-        if (cat === c.category && !sub) opt.selected = true;
-        select.appendChild(opt);
-
-        for (const s of c.subtypes) {
-          const subOpt = document.createElement('option');
-          subOpt.value = `${c.category}:${s}`;
-          subOpt.textContent = `${c.category} / ${s}`;
-          if (cat === c.category && sub === s) subOpt.selected = true;
-          select.appendChild(subOpt);
+      /* Searchable Typable Combobox for Category */
+      const rowCombobox = createSmartCombobox({
+        currentCategory: cat,
+        currentSubtype: sub,
+        currentCustomName: item.customName,
+        categoriesList: smartCategoriesList,
+        onApply: async (res) => {
+          item.userCategory = res.category;
+          item.userSubtype = res.subtype;
+          item.customName = res.customName || null;
+          item.confidence = 1.0;
+          const tokens = (item.name || '').split(/[^a-zA-Z0-9]+/).filter((t: string) => t.length > 2);
+          if (item.userCategory) {
+            await window.api.userDictLearn(tokens, item.userCategory, item.userSubtype || null);
+          }
+          renderPanes();
         }
-      }
-
-      select.addEventListener('change', async (e: any) => {
-        const val = e.target.value;
-        if (!val) {
-          item.userCategory = null;
-          item.userSubtype = null;
-        } else if (val.includes(':')) {
-          const [c, s] = val.split(':');
-          item.userCategory = c;
-          item.userSubtype = s;
-        } else {
-          item.userCategory = val;
-          item.userSubtype = null;
-        }
-        item.confidence = 1.0;
-        const tokens = (item.name || '').split(/[^a-zA-Z0-9]+/).filter((t: string) => t.length > 2);
-        if (item.userCategory) {
-          await window.api.userDictLearn(tokens, item.userCategory, item.userSubtype || null);
-        }
-        renderPanes();
       });
 
       let reasonText = '';
-      if (item.userCategory) reasonText = 'Manual override';
+      if (item.userCategory || item.customName) reasonText = 'Manual override';
       else if (item.matchedOn) reasonText = `Matched "${item.matchedOn}"`;
       else if (item.audioFeatures) reasonText = `Audio centroid ${item.audioFeatures.centroid}Hz`;
       const rReason = el('span', 'smart-reason', reasonText);
 
-      rRow.append(rName, select, rReason);
+      rRow.append(rName, rowCombobox, rReason);
 
       rRow.addEventListener('click', (e) => {
-        if (e.target && ((e.target as HTMLElement).tagName === 'SELECT' || (e.target as HTMLElement).tagName === 'OPTION')) return;
+        if (e.target && ((e.target as HTMLElement).closest('.smart-combobox'))) return;
         smartSelectedPath = item.path;
         Player.load({ path: item.path, name: item.name, ext: pathExt(item.name) });
         renderPanes();
