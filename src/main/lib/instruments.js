@@ -61,7 +61,7 @@ const DICTIONARY = {
     china: ['china', 'chinacymbal'],
     fill: ['fill', 'fills', 'drumfill', 'drum fill'],
     loop: ['drumloop', 'drum loop', 'drumbreak', 'break', 'breakbeat'],
-    kit: ['drums', 'drum', 'drumkit', 'drum kit', 'kit', 'dr']
+    kit: ['drums', 'drum', 'drummer', 'drummers', 'drumkit', 'drum kit', 'kit', 'dr']
   },
 
   /* ============================================================== */
@@ -222,7 +222,7 @@ const DICTIONARY = {
   brass: {
     trumpet: ['trumpet', 'tpt', 'cornet', 'flugelhorn', 'flugel'],
     trombone: ['trombone', 'tbn', 'bonе', 'bone'],
-    frenchhorn: ['frenchhorn', 'french horn', 'horn', 'horns'],
+    frenchhorn: ['frenchhorn', 'french horn', 'horn', 'horns', 'horny'],
     tuba: ['tuba', 'sousaphone'],
     saxophone: ['sax', 'saxophone', 'altosax', 'alto sax', 'tenorsax', 'tenor sax', 'barisax', 'soprano sax'],
     ensemble: ['brassensemble', 'brass ensemble', 'brasssection', 'brass section'],
