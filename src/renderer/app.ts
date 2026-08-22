@@ -3842,7 +3842,10 @@ function renderStemsTab(entry) {
     renameStemsBtn.title = 'Open Smart Renamer with this stems folder';
     renameStemsBtn.addEventListener('click', () => {
       smartRenameFolder = rec.stemsPath;
-      navigate({ kind: 'project-tab', tab: 'tools', project: entry });
+      projectTab = 'tools';
+      projectTool = 'rename';
+      renamerSubMode = 'smart';
+      render();
     });
     controls.append(renameStemsBtn);
   }
