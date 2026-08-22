@@ -93,8 +93,7 @@ function drawWaveform(peaks: number[] | null, progress: number) {
   ctx.moveTo(0, mid);
   ctx.lineTo(width, mid);
   ctx.stroke();
-
-  const effectivePeaks = (peaks && peaks.length > 0) ? peaks : fallbackDemoPeaks;
+  const effectivePeaks = (peaks && peaks.length > 0) ? peaks : null;
   if (!effectivePeaks || effectivePeaks.length === 0) return;
 
   const playedX = width * Math.max(0, Math.min(1, progress));

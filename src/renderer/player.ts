@@ -77,40 +77,69 @@ const Player = (() => {
   let metronomeBpm: number | null = null;
   let lastMetronomeTickIndex = -1;
 
-  // Demo / Placeholder waveform state when no real audio is loaded yet
-  const DEMO_DURATION = 180; // 3:00 min demo audio
-  const demoPeaks = generateDemoPeaks(300);
-  let demoProgress = 0;
-  let isDemoPlaying = false;
-  let demoRafId: number | null = null;
-  let demoStartTime = 0;
-  let demoOsc: OscillatorNode | null = null;
-  let demoGainNode: GainNode | null = null;
+  // High-performance LRU audio & waveform caches
+  const PEAKS_CACHE_LIMIT = 150;
+  const DECODED_CACHE_LIMIT = 10;
+  const BLOB_URL_CACHE_LIMIT = 10;
 
-  function generateDemoPeaks(buckets = 300): Float32Array {
-    const out = new Float32Array(buckets);
-    for (let i = 0; i < buckets; i++) {
-      const norm = i / buckets;
-      let env = 0.5;
-      if (norm < 0.15) {
-        env = 0.2 + 0.6 * (norm / 0.15);
-      } else if (norm < 0.35) {
-        env = 0.65 + 0.15 * Math.sin(norm * 40);
-      } else if (norm < 0.55) {
-        env = 0.85 + 0.12 * Math.cos(norm * 50);
-      } else if (norm < 0.7) {
-        env = 0.45 + 0.2 * Math.sin(norm * 30);
-      } else if (norm < 0.9) {
-        env = 0.92 + 0.08 * Math.sin(norm * 60);
-      } else {
-        env = 0.8 * (1 - (norm - 0.9) / 0.1) + 0.1;
+  const peaksCache = new Map<string, Float32Array>();
+  const decodedCache = new Map<string, AudioBuffer>();
+  const blobUrlCache = new Map<string, string>();
+
+  function addToLruMap<K, V>(map: Map<K, V>, key: K, value: V, limit: number, onEvict?: (k: K, v: V) => void) {
+    if (map.has(key)) map.delete(key);
+    else if (map.size >= limit) {
+      const oldestKey = map.keys().next().value;
+      if (oldestKey !== undefined) {
+        const oldestVal = map.get(oldestKey);
+        map.delete(oldestKey);
+        if (onEvict && oldestVal !== undefined) onEvict(oldestKey, oldestVal);
       }
-      const beat = Math.pow(Math.abs(Math.sin(norm * Math.PI * 32)), 4) * 0.25;
-      const sub = Math.sin(norm * Math.PI * 8) * 0.1;
-      const noise = ((Math.sin(i * 997 + i * i * 13) + 1) / 2) * 0.2;
-      out[i] = Math.max(0.12, Math.min(0.98, (env + beat + sub + noise) * 0.8));
     }
-    return smooth(out, 2);
+    map.set(key, value);
+  }
+
+  // Pre-cached Path2D per peaks & canvas dimension for 60/144fps zero-cost rendering
+  let cachedWavePath: Path2D | null = null;
+  let cachedWavePeaks: Float32Array | null = null;
+  let cachedWaveWidth = 0;
+  let cachedWaveHeight = 0;
+
+  // Progressive waveform analysis sweep state (reveals waveform from left to right as analysis finishes)
+  let sweepProgress = 1.0;
+  let isSweeping = false;
+  let sweepRafId: number | null = null;
+
+  function startSweepAnimation(rawPeaks: Float32Array) {
+    peaks = rawPeaks;
+    isSweeping = true;
+    sweepProgress = 0;
+
+    if (sweepRafId !== null) {
+      cancelAnimationFrame(sweepRafId);
+      sweepRafId = null;
+    }
+
+    const durationMs = 380; // Smooth 380ms visual analysis sweep
+    const startTime = performance.now();
+
+    function sweepStep(now: number) {
+      const elapsed = now - startTime;
+      sweepProgress = Math.min(1, elapsed / durationMs);
+      draw();
+
+      if (sweepProgress < 1) {
+        sweepRafId = requestAnimationFrame(sweepStep);
+      } else {
+        isSweeping = false;
+        sweepProgress = 1.0;
+        sweepRafId = null;
+        draw();
+        broadcastState();
+      }
+    }
+
+    sweepRafId = requestAnimationFrame(sweepStep);
   }
 
   // Region audition (the trim editor). When regionEnd is set, playback stops or
@@ -682,50 +711,84 @@ const Player = (() => {
   /* --------------------------- loading --------------------------- */
 
   async function load(file, { autoplay = true, project = null }: { autoplay?: boolean; project?: any } = {}) {
-    if (isDemoPlaying) stopDemoPlayback();
     const serial = ++loadSerial;
     clearRegion(); // a new file starts as whole-file playback
     const proj = project || (file && (file.project || file.where || file.folder)) || null;
     current = { path: file.path, name: file.name, project: proj };
     titleEl.textContent = file.name;
     titleEl.title = 'Click to open project';
-    timeEl.textContent = 'Loading…';
-    peaks = null;
-    decoded = null;
-    draw();
-    emit();
 
-    let bytes;
-    try {
-      bytes = await window.api.readMedia(file.path);
-    } catch (err) {
-      if (serial === loadSerial) timeEl.textContent = 'Could not read file';
-      return null;
-    }
-    if (serial !== loadSerial) return null;
+    // Check if waveform peaks and/or decoded audio are already in memory
+    const cachedPeaks = peaksCache.get(file.path);
+    const cachedDecoded = decodedCache.get(file.path);
+    const cachedBlobUrl = blobUrlCache.get(file.path);
 
-    // One copy for the audio element, one for decoding — decodeAudioData
-    // takes ownership of the buffer it's given and leaves it empty.
-    const forPlayback = bytes.slice(0);
-
-    const blob = new Blob([forPlayback], { type: guessType(file.name) });
-    if (audio.src) URL.revokeObjectURL(audio.src);
-    audio.src = URL.createObjectURL(blob);
-
-    try {
-      if (!audioContext) audioContext = new AudioContext();
-      const nextDecoded = await audioContext.decodeAudioData(bytes);
-      if (serial !== loadSerial) return null;
-      decoded = nextDecoded;
-      peaks = buildPeaks(nextDecoded, 900);
+    if (cachedPeaks) {
+      peaks = cachedPeaks;
+      decoded = cachedDecoded || null;
+      isSweeping = false;
+      sweepProgress = 1.0;
+      timeEl.textContent = cachedDecoded ? `${clock(0)} / ${clock(cachedDecoded.duration)}` : 'Ready';
       draw();
-      broadcastState();
-    } catch (err) {
-      if (serial === loadSerial) timeEl.textContent = 'Cannot decode this format';
+      emit();
+    } else {
+      peaks = null;
+      decoded = null;
+      isSweeping = false;
+      sweepProgress = 0.0;
+      timeEl.textContent = 'Loading…';
+      draw();
+      emit();
+    }
+
+    if (cachedBlobUrl) {
+      if (audio.src !== cachedBlobUrl) {
+        audio.src = cachedBlobUrl;
+      }
+      if (autoplay) play();
+    } else {
+      let bytes;
+      try {
+        bytes = await window.api.readMedia(file.path);
+      } catch (err) {
+        if (serial === loadSerial) timeEl.textContent = 'Could not read file';
+        return null;
+      }
+      if (serial !== loadSerial) return null;
+
+      // One copy for the audio element, one for decoding — decodeAudioData
+      // takes ownership of the buffer it's given and leaves it empty.
+      const forPlayback = bytes.slice(0);
+      const blob = new Blob([forPlayback], { type: guessType(file.name) });
+      const newUrl = URL.createObjectURL(blob);
+      addToLruMap(blobUrlCache, file.path, newUrl, BLOB_URL_CACHE_LIMIT, (_, oldUrl) => URL.revokeObjectURL(oldUrl));
+      audio.src = newUrl;
+
+      // Start audio playback IMMEDIATELY without waiting for decoding or analysis
+      if (autoplay) play();
+
+      if (!cachedDecoded) {
+        try {
+          if (!audioContext) audioContext = new AudioContext();
+          if (audioContext.state === 'suspended') audioContext.resume();
+          const nextDecoded = await audioContext.decodeAudioData(bytes);
+          if (serial !== loadSerial) return null;
+          decoded = nextDecoded;
+          addToLruMap(decodedCache, file.path, nextDecoded, DECODED_CACHE_LIMIT);
+
+          if (!cachedPeaks) {
+            const rawPeaks = buildPeaks(nextDecoded, 900);
+            addToLruMap(peaksCache, file.path, rawPeaks, PEAKS_CACHE_LIMIT);
+            // Visually sweep and reveal the waveform from left to right as analysis completes
+            startSweepAnimation(rawPeaks);
+          }
+        } catch (err) {
+          if (serial === loadSerial && !cachedPeaks) timeEl.textContent = 'Cannot decode this format';
+        }
+      }
     }
 
     if (serial !== loadSerial) return null;
-    if (autoplay) play();
     emit();
     return decoded;
   }
@@ -806,49 +869,74 @@ const Player = (() => {
     ctx.lineTo(width, mid);
     ctx.stroke();
 
-    const effectivePeaks = peaks || demoPeaks;
-    if (!effectivePeaks || effectivePeaks.length === 0) return;
+    const effectivePeaks = peaks;
 
-    const progress = current
-      ? (duration() > 0 ? audio.currentTime / duration() : 0)
-      : demoProgress;
+    if (!effectivePeaks || effectivePeaks.length === 0) {
+      // Empty baseline when no audio is loaded or while audio is initially reading
+      return;
+    }
+
+    const progress = duration() > 0 ? audio.currentTime / duration() : 0;
     const playedX = width * progress;
+    const sweepLimitX = isSweeping ? width * sweepProgress : width;
 
-    // Sample-accurate, perfectly aligned symmetric waveform shape
-    const path = new Path2D();
-    const len = effectivePeaks.length;
-    const step = width / Math.max(1, len - 1);
-    const amp = mid * 0.92;
+    // Fast cached Path2D reuse across 60/144fps animation frames
+    let path: Path2D;
+    if (
+      cachedWavePath &&
+      cachedWavePeaks === effectivePeaks &&
+      cachedWaveWidth === width &&
+      cachedWaveHeight === height
+    ) {
+      path = cachedWavePath;
+    } else {
+      path = new Path2D();
+      const len = effectivePeaks.length;
+      const step = width / Math.max(1, len - 1);
+      const amp = mid * 0.92;
 
-    // Top half: 0 -> len - 1
-    path.moveTo(0, mid - Math.max(0.015, effectivePeaks[0]) * amp);
-    for (let i = 1; i < len; i += 1) {
-      const x = i * step;
-      const y = mid - Math.max(0.015, effectivePeaks[i]) * amp;
-      path.lineTo(x, y);
+      // Top half: 0 -> len - 1
+      path.moveTo(0, mid - Math.max(0.015, effectivePeaks[0]) * amp);
+      for (let i = 1; i < len; i += 1) {
+        const x = i * step;
+        const y = mid - Math.max(0.015, effectivePeaks[i]) * amp;
+        path.lineTo(x, y);
+      }
+
+      // Bottom half: len - 1 -> 0
+      for (let i = len - 1; i >= 0; i -= 1) {
+        const x = i * step;
+        const y = mid + Math.max(0.015, effectivePeaks[i]) * amp;
+        path.lineTo(x, y);
+      }
+      path.closePath();
+
+      cachedWavePath = path;
+      cachedWavePeaks = effectivePeaks;
+      cachedWaveWidth = width;
+      cachedWaveHeight = height;
     }
 
-    // Bottom half: len - 1 -> 0
-    for (let i = len - 1; i >= 0; i -= 1) {
-      const x = i * step;
-      const y = mid + Math.max(0.015, effectivePeaks[i]) * amp;
-      path.lineTo(x, y);
+    // Clip waveform rendering to the progressive sweep boundary (left to right)
+    ctx.save();
+    if (sweepLimitX < width) {
+      ctx.beginPath();
+      ctx.rect(0, 0, sweepLimitX, height);
+      ctx.clip();
     }
-    path.closePath();
 
     // Unplayed portion (adaptive fill contrast for light & dark surfaces)
-    ctx.save();
     ctx.fillStyle = isLight
       ? 'rgba(0, 0, 0, 0.18)'
       : 'rgba(255, 255, 255, 0.22)';
     ctx.fill(path);
-    ctx.restore();
 
-    // Played portion, clipped to everything left of the playhead
-    if (playedX > 0) {
+    // Played portion, clipped to everything left of the playhead (and within sweep)
+    const effectivePlayedX = Math.min(playedX, sweepLimitX);
+    if (effectivePlayedX > 0) {
       ctx.save();
       ctx.beginPath();
-      ctx.rect(0, 0, playedX, height);
+      ctx.rect(0, 0, effectivePlayedX, height);
       ctx.clip();
       const amberHex = getAmberColor();
       ctx.fillStyle = amberHex;
@@ -856,13 +944,40 @@ const Player = (() => {
       ctx.restore();
     }
 
+    ctx.restore(); // Restore sweep clip
+
+    // If sweeping, draw a scanning beam & glow line at the sweep head
+    if (isSweeping && sweepLimitX > 0 && sweepLimitX < width) {
+      const amberHex = getAmberColor();
+      ctx.save();
+
+      // Glowing scan line
+      ctx.strokeStyle = amberHex;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(sweepLimitX, 2);
+      ctx.lineTo(sweepLimitX, height - 2);
+      ctx.stroke();
+
+      // Subtle sweep trail
+      const glow = ctx.createLinearGradient(Math.max(0, sweepLimitX - 24), 0, sweepLimitX, 0);
+      glow.addColorStop(0, 'rgba(0, 240, 255, 0)');
+      glow.addColorStop(1, isLight ? 'rgba(0, 160, 210, 0.22)' : 'rgba(0, 240, 255, 0.3)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(Math.max(0, sweepLimitX - 24), 2, 24, height - 4);
+
+      ctx.restore();
+    }
+
     // Playhead
-    ctx.strokeStyle = isLight ? '#121714' : '#f3f2f0';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(playedX, 2);
-    ctx.lineTo(playedX, height - 2);
-    ctx.stroke();
+    if (!isSweeping || playedX <= sweepLimitX) {
+      ctx.strokeStyle = isLight ? '#121714' : '#f3f2f0';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(playedX, 2);
+      ctx.lineTo(playedX, height - 2);
+      ctx.stroke();
+    }
   }
 
   let cachedAmberHex = '';
@@ -881,48 +996,7 @@ const Player = (() => {
 
   /* -------------------------- transport -------------------------- */
 
-  function startDemoPlayback() {
-    isDemoPlaying = true;
-    playBtn.innerHTML = '&#10074;&#10074;';
-    demoStartTime = performance.now() - (demoProgress * DEMO_DURATION * 1000);
-    buildChain();
-    demoTick();
-  }
-
-  function stopDemoPlayback() {
-    isDemoPlaying = false;
-    playBtn.innerHTML = '&#9654;';
-    if (demoRafId !== null) {
-      cancelAnimationFrame(demoRafId);
-      demoRafId = null;
-    }
-    draw();
-  }
-
-  function demoTick() {
-    if (!isDemoPlaying) return;
-    const now = performance.now();
-    const elapsedSec = (now - demoStartTime) / 1000;
-    demoProgress = elapsedSec / DEMO_DURATION;
-    if (demoProgress >= 1) {
-      if (repeatEnabled) {
-        demoProgress = 0;
-        demoStartTime = performance.now();
-      } else {
-        demoProgress = 0;
-        stopDemoPlayback();
-        return;
-      }
-    }
-    if (timeEl) {
-      timeEl.textContent = `${clock(demoProgress * DEMO_DURATION)} / ${clock(DEMO_DURATION)}`;
-    }
-    draw();
-    demoRafId = requestAnimationFrame(demoTick);
-  }
-
   function play() {
-    if (isDemoPlaying) stopDemoPlayback();
     // A plain play is always the whole file — drop any trim region first.
     clearRegion();
     if (audioContext && audioContext.state === 'suspended') audioContext.resume();
@@ -979,9 +1053,6 @@ const Player = (() => {
     if (current) {
       if (audio.paused) play();
       else audio.pause();
-    } else {
-      if (isDemoPlaying) stopDemoPlayback();
-      else startDemoPlayback();
     }
   }
 
@@ -1000,13 +1071,13 @@ const Player = (() => {
   function broadcastState() {
     if (window.api && window.api.broadcastPlayerState) {
       window.api.broadcastPlayerState({
-        playing: !audio.paused || isDemoPlaying,
-        name: current ? current.name : (isDemoPlaying ? 'Demo Track' : 'No audio loaded'),
+        playing: !audio.paused,
+        name: current ? current.name : 'No audio loaded',
         project: current ? current.project || current.where || '' : '',
         path: current ? current.path : '',
-        currentTime: current ? audio.currentTime : (demoProgress * DEMO_DURATION),
-        duration: current ? duration() : DEMO_DURATION,
-        peaks: peaks ? Array.from(peaks) : (isDemoPlaying || !current ? Array.from(demoPeaks) : null),
+        currentTime: current ? audio.currentTime : 0,
+        duration: current ? duration() : 0,
+        peaks: peaks ? Array.from(peaks) : null,
         repeat: repeatEnabled,
         reverb: reverbEnabled,
         drone: Boolean(droneOsc)
@@ -1075,16 +1146,6 @@ const Player = (() => {
       audio.currentTime = clickRatio * duration();
       draw();
       broadcastState();
-    } else if (!current) {
-      // Interactive scrubbing on demo waveform
-      demoProgress = clickRatio;
-      if (isDemoPlaying) {
-        demoStartTime = performance.now() - (demoProgress * DEMO_DURATION * 1000);
-      }
-      if (timeEl) {
-        timeEl.textContent = `${clock(demoProgress * DEMO_DURATION)} / ${clock(DEMO_DURATION)}`;
-      }
-      draw();
     }
   });
 

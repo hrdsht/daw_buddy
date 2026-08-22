@@ -359,6 +359,9 @@ let sortBy = 'modified';
 let sortDir = -1;
 const noteTimers = new Map();
 const sampleAuditCache = new Map(); // sessionPath -> audit result, cleared on rescan
+const projectRendersCache = new Map<string, any>(); // sessionPath -> findRenders result, cleared on rescan
+const projectStemsCache = new Map<string, any[]>(); // stemsPath -> listAllAudio files, cleared on rescan
+const projectAllAudioCache = new Map<string, any[]>(); // folder -> deepAudio files, cleared on rescan
 let dedupeState = { groups: [], scanned: 0, folders: 0, chosen: new Set<number>() };
 let silenceProgressStatus = null;
 let finishProgressStatus = null;
@@ -678,6 +681,9 @@ function applySettings() {
 
 async function refresh() {
   sampleAuditCache.clear();
+  projectRendersCache.clear();
+  projectStemsCache.clear();
+  projectAllAudioCache.clear();
   if (view === 'list') showSpinner('Scanning', 'Reading your folders.');
 
   const result = browsing
@@ -1395,8 +1401,7 @@ async function playNewest(entry) {
     return;
   }
   const file = result.renders[0].primary;
-  const decoded = await Player.load(file, { project: entry });
-  if (decoded) analysePlayedAudio(entry, file, decoded);
+  await Player.load(file, { project: entry });
 }
 
 let isPreloadingRender = false;
@@ -1419,8 +1424,7 @@ async function preloadLatestRender({ autoplay = false } = {}) {
         if (file) {
           selected = openProject.path;
           activeAuditionPath = openProject.path;
-          const decoded = await Player.load(file, { autoplay, project: openProject });
-          if (decoded) analysePlayedAudio(openProject, file, decoded);
+          await Player.load(file, { autoplay, project: openProject });
           return;
         }
       }
@@ -1441,8 +1445,7 @@ async function preloadLatestRender({ autoplay = false } = {}) {
         if (file) {
           selected = entry.path;
           activeAuditionPath = entry.path;
-          const decoded = await Player.load(file, { autoplay, project: entry });
-          if (decoded) analysePlayedAudio(entry, file, decoded);
+          await Player.load(file, { autoplay, project: entry });
           return;
         }
       }
@@ -3695,19 +3698,10 @@ function renderRendersTab(entry) {
   loadRenders(entry, list);
 }
 
-async function loadRenders(entry, container) {
-  container.append(el('p', 'muted', 'Looking for audio…'));
-
-  const result = await window.api.findRenders(
-    entry.sessionPath,
-    entry.root,
-    stemsFolderFor(entry),
-    siblingsOf(entry)
-  );
-
+function renderRendersList(entry: any, container: HTMLElement, result: any) {
   container.innerHTML = '';
 
-  if (!result.renders.length) {
+  if (!result || !result.renders || !result.renders.length) {
     container.append(
       el(
         'p',
@@ -3721,7 +3715,7 @@ async function loadRenders(entry, container) {
   // Grouped by where they were found, so Renders, Bounces and loose files
   // stay visually separate instead of merging into one long list.
   const byPlace = new Map();
-  result.renders.forEach((render) => {
+  result.renders.forEach((render: any) => {
     const where = render.where || 'Elsewhere';
     if (!byPlace.has(where)) byPlace.set(where, []);
     byPlace.get(where).push(render);
@@ -3731,7 +3725,42 @@ async function loadRenders(entry, container) {
     const heading = el('div', 'page__kicker', where);
     heading.style.margin = '14px 0 6px';
     container.append(heading);
-    list.forEach((render) => container.append(buildRenderRow(entry, render)));
+    list.forEach((render: any) => container.append(buildRenderRow(entry, render)));
+  }
+}
+
+async function loadRenders(entry: any, container: HTMLElement) {
+  const cacheKey = entry.sessionPath || entry.path;
+  const cached = projectRendersCache.get(cacheKey);
+
+  if (cached) {
+    renderRendersList(entry, container, cached);
+  } else {
+    container.append(el('p', 'muted', 'Looking for audio…'));
+  }
+
+  try {
+    const result = await window.api.findRenders(
+      entry.sessionPath,
+      entry.root,
+      stemsFolderFor(entry),
+      siblingsOf(entry)
+    );
+
+    projectRendersCache.set(cacheKey, result);
+
+    if (container.isConnected) {
+      const cachedPaths = cached?.renders?.map((r: any) => r.primary?.path).join('|');
+      const newPaths = result?.renders?.map((r: any) => r.primary?.path).join('|');
+      if (!cached || cachedPaths !== newPaths) {
+        renderRendersList(entry, container, result);
+      }
+    }
+  } catch (err) {
+    if (!cached && container.isConnected) {
+      container.innerHTML = '';
+      container.append(el('p', 'muted', 'Could not search for renders.'));
+    }
   }
 }
 
@@ -3918,7 +3947,10 @@ function renderStemsTab(entry) {
   section.append(quickFilters);
 
   const list = el('div');
-  list.append(el('p', 'muted', 'Reading stems folder…'));
+  const cachedStems = projectStemsCache.get(rec.stemsPath);
+  if (!cachedStems) {
+    list.append(el('p', 'muted', 'Reading stems folder…'));
+  }
   section.append(list);
   viewEl.append(section);
 
@@ -3934,90 +3966,115 @@ async function loadStems(
   clearSearchBtn: HTMLButtonElement,
   quickFilters: HTMLElement
 ) {
-  const files = await window.api.listAllAudio(folder);
-  container.innerHTML = '';
-
-  if (!files.length) {
-    container.append(el('p', 'muted', 'No WAV, MP3, AIFF, FLAC or OGG files found in this folder.'));
-    searchCount.textContent = '0 stems';
-    return;
-  }
-
-  // Extract unique instrument / stem prefixes for quick filter tags
-  const prefixCounts = new Map<string, number>();
-  for (const f of files) {
-    const clean = f.name.replace(/\.[^.]+$/, '');
-    const tokens = clean.split(/[^a-zA-Z0-9]+/).filter((t: string) => t.length >= 3 && !/^\d+$/.test(t));
-    if (tokens.length > 0) {
-      const topToken = tokens[0];
-      prefixCounts.set(topToken, (prefixCounts.get(topToken) || 0) + 1);
-    }
-  }
-
-  // Build quick filter buttons
-  quickFilters.innerHTML = '';
-  const allPill = el('button', 'pill pill--sm is-active', `All (${files.length})`) as HTMLButtonElement;
-  quickFilters.append(allPill);
-
-  const topPrefixes = [...prefixCounts.entries()]
-    .filter(([_, count]) => count >= 2)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10);
-
-  const filterButtons: HTMLButtonElement[] = [allPill];
-
-  topPrefixes.forEach(([name, count]) => {
-    const pill = el('button', 'pill pill--sm', `${name} (${count})`) as HTMLButtonElement;
-    pill.addEventListener('click', () => {
-      searchInput.value = name;
-      applyFilter();
-      searchInput.focus();
-    });
-    quickFilters.append(pill);
-    filterButtons.push(pill);
-  });
-
-  allPill.addEventListener('click', () => {
-    searchInput.value = '';
-    applyFilter();
-    searchInput.focus();
-  });
-
-  function applyFilter() {
-    const q = (searchInput.value || '').trim().toLowerCase();
-    clearSearchBtn.style.display = q ? 'inline-block' : 'none';
-
-    // Update active state on filter pills
-    filterButtons.forEach((b) => {
-      const bText = (b.textContent || '').split(' ')[0].toLowerCase();
-      if (!q && b === allPill) b.classList.add('is-active');
-      else if (q && bText === q) b.classList.add('is-active');
-      else b.classList.remove('is-active');
-    });
-
-    const filtered = q
-      ? files.filter((f: any) => f.name.toLowerCase().includes(q) || (f.relPath && f.relPath.toLowerCase().includes(q)))
-      : files;
-
-    searchCount.textContent = `Showing ${filtered.length} of ${files.length} stems`;
-
+  function renderStemsContent(files: any[]) {
     container.innerHTML = '';
-    if (!filtered.length) {
-      container.append(el('p', 'muted', `No stems matching "${q}".`));
+
+    if (!files.length) {
+      container.append(el('p', 'muted', 'No WAV, MP3, AIFF, FLAC or OGG files found in this folder.'));
+      searchCount.textContent = '0 stems';
+      quickFilters.innerHTML = '';
       return;
     }
 
-    filtered.forEach((file: any) => container.append(buildStemRow(entry, file)));
+    // Extract unique instrument / stem prefixes for quick filter tags
+    const prefixCounts = new Map<string, number>();
+    for (const f of files) {
+      const clean = f.name.replace(/\.[^.]+$/, '');
+      const tokens = clean.split(/[^a-zA-Z0-9]+/).filter((t: string) => t.length >= 3 && !/^\d+$/.test(t));
+      if (tokens.length > 0) {
+        const topToken = tokens[0];
+        prefixCounts.set(topToken, (prefixCounts.get(topToken) || 0) + 1);
+      }
+    }
+
+    // Build quick filter buttons
+    quickFilters.innerHTML = '';
+    const allPill = el('button', 'pill pill--sm is-active', `All (${files.length})`) as HTMLButtonElement;
+    quickFilters.append(allPill);
+
+    const topPrefixes = [...prefixCounts.entries()]
+      .filter(([_, count]) => count >= 2)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10);
+
+    const filterButtons: HTMLButtonElement[] = [allPill];
+
+    topPrefixes.forEach(([name, count]) => {
+      const pill = el('button', 'pill pill--sm', `${name} (${count})`) as HTMLButtonElement;
+      pill.addEventListener('click', () => {
+        searchInput.value = name;
+        applyFilter();
+        searchInput.focus();
+      });
+      quickFilters.append(pill);
+      filterButtons.push(pill);
+    });
+
+    allPill.addEventListener('click', () => {
+      searchInput.value = '';
+      applyFilter();
+      searchInput.focus();
+    });
+
+    function applyFilter() {
+      const q = (searchInput.value || '').trim().toLowerCase();
+      clearSearchBtn.style.display = q ? 'inline-block' : 'none';
+
+      // Update active state on filter pills
+      filterButtons.forEach((b) => {
+        const bText = (b.textContent || '').split(' ')[0].toLowerCase();
+        if (!q && b === allPill) b.classList.add('is-active');
+        else if (q && bText === q) b.classList.add('is-active');
+        else b.classList.remove('is-active');
+      });
+
+      const filtered = q
+        ? files.filter((f: any) => f.name.toLowerCase().includes(q) || (f.relPath && f.relPath.toLowerCase().includes(q)))
+        : files;
+
+      searchCount.textContent = `Showing ${filtered.length} of ${files.length} stems`;
+
+      container.innerHTML = '';
+      if (!filtered.length) {
+        container.append(el('p', 'muted', `No stems matching "${q}".`));
+        return;
+      }
+
+      filtered.forEach((file: any) => container.append(buildStemRow(entry, file)));
+    }
+
+    searchInput.oninput = () => applyFilter();
+    clearSearchBtn.onclick = () => {
+      searchInput.value = '';
+      searchInput.focus();
+      applyFilter();
+    };
+
+    applyFilter();
   }
 
-  searchInput.addEventListener('input', () => applyFilter());
-  clearSearchBtn.addEventListener('click', () => {
-    searchInput.value = '';
-    searchInput.focus();
-    applyFilter();
-  });
+  const cached = projectStemsCache.get(folder);
+  if (cached) {
+    renderStemsContent(cached);
+  }
 
-  applyFilter();
+  try {
+    const files = await window.api.listAllAudio(folder);
+    projectStemsCache.set(folder, files);
+
+    if (container.isConnected) {
+      const cachedPaths = cached?.map((f: any) => f.path).join('|');
+      const newPaths = files?.map((f: any) => f.path).join('|');
+      if (!cached || cachedPaths !== newPaths) {
+        renderStemsContent(files);
+      }
+    }
+  } catch (err) {
+    if (!cached && container.isConnected) {
+      container.innerHTML = '';
+      container.append(el('p', 'muted', 'Could not read stems folder.'));
+    }
+  }
 }
 
 function buildStemRow(entry, file) {
@@ -6958,10 +7015,113 @@ function renderQcTab(entry) {
 
 /* --------------------------- all audio ---------------------------- */
 
-/**
- * Every audio file below this project, however deep — the flattened view.
- * Grouped by the folder each came from so it stays readable.
- */
+function renderAllAudioList(list: HTMLElement, entry: any, files: any[]) {
+  list.innerHTML = '';
+  if (files.length === 0) {
+    list.append(el('p', 'muted', 'No audio anywhere below this folder.'));
+    return;
+  }
+
+  const byFolder = new Map();
+  files.forEach((file) => {
+    if (!byFolder.has(file.where)) byFolder.set(file.where, []);
+    byFolder.get(file.where).push(file);
+  });
+
+  const total = files.reduce((sum, f) => sum + f.size, 0);
+  list.append(
+    el(
+      'p',
+      'muted',
+      `${files.length} file(s) across ${byFolder.size} folder(s) · ${formatBytes(total)}`
+    )
+  );
+
+  for (const [folder, group] of byFolder) {
+    const heading = el('div', 'page__kicker', folder);
+    heading.style.margin = '16px 0 6px';
+    list.append(heading);
+
+    group.slice(0, 200).forEach((file: any) => {
+      const row = el('div', 'filerow');
+
+      const item: SelectedItem = {
+        id: file.path,
+        name: file.name,
+        path: file.path,
+        size: file.size,
+        type: 'audio'
+      };
+
+      row.append(createSelectHandle(item));
+
+      const play = el('button', 'filerow__play', '▶');
+      play.addEventListener('click', (event) => {
+        event.stopPropagation();
+        Player.load(file);
+      });
+      row.append(play);
+
+      const middle = el('div');
+      const nameRow = el('div', 'filerow__name-row');
+      nameRow.append(el('span', 'filerow__name', file.name));
+
+      const extClean = (file.ext || '').replace('.', '').toUpperCase();
+      if (extClean) {
+        const pill = el('button', `format-pill format-pill--${extClean.toLowerCase()}`, extClean);
+        pill.title = `Hold & Drag ${extClean} directly · Click to audition (${formatBytes(file.size)})`;
+        pill.draggable = true;
+        pill.addEventListener('dragstart', async (e: DragEvent) => {
+          e.stopPropagation();
+          if (e.dataTransfer) {
+            e.dataTransfer.setData('text/plain', file.path);
+            e.dataTransfer.effectAllowed = 'copy';
+          }
+          if (window.api && window.api.dragFiles) {
+            await window.api.dragFiles([file.path]);
+          }
+        });
+        pill.addEventListener('click', (e: MouseEvent) => {
+          e.stopPropagation();
+          Player.load(file);
+        });
+        const pillsWrap = el('span', 'format-pills');
+        pillsWrap.append(pill);
+        nameRow.append(pillsWrap);
+      }
+      middle.append(nameRow);
+
+      middle.append(
+        el(
+          'div',
+          'filerow__meta',
+          `${formatBytes(file.size)}  ·  ${timeAgo(file.modified)}`
+        )
+      );
+      row.append(middle);
+
+      const dragHint = el('span', 'filerow__drag-hint', '⤓ Drag');
+      dragHint.title = 'Drag audio file into DAW or Explorer';
+      row.append(dragHint);
+
+      const actions = el('div', 'filerow__actions');
+      actions.append(analyseAudioButton(entry, file));
+      const reveal = el('button', 'pill pill--sm', `Show in ${settings.fileManager}`);
+      reveal.addEventListener('click', (event) => {
+        event.stopPropagation();
+        window.api.reveal(file.path);
+      });
+      actions.append(reveal);
+      row.append(actions);
+
+      row.dataset.path = file.path;
+      row.addEventListener('dblclick', () => Player.load(file));
+      attachDraggableAndSelectable(row, item);
+      list.append(row);
+    });
+  }
+}
+
 function renderAllAudioTab(entry) {
   const section = el('div', 'section');
   section.append(headRow('All audio'));
@@ -6977,119 +7137,30 @@ function renderAllAudioTab(entry) {
   section.append(list);
   viewEl.append(section);
 
-  list.append(el('p', 'muted', 'Looking…'));
+  const cached = projectAllAudioCache.get(entry.folder);
+  if (cached) {
+    renderAllAudioList(list, entry, cached);
+  } else {
+    list.append(el('p', 'muted', 'Looking…'));
+  }
 
   window.api
     .deepAudio(entry.folder)
     .then((files) => {
-      list.innerHTML = '';
-      if (files.length === 0) {
-        list.append(el('p', 'muted', 'No audio anywhere below this folder.'));
-        return;
-      }
-
-      const byFolder = new Map();
-      files.forEach((file) => {
-        if (!byFolder.has(file.where)) byFolder.set(file.where, []);
-        byFolder.get(file.where).push(file);
-      });
-
-      const total = files.reduce((sum, f) => sum + f.size, 0);
-      list.append(
-        el(
-          'p',
-          'muted',
-          `${files.length} file(s) across ${byFolder.size} folder(s) · ${formatBytes(total)}`
-        )
-      );
-
-      for (const [folder, group] of byFolder) {
-        const heading = el('div', 'page__kicker', folder);
-        heading.style.margin = '16px 0 6px';
-        list.append(heading);
-
-        group.slice(0, 200).forEach((file) => {
-          const row = el('div', 'filerow');
-
-          const item: SelectedItem = {
-            id: file.path,
-            name: file.name,
-            path: file.path,
-            size: file.size,
-            type: 'audio'
-          };
-
-          row.append(createSelectHandle(item));
-
-          const play = el('button', 'filerow__play', '▶');
-          play.addEventListener('click', (event) => {
-            event.stopPropagation();
-            Player.load(file);
-          });
-          row.append(play);
-
-          const middle = el('div');
-          const nameRow = el('div', 'filerow__name-row');
-          nameRow.append(el('span', 'filerow__name', file.name));
-
-          const extClean = (file.ext || '').replace('.', '').toUpperCase();
-          if (extClean) {
-            const pill = el('button', `format-pill format-pill--${extClean.toLowerCase()}`, extClean);
-            pill.title = `Hold & Drag ${extClean} directly · Click to audition (${formatBytes(file.size)})`;
-            pill.draggable = true;
-            pill.addEventListener('dragstart', async (e: DragEvent) => {
-              e.stopPropagation();
-              if (e.dataTransfer) {
-                e.dataTransfer.setData('text/plain', file.path);
-                e.dataTransfer.effectAllowed = 'copy';
-              }
-              if (window.api && window.api.dragFiles) {
-                await window.api.dragFiles([file.path]);
-              }
-            });
-            pill.addEventListener('click', (e: MouseEvent) => {
-              e.stopPropagation();
-              Player.load(file);
-            });
-            const pillsWrap = el('span', 'format-pills');
-            pillsWrap.append(pill);
-            nameRow.append(pillsWrap);
-          }
-          middle.append(nameRow);
-
-          middle.append(
-            el(
-              'div',
-              'filerow__meta',
-              `${formatBytes(file.size)}  ·  ${timeAgo(file.modified)}`
-            )
-          );
-          row.append(middle);
-
-          const dragHint = el('span', 'filerow__drag-hint', '⤓ Drag');
-          dragHint.title = 'Drag audio file into DAW or Explorer';
-          row.append(dragHint);
-
-          const actions = el('div', 'filerow__actions');
-          actions.append(analyseAudioButton(entry, file));
-          const reveal = el('button', 'pill pill--sm', `Show in ${settings.fileManager}`);
-          reveal.addEventListener('click', (event) => {
-            event.stopPropagation();
-            window.api.reveal(file.path);
-          });
-          actions.append(reveal);
-          row.append(actions);
-
-          row.dataset.path = file.path;
-          row.addEventListener('dblclick', () => Player.load(file));
-          attachDraggableAndSelectable(row, item);
-          list.append(row);
-        });
+      projectAllAudioCache.set(entry.folder, files);
+      if (list.isConnected) {
+        const cachedPaths = cached?.map((f: any) => f.path).join('|');
+        const newPaths = files?.map((f: any) => f.path).join('|');
+        if (!cached || cachedPaths !== newPaths) {
+          renderAllAudioList(list, entry, files);
+        }
       }
     })
     .catch((err) => {
-      list.innerHTML = '';
-      list.append(el('p', 'muted', err.message));
+      if (!cached && list.isConnected) {
+        list.innerHTML = '';
+        list.append(el('p', 'muted', err.message));
+      }
     });
 }
 
