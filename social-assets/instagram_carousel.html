@@ -944,15 +944,40 @@
         recordBtn.disabled = false;
         recordBtn.innerHTML = `🎥 Export Video Reel (${ext.toUpperCase()})`;
         videoEl.loop = true;
+        videoEl.currentTime = 0;
         videoEl.play().catch(() => {});
       };
 
-      // Disable looping so playback reaches end cleanly
+      // 1. Pause video immediately, reset time to 0, and disable looping
+      videoEl.pause();
       videoEl.loop = false;
-      videoEl.currentTime = 0;
       videoEl.muted = true;
+      videoEl.currentTime = 0;
 
-      // Start recording with 100ms chunks to continuously flush video frames
+      // 2. Ensure video has completed seeking to 0.0 before recording
+      await new Promise(resolve => {
+        if (videoEl.currentTime === 0 && videoEl.readyState >= 2) {
+          resolve();
+        } else {
+          let resolved = false;
+          const onSeeked = () => {
+            if (resolved) return;
+            resolved = true;
+            videoEl.removeEventListener('seeked', onSeeked);
+            resolve();
+          };
+          videoEl.addEventListener('seeked', onSeeked, { once: true });
+          setTimeout(() => {
+            if (!resolved) {
+              resolved = true;
+              videoEl.removeEventListener('seeked', onSeeked);
+              resolve();
+            }
+          }, 150);
+        }
+      });
+
+      // 3. Start recording with 100ms chunks to continuously flush video frames
       recorder.start(100);
 
       try {
