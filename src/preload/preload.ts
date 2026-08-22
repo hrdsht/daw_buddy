@@ -18,6 +18,7 @@ function subscribe(channel, callback) {
 }
 
 contextBridge.exposeInMainWorld('api', {
+  getVersion: () => ipcRenderer.invoke('app:version'),
   getSettings: () => ipcRenderer.invoke('settings:get'),
   updateSettings: (patch) => ipcRenderer.invoke('settings:update', patch),
   addRoot: () => ipcRenderer.invoke('settings:addRoot'),

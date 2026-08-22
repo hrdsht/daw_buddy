@@ -587,10 +587,12 @@ const platformInfo = () => ({
 const fullSettings = () => ({
   ...settings.get(),
   dataDir: dataDir(),
+  appVersion: app.getVersion(),
   ...platformInfo()
 });
 
 ipcMain.handle('settings:get', () => fullSettings());
+ipcMain.handle('app:version', () => app.getVersion());
 
 ipcMain.handle('settings:update', (event, patch: any) => {
   patch = patch && typeof patch === 'object' ? patch : {};

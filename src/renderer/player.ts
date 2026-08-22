@@ -708,6 +708,28 @@ const Player = (() => {
     });
   }
 
+  function toArrayBuffer(buf: any): ArrayBuffer {
+    if (!buf) return new ArrayBuffer(0);
+    if (buf instanceof ArrayBuffer) {
+      return buf.slice(0);
+    }
+    if (ArrayBuffer.isView(buf)) {
+      const view = buf as Uint8Array;
+      const b = view.buffer;
+      if (b instanceof ArrayBuffer) {
+        return b.slice(view.byteOffset, view.byteOffset + view.byteLength);
+      }
+      const copy = new Uint8Array(view.byteLength);
+      copy.set(new Uint8Array(b as any, view.byteOffset, view.byteLength));
+      return copy.buffer;
+    }
+    if (typeof buf === 'object' && buf && buf.buffer instanceof ArrayBuffer) {
+      return buf.buffer.slice(buf.byteOffset || 0, (buf.byteOffset || 0) + (buf.byteLength || buf.length || 0));
+    }
+    const fallback = new Uint8Array(buf as any);
+    return fallback.buffer.slice(fallback.byteOffset, fallback.byteOffset + fallback.byteLength);
+  }
+
   /* --------------------------- loading --------------------------- */
 
   async function load(file, { autoplay = true, project = null }: { autoplay?: boolean; project?: any } = {}) {
@@ -741,53 +763,68 @@ const Player = (() => {
       emit();
     }
 
+    // 1. Audio element playback source
+    let rawBytes: any = null;
     if (cachedBlobUrl) {
       if (audio.src !== cachedBlobUrl) {
         audio.src = cachedBlobUrl;
       }
       if (autoplay) play();
     } else {
-      let bytes;
       try {
-        bytes = await window.api.readMedia(file.path);
+        rawBytes = await window.api.readMedia(file.path);
       } catch (err) {
         if (serial === loadSerial) timeEl.textContent = 'Could not read file';
         return null;
       }
       if (serial !== loadSerial) return null;
 
-      // Direct zero-copy Blob creation from ArrayBuffer
-      const blob = new Blob([bytes], { type: guessType(file.name) });
+      // Direct zero-copy Blob creation from ArrayBuffer or Uint8Array
+      const blob = new Blob([rawBytes], { type: guessType(file.name) });
       const newUrl = URL.createObjectURL(blob);
       addToLruMap(blobUrlCache, file.path, newUrl, BLOB_URL_CACHE_LIMIT, (_, oldUrl) => URL.revokeObjectURL(oldUrl));
       audio.src = newUrl;
 
       // Priority 1: Start audio playback IMMEDIATELY without waiting for decoding or analysis
       if (autoplay) play();
+    }
 
-      // Priority 2: Asynchronous decoding & waveform generation (scheduled so playback starts instantly)
-      if (!cachedDecoded) {
-        const forDecoding = bytes.slice(0);
-        setTimeout(async () => {
-          if (serial !== loadSerial) return;
-          try {
-            if (!audioContext) audioContext = new AudioContext();
-            if (audioContext.state === 'suspended') audioContext.resume();
-            const nextDecoded = await audioContext.decodeAudioData(forDecoding);
-            if (serial !== loadSerial) return;
-            decoded = nextDecoded;
-            addToLruMap(decodedCache, file.path, nextDecoded, DECODED_CACHE_LIMIT);
-
-            if (!cachedPeaks) {
-              const rawPeaks = buildPeaks(nextDecoded, 900);
-              addToLruMap(peaksCache, file.path, rawPeaks, PEAKS_CACHE_LIMIT);
-              startSweepAnimation(rawPeaks);
-            }
-          } catch (err) {
-            if (serial === loadSerial && !cachedPeaks) timeEl.textContent = 'Cannot decode this format';
+    // 2. Waveform decoding & peak extraction
+    if (!cachedDecoded || !cachedPeaks) {
+      (async () => {
+        if (serial !== loadSerial) return;
+        try {
+          if (!rawBytes) {
+            rawBytes = await window.api.readMedia(file.path);
           }
-        }, 0);
-      }
+          if (serial !== loadSerial || !rawBytes) return;
+
+          const forDecoding = toArrayBuffer(rawBytes);
+          if (!audioContext) audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+          if (audioContext.state === 'suspended') await audioContext.resume().catch(() => {});
+          const nextDecoded = await audioContext.decodeAudioData(forDecoding);
+          if (serial !== loadSerial) return;
+          decoded = nextDecoded;
+          addToLruMap(decodedCache, file.path, nextDecoded, DECODED_CACHE_LIMIT);
+
+          if (!peaksCache.has(file.path)) {
+            const rawPeaks = buildPeaks(nextDecoded, 900);
+            addToLruMap(peaksCache, file.path, rawPeaks, PEAKS_CACHE_LIMIT);
+            startSweepAnimation(rawPeaks);
+          } else {
+            peaks = peaksCache.get(file.path)!;
+            isSweeping = false;
+            sweepProgress = 1.0;
+            draw();
+          }
+          timeEl.textContent = `${clock(audio.currentTime || 0)} / ${clock(nextDecoded.duration)}`;
+          emit();
+          broadcastState();
+        } catch (err) {
+          console.error('[Player] decodeAudioData error:', err);
+          if (serial === loadSerial && !cachedPeaks) timeEl.textContent = 'Cannot decode this format';
+        }
+      })();
     }
 
     if (serial !== loadSerial) return null;
@@ -850,6 +887,8 @@ const Player = (() => {
     const width = canvas.clientWidth;
     const height = canvas.clientHeight;
 
+    if (width <= 0 || height <= 0) return;
+
     if (canvas.width !== width * dpr || canvas.height !== height * dpr) {
       canvas.width = width * dpr;
       canvas.height = height * dpr;
@@ -862,11 +901,12 @@ const Player = (() => {
       typeof document !== 'undefined' &&
       (document.body.classList.contains('theme-light') ||
         document.body.getAttribute('data-surface') === 'light' ||
-        document.body.dataset.surface === 'light');
+        document.body.dataset.surface === 'light' ||
+        (typeof localStorage !== 'undefined' && localStorage.getItem('dawBuddySurface') === 'light'));
     const mid = height / 2;
 
     // Centre line, always visible so an empty player still looks intentional
-    ctx.strokeStyle = isLight ? 'rgba(18, 23, 20, 0.16)' : 'rgba(255, 255, 255, 0.08)';
+    ctx.strokeStyle = isLight ? 'rgba(18, 23, 20, 0.22)' : 'rgba(255, 255, 255, 0.08)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(0, mid);
@@ -992,7 +1032,8 @@ const Player = (() => {
       typeof document !== 'undefined' &&
       (document.body.classList.contains('theme-light') ||
         document.body.getAttribute('data-surface') === 'light' ||
-        document.body.dataset.surface === 'light');
+        document.body.dataset.surface === 'light' ||
+        (typeof localStorage !== 'undefined' && localStorage.getItem('dawBuddySurface') === 'light'));
     const now = Date.now();
     if (!cachedAmberHex || now - cachedAmberTime > 500 || cachedAmberIsLight !== isLight) {
       let val =

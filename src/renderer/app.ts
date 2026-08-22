@@ -555,7 +555,7 @@ async function boot() {
   }
 
   // If user hasn't configured region & world scales yet, display the interactive 3D Globe wizard on first run or after update!
-  const APP_VERSION = '0.4.3';
+  const APP_VERSION = (settings && settings.appVersion) || '0.4.9-beta';
   const seenSetupVersion = localStorage.getItem('dawBuddyRegionSetupVersion');
   const isSetupDone = Boolean(settings.regionSetupComplete) || localStorage.getItem('dawBuddyRegionSetupComplete') === 'true';
 
@@ -607,6 +607,9 @@ function applySettings() {
   if ($('webhookInput')) $('webhookInput').value = settings.webhookUrl || '';
   if ($('enableCrashLogs')) {
     $('enableCrashLogs').checked = settings.enableCrashLogs !== false;
+  }
+  if ($('appVersionDisplay')) {
+    $('appVersionDisplay').textContent = `v${(settings && settings.appVersion) || '0.4.9-beta'}`;
   }
   $('dataDir').textContent = settings.dataDir;
   document.body.classList.toggle('is-mac', Boolean(settings.isMac));
@@ -3348,7 +3351,13 @@ function renderProjectPage() {
 
         const bytes = await window.api.readMedia(audioFileToAnalyze);
         const ac = new (window.AudioContext || (window as any).webkitAudioContext)();
-        const decoded = await ac.decodeAudioData(bytes);
+        const arrayBuf: ArrayBuffer =
+          bytes instanceof ArrayBuffer
+            ? bytes.slice(0)
+            : ArrayBuffer.isView(bytes) && bytes.buffer instanceof ArrayBuffer
+              ? bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+              : (new Uint8Array(bytes)).buffer as ArrayBuffer;
+        const decoded = await ac.decodeAudioData(arrayBuf);
         channelData = decoded.getChannelData(0);
         sampleRate = decoded.sampleRate;
         await ac.close();

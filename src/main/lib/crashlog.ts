@@ -201,7 +201,7 @@ export function recordCrash(source: 'main' | 'renderer' | 'process-gone', err: E
       osRelease: os.release(),
       totalMemMB: Math.round(os.totalmem() / (1024 * 1024)),
       freeMemMB: Math.round(os.freemem() / (1024 * 1024)),
-      appVersion: (app && typeof app.getVersion === 'function' ? app.getVersion() : '0.4.3'),
+      appVersion: (app && typeof app.getVersion === 'function' ? app.getVersion() : '0.4.9-beta'),
       electronVersion: process.versions?.electron || '',
       nodeVersion: process.versions?.node || ''
     };

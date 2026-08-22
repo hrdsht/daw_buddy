@@ -9,6 +9,13 @@ is auto-generated on each GitHub Release; this file is the curated summary.
 
 - _Nothing yet._
 
+## [0.4.9-beta] — 2026-08-22
+
+### Fixed
+- **Waveform Rendering & Web Audio API ArrayBuffer Compatibility**: Fixed IPC buffer transfer mismatch (`Uint8Array` to isolated `ArrayBuffer` conversion) for `audioContext.decodeAudioData()`, restoring smooth progressive waveform visualization across all audio tracks.
+- **Dynamic Version Reporting**: Replaced hardcoded static version strings with dynamic `app.getVersion()` runtime IPC synchronization in Settings and diagnostics.
+- **Cache Invalidation & Redundant Asset Cleanup**: Ensured missing peaks always trigger background audio re-decoding without getting blocked by cached audio stream URLs.
+
 ## [0.4.8-beta] — 2026-08-22
 
 ### Added & Optimized (Performance Enhancements)
