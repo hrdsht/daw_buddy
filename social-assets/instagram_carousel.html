@@ -418,12 +418,9 @@
   </div>
 
   <div class="controls">
-    <button class="btn btn-video" id="recordVideoBtn" onclick="exportSlideVideo()">
-      🎥 Record Video Reel
+    <button class="btn btn-video" id="downloadReelBtn" onclick="downloadReelMp4()">
+      🎥 Download Video Reel (1080x1350 MP4)
     </button>
-    <a class="btn btn-video" href="assets/daw_buddy_startup_reel.mp4" download="daw_buddy_startup_reel.mp4" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px;">
-      ⬇️ Download Reel (MP4)
-    </a>
     <button class="btn btn-cyan" onclick="triggerPastePrompt()">
       📋 Paste Screenshot (Ctrl+V)
     </button>
@@ -847,6 +844,25 @@
       renderSlide(originalIndex);
       const content = await zip.generateAsync({ type: 'blob' });
       saveAs(content, 'daw_buddy_instagram_carousel_16_slides.zip');
+    }
+
+    const reelMp4Map = {
+      wp1: { file: 'assets/daw_buddy_startup_reel_wp1_fire_oni.mp4', name: 'daw_buddy_startup_reel_wp1_fire_oni.mp4' },
+      wp2: { file: 'assets/daw_buddy_startup_reel_wp2_cyberpunk.mp4', name: 'daw_buddy_startup_reel_wp2_cyberpunk.mp4' },
+      wp3: { file: 'assets/daw_buddy_startup_reel_wp3_red_moon.mp4', name: 'daw_buddy_startup_reel_wp3_red_moon.mp4' },
+      wp4: { file: 'assets/daw_buddy_startup_reel_wp4_katana.mp4', name: 'daw_buddy_startup_reel_wp4_katana.mp4' },
+      wp5: { file: 'assets/daw_buddy_startup_reel_wp5_dragon.mp4', name: 'daw_buddy_startup_reel_wp5_dragon.mp4' }
+    };
+
+    function downloadReelMp4() {
+      const activeWp = slidesData[currentSlideIndex]?.wp || 'wp1';
+      const reel = reelMp4Map[activeWp] || reelMp4Map.wp1;
+      const a = document.createElement('a');
+      a.href = reel.file;
+      a.download = reel.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
     }
 
     /* =================================================================
