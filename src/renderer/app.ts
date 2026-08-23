@@ -2200,7 +2200,7 @@ function renderFretboardSvg(
     const line = svgFb.querySelector(`.fretboard-string--${strIdx}`);
     if (line) {
       line.classList.remove('is-vibrating');
-      void (line as any).getBoundingClientRect();
+      (line as any).clientLeft;
       line.classList.add('is-vibrating');
       line.addEventListener('animationend', () => line.classList.remove('is-vibrating'), { once: true });
     }
@@ -2209,7 +2209,7 @@ function renderFretboardSvg(
   function pluckNoteGroup(group: SVGElement) {
     if (group) {
       group.classList.remove('is-plucked');
-      void (group as any).getBoundingClientRect();
+      (group as any).clientLeft;
       group.classList.add('is-plucked');
       group.addEventListener('animationend', () => group.classList.remove('is-plucked'), { once: true });
     }
@@ -2238,6 +2238,13 @@ function renderFretboardSvg(
     group.setAttribute('data-string-idx', String(note.stringIndex));
     group.setAttribute('data-fret', String(note.fret));
     group.style.cursor = 'pointer';
+
+    const ripple = document.createElementNS(svgNS, 'circle');
+    ripple.setAttribute('cx', String(note.x));
+    ripple.setAttribute('cy', String(note.y));
+    ripple.setAttribute('r', '8');
+    ripple.setAttribute('class', 'fret-note-ripple');
+    group.appendChild(ripple);
 
     const circle = document.createElementNS(svgNS, 'circle');
     circle.setAttribute('cx', String(note.x));
