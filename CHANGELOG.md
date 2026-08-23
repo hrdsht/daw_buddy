@@ -9,6 +9,15 @@ is auto-generated on each GitHub Release; this file is the curated summary.
 
 - _Nothing yet._
 
+## [0.4.9-beta2] — 2026-08-23
+
+### Fixed
+- **Audio Analysis Decoding**: Resolved issue where `Player.load()` returned unawaited promises, causing `"That file could not be decoded."` toast errors during manual render analysis. Added dedicated `Player.decode()` pipeline for uninterrupted background analysis of large multi-megabyte WAV bounces.
+- **Social Media Studio Export Enhancements**:
+  - Un-scaled `html2canvas` render pipeline to output full-bleed, crisp 1080×1350 JPEG carousel slides with zero white borders.
+  - Resolved `html2canvas` gradient bar visual artifact by replacing pseudo-element shadows with clean semantic markup.
+  - Added smart aspect-ratio adaptive window shrink-wrapping for screenshots of any native display resolution.
+
 ## [0.4.9-beta] — 2026-08-22
 
 ### Fixed

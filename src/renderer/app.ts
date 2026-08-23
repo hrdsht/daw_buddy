@@ -555,7 +555,7 @@ async function boot() {
   }
 
   // If user hasn't configured region & world scales yet, display the interactive 3D Globe wizard on first run or after update!
-  const APP_VERSION = (settings && settings.appVersion) || '0.4.9-beta';
+  const APP_VERSION = (settings && settings.appVersion) || '0.4.9-beta2';
   const seenSetupVersion = localStorage.getItem('dawBuddyRegionSetupVersion');
   const isSetupDone = Boolean(settings.regionSetupComplete) || localStorage.getItem('dawBuddyRegionSetupComplete') === 'true';
 
@@ -609,7 +609,7 @@ function applySettings() {
     $('enableCrashLogs').checked = settings.enableCrashLogs !== false;
   }
   if ($('appVersionDisplay')) {
-    $('appVersionDisplay').textContent = `v${(settings && settings.appVersion) || '0.4.9-beta'}`;
+    $('appVersionDisplay').textContent = `v${(settings && settings.appVersion) || '0.4.9-beta2'}`;
   }
   $('dataDir').textContent = settings.dataDir;
   document.body.classList.toggle('is-mac', Boolean(settings.isMac));

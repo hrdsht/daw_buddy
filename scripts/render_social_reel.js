@@ -133,7 +133,7 @@ app.whenReady().then(async () => {
           ctx.fillText('DAW Buddy • Startup Video Reel', fx + 72, fy + 23);
 
           ctx.fillStyle = '#00f0ff';
-          ctx.fillText('v0.4.9-beta', fx + fw - 90, fy + 23);
+          ctx.fillText('v0.4.9-beta2', fx + fw - 90, fy + 23);
 
           // Overlay Scanning Chip at window bottom
           ctx.fillStyle = 'rgba(0,0,0,0.85)';
