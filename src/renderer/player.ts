@@ -791,45 +791,64 @@ const Player = (() => {
 
     // 2. Waveform decoding & peak extraction
     if (!cachedDecoded || !cachedPeaks) {
-      (async () => {
-        if (serial !== loadSerial) return;
-        try {
-          if (!rawBytes) {
-            rawBytes = await window.api.readMedia(file.path);
-          }
-          if (serial !== loadSerial || !rawBytes) return;
-
-          const forDecoding = toArrayBuffer(rawBytes);
-          if (!audioContext) audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-          if (audioContext.state === 'suspended') await audioContext.resume().catch(() => {});
-          const nextDecoded = await audioContext.decodeAudioData(forDecoding);
-          if (serial !== loadSerial) return;
-          decoded = nextDecoded;
-          addToLruMap(decodedCache, file.path, nextDecoded, DECODED_CACHE_LIMIT);
-
-          if (!peaksCache.has(file.path)) {
-            const rawPeaks = buildPeaks(nextDecoded, 900);
-            addToLruMap(peaksCache, file.path, rawPeaks, PEAKS_CACHE_LIMIT);
-            startSweepAnimation(rawPeaks);
-          } else {
-            peaks = peaksCache.get(file.path)!;
-            isSweeping = false;
-            sweepProgress = 1.0;
-            draw();
-          }
-          timeEl.textContent = `${clock(audio.currentTime || 0)} / ${clock(nextDecoded.duration)}`;
-          emit();
-          broadcastState();
-        } catch (err) {
-          console.error('[Player] decodeAudioData error:', err);
-          if (serial === loadSerial && !cachedPeaks) timeEl.textContent = 'Cannot decode this format';
+      try {
+        if (!rawBytes) {
+          rawBytes = await window.api.readMedia(file.path);
         }
-      })();
+        if (serial !== loadSerial || !rawBytes) return decoded;
+
+        const forDecoding = toArrayBuffer(rawBytes);
+        if (!audioContext) audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        if (audioContext.state === 'suspended') await audioContext.resume().catch(() => {});
+        const nextDecoded = await audioContext.decodeAudioData(forDecoding);
+        if (serial !== loadSerial) return nextDecoded;
+        decoded = nextDecoded;
+        addToLruMap(decodedCache, file.path, nextDecoded, DECODED_CACHE_LIMIT);
+
+        if (!peaksCache.has(file.path)) {
+          const rawPeaks = buildPeaks(nextDecoded, 900);
+          addToLruMap(peaksCache, file.path, rawPeaks, PEAKS_CACHE_LIMIT);
+          startSweepAnimation(rawPeaks);
+        } else {
+          peaks = peaksCache.get(file.path)!;
+          isSweeping = false;
+          sweepProgress = 1.0;
+          draw();
+        }
+        timeEl.textContent = `${clock(audio.currentTime || 0)} / ${clock(nextDecoded.duration)}`;
+        emit();
+        broadcastState();
+      } catch (err) {
+        console.error('[Player] decodeAudioData error:', err);
+        if (serial === loadSerial && !cachedPeaks) timeEl.textContent = 'Cannot decode this format';
+      }
+    } else {
+      decoded = cachedDecoded;
     }
 
-    if (serial !== loadSerial) return null;
+    if (serial !== loadSerial) return decoded;
     emit();
     return decoded;
+  }
+
+  async function decode(file: { path: string; name?: string }): Promise<AudioBuffer | null> {
+    if (!file || !file.path) return null;
+    const cached = decodedCache.get(file.path);
+    if (cached) return cached;
+
+    try {
+      const rawBytes = await window.api.readMedia(file.path);
+      if (!rawBytes) return null;
+      const forDecoding = toArrayBuffer(rawBytes);
+      if (!audioContext) audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      if (audioContext.state === 'suspended') await audioContext.resume().catch(() => {});
+      const buf = await audioContext.decodeAudioData(forDecoding);
+      addToLruMap(decodedCache, file.path, buf, DECODED_CACHE_LIMIT);
+      return buf;
+    } catch (err) {
+      console.error('[Player] decode error:', err);
+      return null;
+    }
   }
 
   function guessType(name) {
@@ -1320,6 +1339,7 @@ const Player = (() => {
     isPlaying: () => !audio.paused && Boolean(current),
     getDecoded: () => decoded,
     getCurrent: () => current,
+    decode,
     playRegion,
     stopRegion,
     seek,

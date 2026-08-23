@@ -4244,10 +4244,14 @@ async function analyseRender(entry, renderItem, buttonEl, { refresh = true } = {
 
   try {
     const current = Player.getCurrent();
-    const decoded =
+    let decoded =
       current && current.path === renderItem.primary.path && Player.getDecoded()
         ? Player.getDecoded()
-        : await Player.load(renderItem.primary, { autoplay: false, project: entry || openProject });
+        : await Player.decode(renderItem.primary);
+
+    if (!decoded) {
+      decoded = await Player.load(renderItem.primary, { autoplay: false, project: entry || openProject });
+    }
 
     if (!decoded) {
       toast('Analysis failed', 'That file could not be decoded.', true);
