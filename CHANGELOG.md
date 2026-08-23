@@ -9,7 +9,7 @@ is auto-generated on each GitHub Release; this file is the curated summary.
 
 - _Nothing yet._
 
-## [0.5.3-beta.2] — 2026-08-23
+## [0.5.0-beta] — 2026-08-23
 
 ### Added
 - **Slowed + Reverb Studio**:
