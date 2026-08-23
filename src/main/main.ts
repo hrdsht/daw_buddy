@@ -1064,6 +1064,28 @@ ipcMain.handle('tools:renameApply', async (event, planned, meta) => {
 
 ipcMain.handle('tools:renameUndo', () => renamer.undo(undoLog()));
 
+ipcMain.handle('tools:deleteFiles', async (event, filePaths: string[], useTrash: boolean = true) => {
+  if (!Array.isArray(filePaths)) throw new Error('filePaths must be an array.');
+  const results: Array<{ path: string; ok: boolean; error?: string }> = [];
+  for (const fp of filePaths) {
+    try {
+      const dir = path.dirname(fp);
+      guardApproved(dir);
+      if (fs.existsSync(fp)) {
+        if (useTrash && shell.trashItem) {
+          await shell.trashItem(fp);
+        } else {
+          fs.unlinkSync(fp);
+        }
+        results.push({ path: fp, ok: true });
+      }
+    } catch (e: any) {
+      results.push({ path: fp, ok: false, error: e.message });
+    }
+  }
+  return { ok: results.every(r => r.ok), results, deleted: results.filter(r => r.ok).length };
+});
+
 function getDragIcon(customIcon?: string) {
   try {
     const iconPath = customIcon || path.join(__dirname, '..', 'renderer', 'assets', 'dawbuddy-logo-v2.png');

@@ -356,3 +356,62 @@ export function applyThemeTuning(brightness?: number, contrast?: number) {
   if (cSlider) cSlider.value = String(cVal);
   if (cText) cText.textContent = `${cVal}%`;
 }
+
+/**
+ * Detects FL Studio redundant bounce artifacts (Master and Current channels)
+ */
+export function isFlStudioArtifact(fname: string): boolean {
+  if (!fname) return false;
+  const base = fname.replace(/\.[^.]+$/, '').trim();
+  return /(^|[_\s\-])(master|current)$/i.test(base);
+}
+
+/**
+ * Formats stem category and sequential index based on selected naming format mode.
+ */
+export function formatStemOutputName(
+  cat: string,
+  sub: string | null,
+  index: number,
+  ext: string,
+  formatMode: 'snake' | 'title' | 'padded' | 'hyphen' = 'snake',
+  customName?: string | null,
+  artistToken?: string | null
+): string {
+  if (customName) return customName;
+
+  let base = cat;
+  if (artistToken) {
+    base = sub && sub !== 'lead' ? `${cat}_${artistToken}_${sub}` : `${cat}_${artistToken}`;
+  } else if (sub) {
+    base = `${cat}_${sub}`;
+  }
+
+  if (formatMode === 'title') {
+    const titleBase = base
+      .split(/[_-]+/)
+      .map((w) => (w.length > 0 ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : ''))
+      .filter(Boolean)
+      .join(' ');
+    return `${titleBase} ${index}${ext}`;
+  }
+
+  if (formatMode === 'padded') {
+    const titleBase = base
+      .split(/[_-]+/)
+      .map((w) => (w.length > 0 ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : ''))
+      .filter(Boolean)
+      .join(' ');
+    const paddedIndex = index < 10 ? `0${index}` : `${index}`;
+    return `${titleBase} ${paddedIndex}${ext}`;
+  }
+
+  if (formatMode === 'hyphen') {
+    const cleanBase = base.toLowerCase().replace(/_/g, '-');
+    const paddedIndex = index < 10 ? `0${index}` : `${index}`;
+    return `${cleanBase}-${paddedIndex}${ext}`;
+  }
+
+  // Default snake_case
+  return `${base}_${index}${ext}`;
+}

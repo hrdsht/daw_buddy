@@ -1,0 +1,95 @@
+'use strict';
+
+const assert = require('assert/strict');
+const {
+  isFlStudioArtifact,
+  formatStemOutputName
+} = require('../src/renderer/dom');
+
+function testFlStudioArtifactDetection() {
+  // Positive matches (FL Studio redundant master/current bounces)
+  assert.equal(isFlStudioArtifact('_Master.wav'), true, '_Master.wav is FL artifact');
+  assert.equal(isFlStudioArtifact('_Current.wav'), true, '_Current.wav is FL artifact');
+  assert.equal(isFlStudioArtifact('Beat_Master.wav'), true, 'Beat_Master.wav is FL artifact');
+  assert.equal(isFlStudioArtifact('Project - Current.wav'), true, 'Project - Current.wav is FL artifact');
+  assert.equal(isFlStudioArtifact('MySong_master.mp3'), true, 'MySong_master.mp3 is FL artifact');
+  assert.equal(isFlStudioArtifact('Mix_current.flac'), true, 'Mix_current.flac is FL artifact');
+  assert.equal(isFlStudioArtifact('Master.wav'), true, 'Master.wav is FL artifact');
+  assert.equal(isFlStudioArtifact('Current.wav'), true, 'Current.wav is FL artifact');
+
+  // Negative matches (Regular stems that should NOT be excluded or deleted)
+  assert.equal(isFlStudioArtifact('Kick.wav'), false, 'Kick.wav is regular stem');
+  assert.equal(isFlStudioArtifact('808 Bass.wav'), false, '808 Bass.wav is regular stem');
+  assert.equal(isFlStudioArtifact('Master_1.wav'), false, 'Master_1.wav should not match artifact ending');
+  assert.equal(isFlStudioArtifact('Current_Lead.wav'), false, 'Current_Lead.wav should not match artifact ending');
+  assert.equal(isFlStudioArtifact('Mastering EQ.wav'), false, 'Mastering EQ.wav should not match');
+  assert.equal(isFlStudioArtifact(''), false, 'Empty string is false');
+}
+
+function testStemNamingFormats() {
+  // 1. snake_case format
+  assert.equal(
+    formatStemOutputName('drums', 'kick', 1, '.wav', 'snake'),
+    'drums_kick_1.wav'
+  );
+  assert.equal(
+    formatStemOutputName('rhythm', null, 2, '.wav', 'snake'),
+    'rhythm_2.wav'
+  );
+
+  // 2. Title Space format (e.g. "Rhythm 1", "Drums Kick 2")
+  assert.equal(
+    formatStemOutputName('rhythm', null, 1, '.wav', 'title'),
+    'Rhythm 1.wav'
+  );
+  assert.equal(
+    formatStemOutputName('drums', 'snare', 3, '.wav', 'title'),
+    'Drums Snare 3.wav'
+  );
+
+  // 3. Padded format (e.g. "Rhythm 01", "RX 02")
+  assert.equal(
+    formatStemOutputName('rhythm', null, 1, '.wav', 'padded'),
+    'Rhythm 01.wav'
+  );
+  assert.equal(
+    formatStemOutputName('rhythm', null, 12, '.wav', 'padded'),
+    'Rhythm 12.wav'
+  );
+  assert.equal(
+    formatStemOutputName('rx', null, 5, '.wav', 'padded'),
+    'Rx 05.wav'
+  );
+
+  // 4. Hyphen format
+  assert.equal(
+    formatStemOutputName('synth_lead', null, 2, '.wav', 'hyphen'),
+    'synth-lead-02.wav'
+  );
+
+  // 5. Custom name override
+  assert.equal(
+    formatStemOutputName('drums', 'kick', 1, '.wav', 'snake', 'CustomKick_Dry.wav'),
+    'CustomKick_Dry.wav'
+  );
+
+  // 6. Vocal Artist token preservation with style format
+  assert.equal(
+    formatStemOutputName('vox', 'lead', 1, '.wav', 'snake', null, 'ritesh'),
+    'vox_ritesh_1.wav'
+  );
+  assert.equal(
+    formatStemOutputName('vox', 'lead', 1, '.wav', 'title', null, 'ritesh'),
+    'Vox Ritesh 1.wav'
+  );
+  assert.equal(
+    formatStemOutputName('vox', 'lead', 1, '.wav', 'padded', null, 'ritesh'),
+    'Vox Ritesh 01.wav'
+  );
+}
+
+testFlStudioArtifactDetection();
+console.log('ok - testFlStudioArtifactDetection');
+
+testStemNamingFormats();
+console.log('ok - testStemNamingFormats');

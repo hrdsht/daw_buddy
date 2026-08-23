@@ -84,7 +84,9 @@ import {
   SURFACES,
   ABLETON_CLIP_PALETTE,
   ABLETON_PALETTE_GRID,
-  getAbletonProjectColor
+  getAbletonProjectColor,
+  isFlStudioArtifact,
+  formatStemOutputName
 } from './dom';
 import { startFeatureWalkthrough, startProjectWalkthrough, startToolWalkthrough } from './tour';
 
@@ -5673,6 +5675,9 @@ let smartItems: Array<{
 let smartCategoriesList: Array<{ category: string; subtypes: string[] }> = [];
 let smartSelectedPath: string | null = null;
 let smartSelectedSet = new Set<string>();
+let smartExcludedSet = new Set<string>();
+let smartDismissedFlCleaner = false;
+let smartNamingFormat: 'snake' | 'title' | 'padded' | 'hyphen' = (localStorage.getItem('dawBuddySmartRenameFormat') as any) || 'snake';
 let smartSortMode: 'priority' | 'name' = 'priority';
 let smartManifests: any[] = [];
 
@@ -5938,6 +5943,10 @@ async function renderSmartRenameTab(entry: any = null) {
   folderBar.append(bar);
   section.append(folderBar);
 
+  /* FL Studio Redundant Artifact Cleaner Banner Container */
+  const flCleanerContainer = el('div');
+  section.append(flCleanerContainer);
+
   /* Manifests / Undo bar */
   const manifestContainer = el('div');
   manifestContainer.style.marginBottom = '10px';
@@ -5946,6 +5955,10 @@ async function renderSmartRenameTab(entry: any = null) {
   /* Controls / Actions toolbar */
   const toolbar = el('div', 'tabs');
   toolbar.style.marginBottom = '12px';
+  toolbar.style.display = 'flex';
+  toolbar.style.flexWrap = 'wrap';
+  toolbar.style.alignItems = 'center';
+  toolbar.style.gap = '8px';
 
   const analyseNamesBtn = el('button', 'pill pill--solid', '⚡ Analyse names');
   const analyseAudioBtn = el('button', 'pill', '🎧 Analyse audio features');
@@ -5962,7 +5975,39 @@ async function renderSmartRenameTab(entry: any = null) {
     renderPanes();
   });
 
-  toolbar.append(analyseNamesBtn, analyseAudioBtn, sortToggle);
+  /* Naming Format Selector (snake_case, Title Space, 01 Padded, Hyphenated) */
+  const formatGroup = el('div', 'smart-format-group');
+  formatGroup.style.display = 'flex';
+  formatGroup.style.alignItems = 'center';
+  formatGroup.style.gap = '4px';
+  formatGroup.style.marginLeft = 'auto';
+
+  const formatLabel = el('span', 'muted', 'Style:');
+  formatLabel.style.fontSize = '12px';
+  formatGroup.append(formatLabel);
+
+  const formatModes: Array<{ key: 'snake' | 'title' | 'padded' | 'hyphen'; label: string; title: string }> = [
+    { key: 'snake', label: 'snake_1', title: 'snake_case (e.g. drums_1.wav, rhythm_2.wav)' },
+    { key: 'title', label: 'Title 1', title: 'Space Formatted (e.g. Drums 1.wav, Rhythm 2.wav)' },
+    { key: 'padded', label: 'Title 01', title: 'Zero Padded (e.g. Drums 01.wav, RX 01.wav)' },
+    { key: 'hyphen', label: 'hyphen-01', title: 'Hyphenated (e.g. drums-01.wav, rhythm-02.wav)' }
+  ];
+
+  formatModes.forEach((fm) => {
+    const btn = el('button', `pill pill--sm smart-format-btn${smartNamingFormat === fm.key ? ' pill--solid' : ''}`, fm.label);
+    btn.title = fm.title;
+    btn.addEventListener('click', () => {
+      smartNamingFormat = fm.key;
+      localStorage.setItem('dawBuddySmartRenameFormat', fm.key);
+      formatGroup.querySelectorAll('.smart-format-btn').forEach((b: any, idx) => {
+        b.classList.toggle('pill--solid', formatModes[idx].key === smartNamingFormat);
+      });
+      renderPanes();
+    });
+    formatGroup.append(btn);
+  });
+
+  toolbar.append(analyseNamesBtn, analyseAudioBtn, sortToggle, formatGroup);
   section.append(toolbar);
 
   /* Batch Actions Container */
@@ -5987,7 +6032,7 @@ async function renderSmartRenameTab(entry: any = null) {
   const leftTitleText = el('span', null, 'Original files');
   leftTitle.append(leftCheckAll, leftTitleText);
 
-  const leftSub = el('span', 'smart-pane__sub', 'Click to arm audio');
+  const leftSub = el('span', 'smart-pane__sub', 'Click to arm audio · Shift+Click to range select');
   leftHead.append(leftTitle, leftSub);
   const leftBody = el('div', 'smart-pane__body');
   leftPane.append(leftHead, leftBody);
@@ -6017,6 +6062,75 @@ async function renderSmartRenameTab(entry: any = null) {
 
   viewEl.append(section);
 
+  function renderFlCleanerBanner() {
+    flCleanerContainer.innerHTML = '';
+    if (smartDismissedFlCleaner || !smartFiles || smartFiles.length === 0) return;
+    const artifacts = smartFiles.filter((f) => isFlStudioArtifact(f.name));
+    if (artifacts.length === 0) return;
+
+    const banner = el('div', 'callout smart-fl-cleaner-banner');
+    banner.style.padding = '12px 16px';
+    banner.style.marginBottom = '12px';
+    banner.style.border = '1.5px solid var(--amber)';
+    banner.style.borderRadius = 'var(--r)';
+    banner.style.background = 'linear-gradient(145deg, var(--surface), var(--raised))';
+
+    const top = el('div');
+    top.style.display = 'flex';
+    top.style.justifyContent = 'space-between';
+    top.style.alignItems = 'center';
+    top.style.marginBottom = '6px';
+
+    const header = el('div', 'page__kicker', `🧹 FL Studio Stem Artifacts Detected (${artifacts.length} file${artifacts.length > 1 ? 's' : ''})`);
+    header.style.color = 'var(--amber)';
+    header.style.fontWeight = '600';
+    header.style.margin = '0';
+
+    const dismissBtn = el('button', 'pill pill--sm', '✕ Dismiss');
+    dismissBtn.addEventListener('click', () => {
+      smartDismissedFlCleaner = true;
+      banner.remove();
+    });
+    top.append(header, dismissBtn);
+
+    const desc = el('p', 'muted', `FL Studio automatically exports duplicate mix bounces when splitting mixer tracks: ${artifacts.map(a => `"${a.name}"`).join(', ')}`);
+    desc.style.fontSize = '12.5px';
+    desc.style.margin = '0 0 10px 0';
+
+    const actions = el('div', 'tabs');
+    const excludeBtn = el('button', 'pill pill--sm', `🚫 Exclude from Rename (${artifacts.length})`);
+    excludeBtn.title = 'Keep these files in the folder but exclude them from renaming';
+    excludeBtn.addEventListener('click', () => {
+      artifacts.forEach((a) => {
+        smartExcludedSet.add(a.path);
+        smartSelectedSet.delete(a.path);
+      });
+      toast('Artifacts Excluded', `Skipped ${artifacts.length} FL Studio artifacts from rename`);
+      renderPanes();
+    });
+
+    const deleteBtn = el('button', 'pill pill--solid pill--sm', `🗑️ Delete Duplicate Artifacts (${artifacts.length})`);
+    deleteBtn.style.background = 'var(--alert)';
+    deleteBtn.style.color = '#ffffff';
+    deleteBtn.title = 'Safely move duplicate FL Studio Master and Current bounces to trash';
+    deleteBtn.addEventListener('click', async () => {
+      const confirmDelete = window.confirm(`Permanently remove ${artifacts.length} FL Studio bounce duplicates (${artifacts.map(a => a.name).join(', ')})?`);
+      if (confirmDelete) {
+        const res = await window.api.deleteFiles(artifacts.map(a => a.path), true);
+        if (res.ok) {
+          toast('Artifacts Deleted', `Removed ${res.deleted} FL Studio duplicate stem(s)`);
+          await loadFolder();
+        } else {
+          toast('Deletion Incomplete', `Failed to delete some files`, true);
+        }
+      }
+    });
+
+    actions.append(excludeBtn, deleteBtn);
+    banner.append(top, desc, actions);
+    flCleanerContainer.append(banner);
+  }
+
   async function loadFolder() {
     if (!smartRenameFolder) {
       summary.textContent = 'Choose a folder to begin classifying stems.';
@@ -6038,6 +6152,7 @@ async function renderSmartRenameTab(entry: any = null) {
         smartManifests = [];
       }
       renderManifests();
+      renderFlCleanerBanner();
       await runNameAnalysis();
     } catch (err: any) {
       summary.textContent = `Error reading folder: ${err.message}`;
@@ -6140,12 +6255,26 @@ async function renderSmartRenameTab(entry: any = null) {
 
   function computeOutputNames() {
     const counts = new Map<string, number>();
-    const planRows: Array<{ path: string; from: string; to: string; changed: boolean; problem: string | null; item: any }> = [];
+    const planRows: Array<{ path: string; from: string; to: string; changed: boolean; problem: string | null; item: any; excluded?: boolean }> = [];
 
     const ordered = [...smartItems].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 
     for (const item of ordered) {
       const ext = pathExt(item.name);
+      const isExcluded = smartExcludedSet.has(item.path);
+      if (isExcluded) {
+        planRows.push({
+          path: item.path,
+          from: item.name,
+          to: item.name,
+          changed: false,
+          problem: null,
+          item,
+          excluded: true
+        });
+        continue;
+      }
+
       const cat = item.userCategory !== undefined && item.userCategory !== null ? item.userCategory : item.category;
       const sub = item.userSubtype !== undefined && item.userSubtype !== null ? item.userSubtype : item.subtype;
 
@@ -6157,12 +6286,14 @@ async function renderSmartRenameTab(entry: any = null) {
           to: targetName,
           changed: targetName !== item.name,
           problem: null,
-          item
+          item,
+          excluded: false
         });
         continue;
       }
 
       let key = sub ? `${cat}_${sub}` : cat;
+      let artistToken: string | null = null;
 
       // Smart vocal modifier / artist preservation (e.g. "vox lals", "vox ritesh", "vocal lalasa")
       if (cat === 'vox' || cat === 'vocal') {
@@ -6188,28 +6319,40 @@ async function renderSmartRenameTab(entry: any = null) {
           'stem',
           'consolidated'
         ]);
-        const artistToken = tokens.find((t: string) => !ignoredTokens.has(t));
-        if (artistToken) {
-          key = sub && sub !== 'lead' ? `${cat}_${artistToken}_${sub}` : `${cat}_${artistToken}`;
+        const foundArtist = tokens.find((t: string) => !ignoredTokens.has(t));
+        if (foundArtist) {
+          artistToken = foundArtist;
+          key = sub && sub !== 'lead' ? `${cat}_${foundArtist}_${sub}` : `${cat}_${foundArtist}`;
         }
       }
 
       const currentCount = (counts.get(key) || 0) + 1;
       counts.set(key, currentCount);
 
-      const targetName = item.customName || `${key}_${currentCount}${ext}`;
+      const targetName = formatStemOutputName(
+        cat,
+        sub,
+        currentCount,
+        ext,
+        smartNamingFormat,
+        item.customName,
+        artistToken
+      );
+
       planRows.push({
         path: item.path,
         from: item.name,
         to: targetName,
         changed: targetName !== item.name,
         problem: null,
-        item
+        item,
+        excluded: false
       });
     }
 
     const seen = new Map<string, string>();
     for (const r of planRows) {
+      if (r.excluded) continue;
       const lk = r.to.toLowerCase();
       if (seen.has(lk)) {
         r.problem = `Same new name as "${seen.get(lk)}"`;
@@ -6220,6 +6363,8 @@ async function renderSmartRenameTab(entry: any = null) {
 
     return planRows;
   }
+
+  let lastCheckedIndex: number | null = null;
 
   function renderPanes() {
     leftBody.innerHTML = '';
@@ -6236,7 +6381,9 @@ async function renderSmartRenameTab(entry: any = null) {
     leftCheckAll.indeterminate = smartSelectedSet.size > 0 && smartSelectedSet.size < smartItems.length;
     leftCheckAll.onchange = () => {
       if (leftCheckAll.checked) {
-        smartItems.forEach((it) => smartSelectedSet.add(it.path));
+        smartItems.forEach((it) => {
+          if (!smartExcludedSet.has(it.path)) smartSelectedSet.add(it.path);
+        });
       } else {
         smartSelectedSet.clear();
       }
@@ -6300,7 +6447,7 @@ async function renderSmartRenameTab(entry: any = null) {
         smartSelectedSet.clear();
         smartItems.forEach((it) => {
           const cat = it.userCategory !== undefined && it.userCategory !== null ? it.userCategory : it.category;
-          if (!cat) smartSelectedSet.add(it.path);
+          if (!cat && !smartExcludedSet.has(it.path)) smartSelectedSet.add(it.path);
         });
         renderPanes();
       });
@@ -6308,6 +6455,7 @@ async function renderSmartRenameTab(entry: any = null) {
       const invertBtn = el('button', 'pill pill--sm', 'Invert');
       invertBtn.addEventListener('click', () => {
         smartItems.forEach((it) => {
+          if (smartExcludedSet.has(it.path)) return;
           if (smartSelectedSet.has(it.path)) smartSelectedSet.delete(it.path);
           else smartSelectedSet.add(it.path);
         });
@@ -6329,6 +6477,7 @@ async function renderSmartRenameTab(entry: any = null) {
     if (smartSortMode === 'priority') {
       displayItems.sort((a, b) => {
         const rank = (item: any) => {
+          if (smartExcludedSet.has(item.path)) return 3;
           const cat = item.userCategory !== undefined && item.userCategory !== null ? item.userCategory : item.category;
           if (!cat) return 0;
           if (item.confidence < 0.8) return 1;
@@ -6342,33 +6491,57 @@ async function renderSmartRenameTab(entry: any = null) {
       displayItems.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
     }
 
+    const handleCheckToggle = (item: any, itemIndex: number, e: MouseEvent) => {
+      if (e.shiftKey && lastCheckedIndex !== null) {
+        const start = Math.min(lastCheckedIndex, itemIndex);
+        const end = Math.max(lastCheckedIndex, itemIndex);
+        const targetChecked = !smartSelectedSet.has(item.path);
+        for (let i = start; i <= end; i++) {
+          const it = displayItems[i];
+          if (it && !smartExcludedSet.has(it.path)) {
+            if (targetChecked) smartSelectedSet.add(it.path);
+            else smartSelectedSet.delete(it.path);
+          }
+        }
+      } else {
+        if (smartSelectedSet.has(item.path)) {
+          smartSelectedSet.delete(item.path);
+        } else {
+          smartSelectedSet.add(item.path);
+        }
+      }
+      lastCheckedIndex = itemIndex;
+      renderPanes();
+    };
+
     let changingCount = 0;
     let unresolvedCount = 0;
 
-    for (const item of displayItems) {
+    displayItems.forEach((item, itemIdx) => {
       const planRow = rowsByPath.get(item.path);
       const isSelected = item.path === smartSelectedPath;
       const isChecked = smartSelectedSet.has(item.path);
+      const isExcluded = smartExcludedSet.has(item.path);
       const cat = item.userCategory !== undefined && item.userCategory !== null ? item.userCategory : item.category;
       const sub = item.userSubtype !== undefined && item.userSubtype !== null ? item.userSubtype : item.subtype;
       const isChanged = planRow ? planRow.changed : false;
-      if (isChanged && !planRow?.problem) changingCount++;
-      if (!cat) unresolvedCount++;
+      if (!isExcluded && isChanged && !planRow?.problem) changingCount++;
+      if (!isExcluded && !cat) unresolvedCount++;
 
       /* Left Row */
-      const lRow = el('div', `smart-row${isSelected ? ' is-selected' : ''}${isChecked ? ' is-checked' : ''}${cat ? ' is-matched' : ' is-unresolved'}`);
+      const lRow = el(
+        'div',
+        `smart-row${isSelected ? ' is-selected' : ''}${isChecked ? ' is-checked' : ''}${isExcluded ? ' is-excluded' : cat ? ' is-matched' : ' is-unresolved'}`
+      );
 
       const check = document.createElement('input');
       check.type = 'checkbox';
       check.className = 'smart-check';
       check.checked = isChecked;
+      check.disabled = isExcluded;
       check.addEventListener('click', (e) => {
         e.stopPropagation();
-      });
-      check.addEventListener('change', () => {
-        if (check.checked) smartSelectedSet.add(item.path);
-        else smartSelectedSet.delete(item.path);
-        renderPanes();
+        handleCheckToggle(item, itemIdx, e);
       });
 
       const lName = el('span', 'smart-row__name', item.name);
@@ -6376,7 +6549,10 @@ async function renderSmartRenameTab(entry: any = null) {
 
       let badgeType = 'smart-badge--miss';
       let badgeText = '? Unresolved';
-      if (cat) {
+      if (isExcluded) {
+        badgeType = 'smart-badge--warn';
+        badgeText = '🚫 Excluded';
+      } else if (cat) {
         if (item.confidence >= 0.8) {
           badgeType = 'smart-badge--ok';
           badgeText = `✔ ${sub ? `${cat}_${sub}` : cat}`;
@@ -6388,7 +6564,11 @@ async function renderSmartRenameTab(entry: any = null) {
       const lBadge = el('span', `smart-badge ${badgeType}`, badgeText);
       lRow.append(check, lName, lBadge);
 
-      lRow.addEventListener('click', () => {
+      lRow.addEventListener('click', (e) => {
+        if (e.shiftKey) {
+          handleCheckToggle(item, itemIdx, e);
+          return;
+        }
         smartSelectedPath = item.path;
         Player.load({ path: item.path, name: item.name, ext: pathExt(item.name) });
         renderPanes();
@@ -6396,12 +6576,16 @@ async function renderSmartRenameTab(entry: any = null) {
       leftBody.append(lRow);
 
       /* Right Row */
-      const rRow = el('div', `smart-row${isSelected ? ' is-selected' : ''}${isChecked ? ' is-checked' : ''}`);
-      const suggestedText = planRow ? planRow.to : item.name;
+      const rRow = el(
+        'div',
+        `smart-row${isSelected ? ' is-selected' : ''}${isChecked ? ' is-checked' : ''}${isExcluded ? ' is-excluded' : ''}`
+      );
+      const suggestedText = isExcluded ? `${item.name} (excluded)` : planRow ? planRow.to : item.name;
       const rName = el('span', 'smart-row__name', suggestedText);
       rName.title = suggestedText;
-      rName.style.fontWeight = isChanged ? '600' : 'normal';
-      if (isChanged) rName.style.color = 'var(--amber)';
+      rName.style.fontWeight = isChanged && !isExcluded ? '600' : 'normal';
+      if (isChanged && !isExcluded) rName.style.color = 'var(--amber)';
+      if (isExcluded) rName.style.opacity = '0.6';
 
       /* Searchable Typable Combobox for Category */
       const rowCombobox = createSmartCombobox({
@@ -6424,7 +6608,7 @@ async function renderSmartRenameTab(entry: any = null) {
 
       // Cross-verification pill if audio analysis suggests a distinct instrument
       let audioInsightPill: HTMLElement | null = null;
-      if (item.audioCategory) {
+      if (!isExcluded && item.audioCategory) {
         const audioFull = item.audioSubtype ? `${item.audioCategory} / ${item.audioSubtype}` : item.audioCategory;
         const currentFull = sub ? `${cat} / ${sub}` : (cat || '');
         if (audioFull !== currentFull) {
@@ -6442,7 +6626,8 @@ async function renderSmartRenameTab(entry: any = null) {
       }
 
       let reasonText = '';
-      if (item.userCategory || item.customName) reasonText = 'Manual override';
+      if (isExcluded) reasonText = 'FL Studio bounce clone';
+      else if (item.userCategory || item.customName) reasonText = 'Manual override';
       else if (item.matchedOn) reasonText = `Matched "${item.matchedOn}"`;
       else if (item.audioFeatures) reasonText = `Audio centroid ${item.audioFeatures.centroid}Hz`;
       const rReason = el('span', 'smart-reason', reasonText);
@@ -6451,28 +6636,43 @@ async function renderSmartRenameTab(entry: any = null) {
       rightControls.style.display = 'flex';
       rightControls.style.alignItems = 'center';
       rightControls.style.gap = '6px';
-      rightControls.append(rowCombobox);
-      if (audioInsightPill) rightControls.append(audioInsightPill);
+      if (!isExcluded) {
+        rightControls.append(rowCombobox);
+        if (audioInsightPill) rightControls.append(audioInsightPill);
+      } else {
+        const unexcludeBtn = el('button', 'pill pill--sm', 'Include');
+        unexcludeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          smartExcludedSet.delete(item.path);
+          renderPanes();
+        });
+        rightControls.append(unexcludeBtn);
+      }
       rightControls.append(rReason);
 
       rRow.append(rName, rightControls);
 
       rRow.addEventListener('click', (e) => {
-        if (e.target && ((e.target as HTMLElement).closest('.smart-combobox'))) return;
+        if (e.target && ((e.target as HTMLElement).closest('.smart-combobox') || (e.target as HTMLElement).closest('button'))) return;
+        if (e.shiftKey) {
+          handleCheckToggle(item, itemIdx, e);
+          return;
+        }
         smartSelectedPath = item.path;
         Player.load({ path: item.path, name: item.name, ext: pathExt(item.name) });
         renderPanes();
       });
       rightBody.append(rRow);
-    }
+    });
 
-    summary.textContent = `${changingCount} of ${smartItems.length} files will be renamed · ${unresolvedCount} unresolved (kept original)`;
+    summary.textContent = `${changingCount} of ${smartItems.length} files will be renamed · ${unresolvedCount} unresolved (kept original)${smartExcludedSet.size > 0 ? ` · ${smartExcludedSet.size} excluded` : ''}`;
     commitBtn.disabled = changingCount === 0;
     commitBtn.textContent = `Rename ${changingCount} files`;
 
     commitBtn.onclick = async () => {
+      const activePlanRows = planRows.filter((r) => !r.excluded && !smartExcludedSet.has(r.path));
       const plan = {
-        rows: planRows.map((r) => ({
+        rows: activePlanRows.map((r) => ({
           path: r.path,
           from: r.from,
           to: r.to,
@@ -6480,18 +6680,26 @@ async function renderSmartRenameTab(entry: any = null) {
           problem: r.problem
         })),
         changing: changingCount,
-        problems: planRows.filter((r) => r.problem).length,
+        problems: activePlanRows.filter((r) => r.problem).length,
         tool: 'smart-rename'
       };
       const outcome = await window.api.renameApply(plan, { tool: 'smart-rename' });
-      toast('Smart Rename Applied', `Renamed ${outcome.renamed} file(s)${outcome.failed && outcome.failed.length ? ` (${outcome.failed.length} failed)` : ''}`, Boolean(outcome.failed && outcome.failed.length > 0));
-      await loadFolder();
+      if (outcome && outcome.renamed > 0) {
+        toast('Smart Renamer', `Renamed ${outcome.renamed} stem(s) successfully!`);
+        await loadFolder();
+      } else if (outcome && outcome.errors && outcome.errors.length > 0) {
+        toast('Rename Error', outcome.errors[0]?.error || 'Failed to rename files', true);
+      }
     };
 
     undoLastBtn.onclick = async () => {
-      const outcome = await window.api.renameUndo();
-      toast('Undo', `${outcome.reverted} file(s) restored`);
-      await loadFolder();
+      const res = await window.api.renameUndo();
+      if (res && res.ok) {
+        toast('Undo Rename', `Reverted ${res.reverted || 'previous'} file names`);
+        await loadFolder();
+      } else {
+        toast('Undo Failed', res?.message || 'No previous rename action to undo', true);
+      }
     };
   }
 

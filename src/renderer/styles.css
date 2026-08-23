@@ -4902,6 +4902,16 @@ body[data-anim-scale="0"] *::after {
   background: rgba(45, 212, 191, 0.08);
 }
 
+.smart-row.is-excluded {
+  opacity: 0.55;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.smart-row.is-excluded .smart-row__name {
+  text-decoration: line-through;
+  color: var(--dim);
+}
+
 .smart-batch-bar {
   display: flex;
   align-items: center;
