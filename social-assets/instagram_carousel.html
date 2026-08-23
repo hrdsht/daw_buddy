@@ -451,14 +451,14 @@
       🔄 Reset Slide
     </button>
 
-    <button class="btn btn-primary" onclick="downloadCurrentSlide()">
+    <button class="btn btn-primary" id="exportSlideBtn" onclick="downloadCurrentSlide()">
       <svg width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
-      Export Current Slide PNG
+      Export Current Slide JPG
     </button>
 
     <button class="btn btn-primary" onclick="exportAllSlidesZip()">
       <svg width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
-      Export All 15 Slides as ZIP
+      Export All 16 Slides as ZIP (JPG)
     </button>
 
     <button class="btn" onclick="prevSlide()">← Prev</button>
@@ -825,43 +825,83 @@
     }
 
     async function downloadCurrentSlide() {
+      const btn = document.getElementById('exportSlideBtn');
+      const originalText = btn ? btn.innerHTML : '';
+      if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Exporting JPG...'; }
+
       const canvasEl = document.getElementById('slideCanvas');
       const canvas = await html2canvas(canvasEl, {
         scale: 1,
         width: 1080,
         height: 1350,
         useCORS: true,
-        allowTaint: true
+        allowTaint: true,
+        backgroundColor: '#0a0b10',
+        onclone: (clonedDoc) => {
+          const clonedCanvas = clonedDoc.getElementById('slideCanvas');
+          if (clonedCanvas) {
+            clonedCanvas.style.transform = 'none';
+            clonedCanvas.style.position = 'relative';
+            clonedCanvas.style.top = '0';
+            clonedCanvas.style.left = '0';
+            clonedCanvas.style.width = '1080px';
+            clonedCanvas.style.height = '1350px';
+          }
+        }
       });
-      const dataUrl = canvas.toDataURL('image/png');
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
       const link = document.createElement('a');
-      link.download = `daw_buddy_slide_${currentSlideIndex + 1}.png`;
+      link.download = `daw_buddy_slide_${String(currentSlideIndex + 1).padStart(2, '0')}.jpg`;
       link.href = dataUrl;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
+
+      if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
     }
 
     async function exportAllSlidesZip() {
+      const btn = event?.currentTarget;
+      const originalText = btn ? btn.innerHTML : '';
+      if (btn) { btn.disabled = true; }
+
       const zip = new JSZip();
       const canvasEl = document.getElementById('slideCanvas');
       const originalIndex = currentSlideIndex;
 
       for (let i = 0; i < slidesData.length; i++) {
+        if (btn) { btn.innerHTML = `⏳ Exporting Slide ${i + 1}/${slidesData.length}...`; }
         renderSlide(i);
-        await new Promise(r => setTimeout(r, 120));
+        await new Promise(r => setTimeout(r, 140));
         const canvas = await html2canvas(canvasEl, {
           scale: 1,
           width: 1080,
           height: 1350,
           useCORS: true,
-          allowTaint: true
+          allowTaint: true,
+          backgroundColor: '#0a0b10',
+          onclone: (clonedDoc) => {
+            const clonedCanvas = clonedDoc.getElementById('slideCanvas');
+            if (clonedCanvas) {
+              clonedCanvas.style.transform = 'none';
+              clonedCanvas.style.position = 'relative';
+              clonedCanvas.style.top = '0';
+              clonedCanvas.style.left = '0';
+              clonedCanvas.style.width = '1080px';
+              clonedCanvas.style.height = '1350px';
+            }
+          }
         });
-        const dataUrl = canvas.toDataURL('image/png').split(',')[1];
-        zip.file(`slide_${String(i + 1).padStart(2, '0')}_${slidesData[i].cat.replace(/[^a-zA-Z0-9]/g, '_')}.png`, dataUrl, { base64: true });
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.95).split(',')[1];
+        zip.file(`slide_${String(i + 1).padStart(2, '0')}_${slidesData[i].cat.replace(/[^a-zA-Z0-9]/g, '_')}.jpg`, dataUrl, { base64: true });
       }
 
       renderSlide(originalIndex);
+      if (btn) { btn.innerHTML = `⏳ Zipping JPGs...`; }
       const content = await zip.generateAsync({ type: 'blob' });
-      saveAs(content, 'daw_buddy_instagram_carousel_16_slides.zip');
+      saveAs(content, 'daw_buddy_instagram_carousel_16_slides_jpg.zip');
+
+      if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
     }
 
     const reelMp4Map = {
