@@ -199,14 +199,18 @@ function createWindow({ splash = null, revealWhen = Promise.resolve() }: any = {
  * errors, which are the second instance failing to take the lock on the
  * shader cache — harmless in themselves, but a symptom of the real problem.
  */
-if (!app.requestSingleInstanceLock()) {
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
   console.log('[app] DAW Buddy is already running — focusing that window.');
   app.quit();
+  process.exit(0);
 } else {
   app.on('second-instance', () => {
-    if (!mainWindow) return;
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.focus();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      if (!mainWindow.isVisible()) mainWindow.show();
+      mainWindow.focus();
+    }
   });
 }
 
@@ -798,6 +802,7 @@ ipcMain.handle('records:set', (event, key, patch) => {
   const allowed: Record<string, any> = {};
   [
     'key', 'camelot', 'keyConfidence', 'keyAlternate', 'detectedBpm',
+    'detectedTimeSignature', 'detectedTala', 'chordProgression', 'analysis',
     'analysedFrom', 'favourite', 'customColor', 'tonic', 'scale',
     'modal', 'scaleConfidence', 'tuningA4', 'ragas', 'stemsPath', 'note'
   ].forEach((field) => {

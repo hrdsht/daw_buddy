@@ -29,6 +29,10 @@ const EMPTY = {
   modal: false,
   scaleConfidence: 0,
   detectedBpm: null,
+  detectedTimeSignature: null,
+  detectedTala: null,
+  chordProgression: null,
+  analysis: null,
   analysedFrom: null,
   favourite: false,
   customColor: null,
@@ -82,7 +86,14 @@ class ProjectStore {
     next.updatedAt = new Date().toISOString();
 
     const isEmpty =
-      !next.note && !next.stemsPath && !next.key && !next.favourite && !next.customColor && !next.tonic;
+      !next.note &&
+      !next.stemsPath &&
+      !next.key &&
+      !next.favourite &&
+      !next.customColor &&
+      !next.tonic &&
+      !next.analysis &&
+      !next.detectedBpm;
 
     if (isEmpty) delete this.data[key];
     else this.data[key] = next;

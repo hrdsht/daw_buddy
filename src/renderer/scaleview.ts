@@ -123,6 +123,117 @@ export function layout(octaves = 2, whiteWidth = 22, whiteHeight = 96): Keyboard
   };
 }
 
+/* ================================================================== */
+/* Guitar Fretboard Layout & Highlighting                             */
+/* ================================================================== */
+
+export interface FretNote {
+  stringIndex: number; // 0 = High E (E4), 5 = Low E (E2)
+  stringName: string;
+  fret: number; // 0 = open string, 1 to 12
+  pc: number;
+  octave: number;
+  name: string;
+  x: number;
+  y: number;
+  state?: 'tonic' | 'scale' | 'out';
+  degree?: number | null;
+}
+
+export interface FretboardLayout {
+  strings: { index: number; name: string; openPc: number; openOctave: number; y: number; gauge: number }[];
+  frets: { fret: number; x: number; width: number }[];
+  inlays: { fret: number; x: number; y: number; double?: boolean }[];
+  notes: FretNote[];
+  width: number;
+  height: number;
+}
+
+export const GUITAR_STRINGS = [
+  { index: 0, name: 'E4', openPc: 4, openOctave: 4, gauge: 1.0 },
+  { index: 1, name: 'B3', openPc: 11, openOctave: 3, gauge: 1.3 },
+  { index: 2, name: 'G3', openPc: 7, openOctave: 3, gauge: 1.7 },
+  { index: 3, name: 'D3', openPc: 2, openOctave: 3, gauge: 2.1 },
+  { index: 4, name: 'A2', openPc: 9, openOctave: 2, gauge: 2.5 },
+  { index: 5, name: 'E2', openPc: 4, openOctave: 2, gauge: 3.0 }
+];
+
+export function fretboardLayout(fretCount = 12, totalWidth = 580, totalHeight = 110): FretboardLayout {
+  const nutX = 36;
+  const playableWidth = totalWidth - nutX - 16;
+  const fretWidth = playableWidth / fretCount;
+
+  const stringPaddingTop = 14;
+  const stringSpacing = (totalHeight - stringPaddingTop * 2) / (GUITAR_STRINGS.length - 1);
+
+  const strings = GUITAR_STRINGS.map((s, idx) => ({
+    ...s,
+    y: Math.round(stringPaddingTop + idx * stringSpacing)
+  }));
+
+  const frets: { fret: number; x: number; width: number }[] = [];
+  for (let f = 1; f <= fretCount; f++) {
+    frets.push({
+      fret: f,
+      x: Math.round(nutX + f * fretWidth),
+      width: Math.round(fretWidth)
+    });
+  }
+
+  // Inlay markers: single dots at 3, 5, 7, 9; double dots at 12
+  const inlays: { fret: number; x: number; y: number; double?: boolean }[] = [];
+  [3, 5, 7, 9].forEach((f) => {
+    const centerFretX = nutX + (f - 0.5) * fretWidth;
+    inlays.push({ fret: f, x: Math.round(centerFretX), y: Math.round(totalHeight / 2) });
+  });
+  // 12th fret double dots
+  const fret12X = nutX + 11.5 * fretWidth;
+  inlays.push(
+    { fret: 12, x: Math.round(fret12X), y: Math.round(totalHeight / 2 - 16), double: true },
+    { fret: 12, x: Math.round(fret12X), y: Math.round(totalHeight / 2 + 16), double: true }
+  );
+
+  const notes: FretNote[] = [];
+  strings.forEach((str) => {
+    for (let f = 0; f <= fretCount; f++) {
+      const semitone = str.openPc + f;
+      const pc = semitone % 12;
+      const octave = str.openOctave + Math.floor((str.openPc + f) / 12);
+      const noteX = f === 0 ? 16 : Math.round(nutX + (f - 0.5) * fretWidth);
+      notes.push({
+        stringIndex: str.index,
+        stringName: str.name,
+        fret: f,
+        pc,
+        octave,
+        name: NOTE_NAMES[pc],
+        x: noteX,
+        y: str.y
+      });
+    }
+  });
+
+  return {
+    strings,
+    frets,
+    inlays,
+    notes,
+    width: totalWidth,
+    height: totalHeight
+  };
+}
+
+export function highlightFretboard(notes: FretNote[], tonicPc: number, degrees: number[]): FretNote[] {
+  const inScale = new Set(degrees.map((d) => (tonicPc + d) % 12));
+
+  return notes.map((note) => ({
+    ...note,
+    state:
+      note.pc === tonicPc ? 'tonic' : inScale.has(note.pc) ? 'scale' : 'out',
+    degree: inScale.has(note.pc) ? degreeOf(note.pc, tonicPc, degrees) : null
+  }));
+}
+
 /**
  * Marks each key as tonic, in-scale or outside.
  */

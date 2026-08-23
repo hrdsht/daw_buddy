@@ -15,6 +15,7 @@ const renders = require('../src/main/lib/renders');
 const videos = require('../src/main/lib/videos');
 const id3 = require('../src/main/lib/id3');
 const versions = require('../src/main/lib/versions');
+const { ProjectStore } = require('../src/main/lib/notes');
 
 async function withTempDir(run) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'daw-buddy-test-'));
@@ -536,6 +537,42 @@ async function audioCopiedToProjectFolderRootIsListed() {
   });
 }
 
+async function audioAnalysisPersistsInStore() {
+  await withTempDir(async (dir) => {
+    const storePath = path.join(dir, 'notes.json');
+    const store = new ProjectStore(storePath);
+    await store.load();
+
+    const analysisData = {
+      bpm: 128,
+      key: 'C maj',
+      camelot: '8B',
+      timeSignature: '4/4',
+      tala: { name: 'Teental' }
+    };
+
+    store.set('C:\\Music\\Track_v1.wav', {
+      analysis: analysisData,
+      detectedBpm: 128,
+      key: 'C maj',
+      camelot: '8B',
+      detectedTimeSignature: '4/4',
+      detectedTala: 'Teental'
+    });
+    await store.flush();
+
+    const store2 = new ProjectStore(storePath);
+    await store2.load();
+    const retrieved = store2.get('C:\\Music\\Track_v1.wav');
+
+    assert.equal(retrieved.key, 'C maj');
+    assert.equal(retrieved.detectedBpm, 128);
+    assert.equal(retrieved.detectedTimeSignature, '4/4');
+    assert.equal(retrieved.detectedTala, 'Teental');
+    assert.deepEqual(retrieved.analysis, analysisData);
+  });
+}
+
 async function run() {
   const tests = [
     scannerKeepsSessionFactsSeparate,
@@ -553,7 +590,8 @@ async function run() {
     proToolsBackupsAndSourceAudioStayOutOfResults,
     audioInAnotherBranchDoesNotEnablePlay,
     videosAreCountedAndListed,
-    id3EditingNeverChangesAudioBytes
+    id3EditingNeverChangesAudioBytes,
+    audioAnalysisPersistsInStore
   ];
 
   for (const test of tests) {

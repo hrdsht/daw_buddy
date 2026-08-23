@@ -49,7 +49,33 @@ function testCamelotWheelLayoutAndCompatibility() {
   assert.equal(comp1A.down, '12A');
 }
 
+function testFretboardLayoutAndHighlight() {
+  const fb = scaleview.fretboardLayout(12, 580, 110);
+  assert.equal(fb.strings.length, 6);
+  assert.equal(fb.frets.length, 12);
+  assert.equal(fb.notes.length, 6 * 13); // 6 strings * (12 frets + 1 open string) = 78 notes
+
+  // Test C Major (Tonic C = 0, degrees = [0, 2, 4, 5, 7, 9, 11])
+  const majorDegrees = [0, 2, 4, 5, 7, 9, 11];
+  const highlighted = scaleview.highlightFretboard(fb.notes, 0, majorDegrees);
+
+  const tonicNotes = highlighted.filter((n) => n.state === 'tonic');
+  assert.ok(tonicNotes.length >= 6); // At least 6 C notes across standard fretboard
+  tonicNotes.forEach((n) => {
+    assert.equal(n.name, 'C');
+    assert.equal(n.degree, 1);
+  });
+
+  const scaleNotes = highlighted.filter((n) => n.state === 'scale');
+  assert.ok(scaleNotes.length > 30);
+
+  const outNotes = highlighted.filter((n) => n.state === 'out');
+  assert.ok(outNotes.length > 0);
+}
+
 testKeyboardLayoutAndHighlight();
 console.log('ok - testKeyboardLayoutAndHighlight');
 testCamelotWheelLayoutAndCompatibility();
 console.log('ok - testCamelotWheelLayoutAndCompatibility');
+testFretboardLayoutAndHighlight();
+console.log('ok - testFretboardLayoutAndHighlight');

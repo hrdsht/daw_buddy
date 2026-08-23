@@ -9,7 +9,28 @@ is auto-generated on each GitHub Release; this file is the curated summary.
 
 - _Nothing yet._
 
-## [0.4.9-beta2] — 2026-08-23
+## [0.5.0-beta] — 2026-08-23
+
+### Added
+- **Interactive 6-String Guitar Fretboard Visualizer**:
+  - Full 12-fret standard guitar fretboard (`EADGBE`) with fret wires, inlay markers (frets 3, 5, 7, 9, 12), and gauge-differentiated strings.
+  - Interactive note plucking with acoustic string shimmer wave animations and synthesized note playback.
+  - Highlighted root tonic (gold glow) and scale degree notes.
+- **Centered & Expanded Scale Notes & Sargam Solfege**:
+  - Centered layout displaying note badges with Western note names, Indian Sargam (`Sa`, `Re`, `Ga`, `ma`, `Pa`, `Dha`, `ni`), scale degrees, and exact tuning frequencies (Hz). Clicking any badge triggers note playback and plucks matching fretboard notes.
+- **2-Row Scale Suggestions Grid & Camelot Wheel**:
+  - 2-column, 2-row clean grid for World Musical Traditions & Scale Suggestions with Audition and Drag to DAW features.
+- **Persistent Audio Analysis Knowledge Base**:
+  - Permanent caching of detected musical keys, Camelot codes, BPMs, time signatures, and Talas.
+  - Interactive "Are you sure?" confirmation dialog when manually requesting re-analysis of already analyzed files.
+- **Dynamic In-Place Project Harmony Updates**:
+  - Real-time animated updates to keyboard, fretboard, and Camelot wheel on audio analysis without full page reloads.
+
+### Fixed
+- **Strict Single-Instance Lock**:
+  - Enforced single-instance application locking via `app.requestSingleInstanceLock()`. Secondary instances immediately exit and bring the running window into focus.
+- **Mini Player Background Playback Synchronization**:
+  - Implemented continuous 100ms background playback state broadcasting and `timeupdate` listeners, ensuring the Mini Player seek bar and time counter update smoothly even when DAW Buddy's main window is minimized.
 
 ### Fixed
 - **Audio Analysis Decoding**: Resolved issue where `Player.load()` returned unawaited promises, causing `"That file could not be decoded."` toast errors during manual render analysis. Added dedicated `Player.decode()` pipeline for uninterrupted background analysis of large multi-megabyte WAV bounces.

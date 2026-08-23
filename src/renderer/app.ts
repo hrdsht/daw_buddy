@@ -14,6 +14,10 @@ import { DSP, ScaleSegment, ScaleModulationReport } from './dsp';
 import {
   layout as kbLayoutFn,
   highlight as kbHighlightFn,
+  fretboardLayout as fretboardLayoutFn,
+  highlightFretboard as fretboardHighlightFn,
+  FretNote,
+  GUITAR_STRINGS,
   wheelLayout as wheelLayoutFn,
   compatible as camelotCompatible,
   codeFor,
@@ -382,7 +386,149 @@ let analysisRequestId = 0;
 const pendingAnalysis = new Map();
 const activePlayAnalysis = new Map();
 const analysisJobs = new Map();
+const audioAnalysisCache = new Map<string, any>();
 const navigationHistory = new NavigationHistory();
+
+function getFileAnalysis(filePath?: string | null, fileName?: string | null, entry?: any): any | null {
+  if (filePath && audioAnalysisCache.has(filePath)) {
+    return audioAnalysisCache.get(filePath);
+  }
+  const rec = filePath ? (records as any)[filePath] : null;
+  if (rec && (rec.analysis || rec.key || rec.detectedBpm || rec.tonic)) {
+    const res = rec.analysis || {
+      key: rec.key,
+      camelot: rec.camelot,
+      keyConfidence: rec.keyConfidence,
+      keyAlternate: rec.keyAlternate,
+      tonic: rec.tonic,
+      tonicConfidence: rec.tonicConfidence,
+      scale: rec.scale,
+      scaleConfidence: rec.scaleConfidence,
+      modal: rec.modal,
+      bpm: rec.detectedBpm,
+      timeSignature: rec.detectedTimeSignature,
+      tala: rec.detectedTala ? { name: rec.detectedTala } : null,
+      tuningA4: rec.tuningA4,
+      ragas: rec.ragas,
+      chordProgression: rec.chordProgression
+    };
+    if (filePath) audioAnalysisCache.set(filePath, res);
+    return res;
+  }
+  if (entry && fileName && (records as any)[entry.path]?.analysedFrom === fileName) {
+    const entryRec = (records as any)[entry.path];
+    if (entryRec && (entryRec.key || entryRec.detectedBpm || entryRec.tonic)) {
+      const res = {
+        key: entryRec.key,
+        camelot: entryRec.camelot,
+        keyConfidence: entryRec.keyConfidence,
+        keyAlternate: entryRec.keyAlternate,
+        tonic: entryRec.tonic,
+        tonicConfidence: entryRec.tonicConfidence,
+        scale: entryRec.scale,
+        scaleConfidence: entryRec.scaleConfidence,
+        modal: entryRec.modal,
+        bpm: entryRec.detectedBpm,
+        timeSignature: entryRec.detectedTimeSignature,
+        tala: entryRec.detectedTala ? { name: entryRec.detectedTala } : null,
+        tuningA4: entryRec.tuningA4,
+        ragas: entryRec.ragas
+      };
+      if (filePath) audioAnalysisCache.set(filePath, res);
+      return res;
+    }
+  }
+  return null;
+}
+
+function isFileAnalysed(filePath?: string | null, fileName?: string | null, entry?: any): boolean {
+  return Boolean(getFileAnalysis(filePath, fileName, entry));
+}
+
+interface ConfirmModalOptions {
+  title?: string;
+  icon?: string;
+  message: string;
+  details?: string;
+  confirmText?: string;
+  cancelText?: string;
+}
+
+function showConfirmModal(opts: ConfirmModalOptions): Promise<boolean> {
+  return new Promise((resolve) => {
+    document.querySelectorAll('.confirm-modal-overlay').forEach((node) => node.remove());
+
+    const overlay = el('div', 'confirm-modal-overlay');
+    const modal = el('div', 'confirm-modal');
+
+    // Header
+    const header = el('div', 'confirm-modal__header');
+    const titles = el('div', 'confirm-modal__titles');
+    if (opts.icon) {
+      titles.append(el('span', 'confirm-modal__icon', opts.icon));
+    }
+    titles.append(el('h3', 'confirm-modal__title', opts.title || 'Are you sure?'));
+    header.append(titles);
+
+    const closeBtn = el('button', 'confirm-modal__close', '✕');
+    closeBtn.title = 'Cancel (Esc)';
+    closeBtn.addEventListener('click', () => {
+      cleanup(false);
+    });
+    header.append(closeBtn);
+    modal.append(header);
+
+    // Body
+    const body = el('div', 'confirm-modal__body');
+    const msg = el('p', 'confirm-modal__message', opts.message);
+    body.append(msg);
+
+    if (opts.details) {
+      const detailsBox = el('div', 'confirm-modal__details');
+      detailsBox.append(el('div', 'confirm-modal__details-label', 'Knowledge Base Record'));
+      detailsBox.append(el('div', 'confirm-modal__details-content', opts.details));
+      body.append(detailsBox);
+    }
+
+    const prompt = el('p', 'confirm-modal__prompt', 'Would you like to re-analyse it now?');
+    body.append(prompt);
+    modal.append(body);
+
+    // Footer
+    const footer = el('div', 'confirm-modal__footer');
+    const cancelBtn = el('button', 'pill', opts.cancelText || 'No');
+    const confirmBtn = el('button', 'pill pill--solid', opts.confirmText || 'Yes');
+
+    cancelBtn.addEventListener('click', () => cleanup(false));
+    confirmBtn.addEventListener('click', () => cleanup(true));
+
+    footer.append(cancelBtn, confirmBtn);
+    modal.append(footer);
+    overlay.append(modal);
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        cleanup(false);
+      } else if (e.key === 'Enter') {
+        cleanup(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) cleanup(false);
+    });
+
+    function cleanup(result: boolean) {
+      window.removeEventListener('keydown', onKey);
+      overlay.remove();
+      resolve(result);
+    }
+
+    document.body.append(overlay);
+    requestAnimationFrame(() => confirmBtn.focus());
+  });
+}
 
 /* ==================================================================
    GLOBAL UNCAUGHT ERROR REPORTING & CRASH RECOVERY
@@ -1960,6 +2106,175 @@ function openScaleModulationModal(segment: ScaleSegment, report: ScaleModulation
   document.body.append(overlay);
 }
 
+function renderFretboardSvg(
+  tonicPc: number,
+  degrees: number[],
+  selectedTuningA4 = 440,
+  onNoteClick?: (note: FretNote) => void
+): SVGElement & { vibrateString: (strIdx: number) => void; vibrateNote: (notePc: number) => void } {
+  const fb = fretboardLayoutFn(12, 560, 114);
+  const highlightedNotes = fretboardHighlightFn(fb.notes, tonicPc, degrees);
+  const svgNS = 'http://www.w3.org/2000/svg';
+
+  const svgFb = document.createElementNS(svgNS, 'svg') as any;
+  svgFb.setAttribute('class', 'scale-fretboard');
+  svgFb.setAttribute('viewBox', `0 0 ${fb.width} ${fb.height}`);
+  svgFb.setAttribute('width', '100%');
+  svgFb.setAttribute('height', '114');
+
+  // 1. Fretboard body slab
+  const bg = document.createElementNS(svgNS, 'rect');
+  bg.setAttribute('x', '36');
+  bg.setAttribute('y', '6');
+  bg.setAttribute('width', String(fb.width - 36 - 12));
+  bg.setAttribute('height', String(fb.height - 18));
+  bg.setAttribute('rx', '4');
+  bg.setAttribute('class', 'fretboard-wood');
+  svgFb.appendChild(bg);
+
+  // 2. Nut (fret 0 separator)
+  const nut = document.createElementNS(svgNS, 'rect');
+  nut.setAttribute('x', '33');
+  nut.setAttribute('y', '5');
+  nut.setAttribute('width', '5');
+  nut.setAttribute('height', String(fb.height - 16));
+  nut.setAttribute('rx', '1.5');
+  nut.setAttribute('class', 'fretboard-nut');
+  svgFb.appendChild(nut);
+
+  // 3. Fret wires & Fret numbers
+  fb.frets.forEach((f) => {
+    const line = document.createElementNS(svgNS, 'line');
+    line.setAttribute('x1', String(f.x));
+    line.setAttribute('y1', '6');
+    line.setAttribute('x2', String(f.x));
+    line.setAttribute('y2', String(fb.height - 12));
+    line.setAttribute('class', 'fretboard-wire');
+    svgFb.appendChild(line);
+
+    // Fret number label below fretboard
+    if ([1, 3, 5, 7, 9, 12].includes(f.fret)) {
+      const fretNum = document.createElementNS(svgNS, 'text');
+      const fretCenterX = f.fret === 1 ? (36 + f.x) / 2 : (f.x - f.width / 2);
+      fretNum.setAttribute('x', String(fretCenterX));
+      fretNum.setAttribute('y', String(fb.height - 1));
+      fretNum.setAttribute('text-anchor', 'middle');
+      fretNum.setAttribute('class', 'fretboard-num');
+      fretNum.textContent = String(f.fret);
+      svgFb.appendChild(fretNum);
+    }
+  });
+
+  // 4. Inlay markers (3, 5, 7, 9, 12)
+  fb.inlays.forEach((inlay) => {
+    const dot = document.createElementNS(svgNS, 'circle');
+    dot.setAttribute('cx', String(inlay.x));
+    dot.setAttribute('cy', String(inlay.y));
+    dot.setAttribute('r', inlay.double ? '3' : '4');
+    dot.setAttribute('class', 'fretboard-inlay');
+    svgFb.appendChild(dot);
+  });
+
+  // 5. Strings
+  fb.strings.forEach((str) => {
+    // Open string name label at left
+    const label = document.createElementNS(svgNS, 'text');
+    label.setAttribute('x', '16');
+    label.setAttribute('y', String(str.y + 3.5));
+    label.setAttribute('text-anchor', 'middle');
+    label.setAttribute('class', 'fretboard-string-label');
+    label.textContent = str.name.slice(0, 1);
+    svgFb.appendChild(label);
+
+    const sLine = document.createElementNS(svgNS, 'line');
+    sLine.setAttribute('x1', '28');
+    sLine.setAttribute('y1', String(str.y));
+    sLine.setAttribute('x2', String(fb.width - 14));
+    sLine.setAttribute('y2', String(str.y));
+    sLine.setAttribute('stroke-width', String(str.gauge));
+    sLine.setAttribute('class', `fretboard-string fretboard-string--${str.index}`);
+    svgFb.appendChild(sLine);
+  });
+
+  function vibrateString(strIdx: number) {
+    const line = svgFb.querySelector(`.fretboard-string--${strIdx}`);
+    if (line) {
+      line.classList.remove('is-vibrating');
+      void (line as any).getBoundingClientRect();
+      line.classList.add('is-vibrating');
+      line.addEventListener('animationend', () => line.classList.remove('is-vibrating'), { once: true });
+    }
+  }
+
+  function pluckNoteGroup(group: SVGElement) {
+    if (group) {
+      group.classList.remove('is-plucked');
+      void (group as any).getBoundingClientRect();
+      group.classList.add('is-plucked');
+      group.addEventListener('animationend', () => group.classList.remove('is-plucked'), { once: true });
+    }
+  }
+
+  function vibrateNote(notePc: number) {
+    const matching = fb.notes.filter((n) => n.pc === notePc && n.state !== 'out');
+    if (matching.length > 0) {
+      matching.forEach((n) => {
+        vibrateString(n.stringIndex);
+        const g = svgFb.querySelector(`[data-note-pc="${n.pc}"][data-string-idx="${n.stringIndex}"][data-fret="${n.fret}"]`);
+        if (g) pluckNoteGroup(g as SVGElement);
+      });
+    } else {
+      vibrateString(0);
+    }
+  }
+
+  // 6. Scale & Tonic Notes
+  highlightedNotes.forEach((note) => {
+    if (note.state === 'out') return;
+
+    const group = document.createElementNS(svgNS, 'g');
+    group.setAttribute('class', `fret-note-group fret-note--${note.state}`);
+    group.setAttribute('data-note-pc', String(note.pc));
+    group.setAttribute('data-string-idx', String(note.stringIndex));
+    group.setAttribute('data-fret', String(note.fret));
+    group.style.cursor = 'pointer';
+
+    const circle = document.createElementNS(svgNS, 'circle');
+    circle.setAttribute('cx', String(note.x));
+    circle.setAttribute('cy', String(note.y));
+    circle.setAttribute('r', note.fret === 0 ? '7.5' : '8.5');
+    circle.setAttribute('class', `fret-note-circle fret-note-circle--${note.state}`);
+    group.appendChild(circle);
+
+    const txt = document.createElementNS(svgNS, 'text');
+    txt.setAttribute('x', String(note.x));
+    txt.setAttribute('y', String(note.y + 3));
+    txt.setAttribute('text-anchor', 'middle');
+    txt.setAttribute('class', 'fret-note-text');
+    txt.textContent = note.name;
+    group.appendChild(txt);
+
+    const interval = ((note.pc - tonicPc) % 12 + 12) % 12;
+    const degName = DEGREE_NAMES[interval] || '';
+    const sargam = SARGAM_NAMES[interval] || '';
+    group.innerHTML += `<title>${note.name} (${degName}${sargam ? ` · ${sargam}` : ''}) — String ${note.stringIndex + 1} (${note.stringName}), Fret ${note.fret}</title>`;
+
+    group.addEventListener('click', (e) => {
+      e.stopPropagation();
+      playSynthNote(note.pc, note.octave, selectedTuningA4);
+      pluckNoteGroup(group);
+      vibrateString(note.stringIndex);
+      if (onNoteClick) onNoteClick(note);
+    });
+
+    svgFb.appendChild(group);
+  });
+
+  svgFb.vibrateString = vibrateString;
+  svgFb.vibrateNote = vibrateNote;
+  return svgFb;
+}
+
 function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
   document.querySelectorAll('.camelot-modal-overlay').forEach((node) => node.remove());
 
@@ -2004,7 +2319,7 @@ function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
     const thaat = DSP.THAAT_MAP[selectedScale] || (selectedCode.endsWith('B') ? 'Bilawal (Major)' : 'Asavari (Natural Minor)');
     const comp = camelotCompatible(selectedCode);
 
-    // Inspector Top Card
+    // Inspector Top Card: Instruments & Visualizers
     const topCard = el('div', 'scale-inspect-card');
     const headerRow = el('div', 'scale-inspect__header');
 
@@ -2017,7 +2332,7 @@ function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
     headerRow.append(thaatBadge);
     topCard.append(headerRow);
 
-    // 2-octave Interactive Piano Keyboard
+    // 1. 2-octave Interactive Piano Keyboard
     const kb = kbLayoutFn(2, 19, 70);
     const highlightedKeys = kbHighlightFn(kb.keys, tonicPc, degrees);
     const svgNS = 'http://www.w3.org/2000/svg';
@@ -2060,13 +2375,18 @@ function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
     });
 
     topCard.append(svgKb);
+
+    // 2. Interactive 6-String Guitar Fretboard (below keyboard)
+    const svgFb = renderFretboardSvg(tonicPc, degrees, selectedTuningA4);
+    topCard.append(svgFb);
+
     inspectorCol.append(topCard);
 
-    // Notes & Sargam Grid
-    const notesSection = el('div', 'scale-notes-section');
+    // 3. Notes & Indian Sargam Solfege (Centered and expanded)
+    const notesSection = el('div', 'scale-notes-section scale-notes-section--centered');
     notesSection.append(el('h4', 'scale-notes__title', 'Scale Notes & Indian Sargam Solfege'));
 
-    const notesGrid = el('div', 'scale-notes-grid');
+    const notesGrid = el('div', 'scale-notes-grid scale-notes-grid--expanded');
     degrees.forEach((interval) => {
       const notePc = (tonicPc + interval) % 12;
       const noteName = DSP.NOTES[notePc];
@@ -2081,7 +2401,10 @@ function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
       noteCard.append(el('div', 'note-badge__sargam', sargam.split(' ')[0]));
       noteCard.append(el('div', 'note-badge__degree', degName));
       noteCard.append(el('div', 'note-badge__freq', `${freq} Hz`));
-      noteCard.addEventListener('click', () => playSynthNote(notePc, octave, selectedTuningA4));
+      noteCard.addEventListener('click', () => {
+        playSynthNote(notePc, octave, selectedTuningA4);
+        if (svgFb && svgFb.vibrateNote) svgFb.vibrateNote(notePc);
+      });
       notesGrid.append(noteCard);
     });
     notesSection.append(notesGrid);
@@ -3851,10 +4174,14 @@ function buildRenderRow(entry, render) {
 
   row.append(createSelectHandle(item));
 
-  const analyse = el('button', 'pill pill--sm', 'Analyse');
+  const isAnalysed = isFileAnalysed(render.primary.path, render.primary.name, entry);
+  const analyse = el('button', `pill pill--sm ${isAnalysed ? 'is-analysed' : ''}`, isAnalysed ? 'Analysed' : 'Analyse');
+  if (isAnalysed) {
+    analyse.title = 'Already analysed (stored in Knowledge Base). Click to re-analyse.';
+  }
   analyse.addEventListener('click', async (event) => {
     event.stopPropagation();
-    await analyseRender(entry, render, analyse);
+    await analyseRender(entry, render, analyse, { interactive: true });
   });
 
   const play = el('button', 'filerow__play', '▶');
@@ -3862,7 +4189,7 @@ function buildRenderRow(entry, render) {
     event.stopPropagation();
     await Player.load(render.primary, { autoplay: true, project: entry || openProject });
     if (entry) {
-      await analyseRender(entry, { primary: render.primary }, analyse, { refresh: false });
+      await analyseRender(entry, { primary: render.primary }, analyse, { refresh: false, interactive: false });
     }
   });
   row.append(play);
@@ -3902,7 +4229,7 @@ function buildRenderRow(entry, render) {
       // Single click: load, analyse, and play that specific format!
       await Player.load(fmtFile, { autoplay: true, project: entry || openProject });
       if (entry) {
-        await analyseRender(entry, { primary: fmtFile }, analyse, { refresh: false });
+        await analyseRender(entry, { primary: fmtFile }, analyse, { refresh: false, interactive: false });
       }
     });
 
@@ -3942,7 +4269,7 @@ function buildRenderRow(entry, render) {
   row.addEventListener('dblclick', async () => {
     await Player.load(render.primary, { autoplay: true, project: entry || openProject });
     if (entry) {
-      await analyseRender(entry, { primary: render.primary }, analyse, { refresh: false });
+      await analyseRender(entry, { primary: render.primary }, analyse, { refresh: false, interactive: false });
     }
   });
   attachDraggableAndSelectable(row, item);
@@ -4231,51 +4558,133 @@ function buildStemRow(entry, file) {
 }
 
 function analyseAudioButton(entry, file) {
-  const button = el('button', 'pill pill--sm', 'Analyse');
+  const isAnalysed = isFileAnalysed(file.path, file.name, entry);
+  const button = el('button', `pill pill--sm ${isAnalysed ? 'is-analysed' : ''}`, isAnalysed ? 'Analysed' : 'Analyse');
+  if (isAnalysed) {
+    button.title = 'Already analysed (stored in Knowledge Base). Click to re-analyse.';
+  }
   button.addEventListener('click', async (event) => {
     event.stopPropagation();
-    await analyseRender(entry, { primary: file }, button, { refresh: false });
+    await analyseRender(entry, { primary: file }, button, { refresh: false, interactive: true });
   });
   return button;
 }
 
-async function analyseRender(entry, renderItem, buttonEl, { refresh = true } = {}) {
-  const restoreBtn = setBtnLoading(buttonEl as HTMLButtonElement, 'Reading…');
+async function analyseRender(
+  entry: any,
+  renderItem: any,
+  buttonEl?: HTMLElement | null,
+  { refresh = true, force = false, interactive = false }: { refresh?: boolean; force?: boolean; interactive?: boolean } = {}
+) {
+  const file = renderItem?.primary;
+  if (!file) return null;
+
+  const existing = getFileAnalysis(file.path, file.name, entry);
+
+  if (existing && !force) {
+    if (interactive) {
+      let desc = '';
+      if (existing.key) desc += `Key: ${existing.key}${existing.camelot ? ` (${existing.camelot})` : ''}`;
+      else if (existing.tonic && existing.scale) desc += `Scale: Tonic ${existing.tonic} · ${existing.scale}`;
+      if (existing.bpm) desc += `${desc ? ' · ' : ''}BPM: ${Math.round(existing.bpm * 10) / 10}`;
+      if (existing.timeSignature) desc += ` · Meter: ${existing.timeSignature}`;
+
+      const confirmed = await showConfirmModal({
+        title: 'Re-analyse Audio?',
+        icon: '🎧',
+        message: `"${file.name}" has already been analysed and is stored in your knowledge base.`,
+        details: desc || 'Analysis data is cached in knowledge base',
+        confirmText: 'Yes, Re-analyse',
+        cancelText: 'No (Keep Cached)'
+      });
+
+      if (!confirmed) {
+        if (entry) {
+          await storeAnalysis(entry, file, existing);
+          if (refresh) patchAnalysisUI(entry, existing);
+        }
+        toast('Using Knowledge Base', `"${file.name}" is already analysed`);
+        return existing;
+      }
+    } else {
+      // Non-interactive load (playback / pill click / dblclick): immediately apply knowledge base result
+      if (entry) {
+        await storeAnalysis(entry, file, existing);
+        if (refresh) patchAnalysisUI(entry, existing);
+      }
+      return existing;
+    }
+  }
+
+  const restoreBtn = buttonEl ? setBtnLoading(buttonEl as HTMLButtonElement, 'Reading…') : () => {};
 
   try {
     const current = Player.getCurrent();
     let decoded =
-      current && current.path === renderItem.primary.path && Player.getDecoded()
+      current && current.path === file.path && Player.getDecoded()
         ? Player.getDecoded()
-        : await Player.decode(renderItem.primary);
+        : await Player.decode(file);
 
     if (!decoded) {
-      decoded = await Player.load(renderItem.primary, { autoplay: false, project: entry || openProject });
+      decoded = await Player.load(file, { autoplay: false, project: entry || openProject });
     }
 
     if (!decoded) {
       toast('Analysis failed', 'That file could not be decoded.', true);
       restoreBtn();
-      return;
+      return null;
     }
 
-    buttonEl.innerHTML = '<span class="btn-spinner"></span> Analysing…';
-    const result = await analyseAudioFile(renderItem.primary, decoded);
-    await storeAnalysis(entry, renderItem.primary, result);
-    showAnalysisResult(entry, result);
+    if (buttonEl) buttonEl.innerHTML = '<span class="btn-spinner"></span> Analysing…';
+    const result = await analyseAudioFile(file, decoded);
+
+    // Save to in-memory knowledge base cache
+    audioAnalysisCache.set(file.path, result);
+
+    // Save to persistent file record
+    await saveRecord(file.path, {
+      analysis: result,
+      key: result.key,
+      camelot: result.camelot,
+      keyConfidence: result.keyConfidence,
+      keyAlternate: result.keyAlternate,
+      tonic: result.tonic,
+      tonicConfidence: result.tonicConfidence,
+      scale: result.scale,
+      scaleConfidence: result.scaleConfidence,
+      modal: result.modal,
+      detectedBpm: result.bpm,
+      detectedTimeSignature: result.timeSignature || null,
+      detectedTala: result.tala ? result.tala.name : null,
+      chordProgression: result.chordProgression,
+      analysedFrom: file.name
+    });
+
+    if (entry) {
+      await storeAnalysis(entry, file, result);
+    }
+
+    showAnalysisResult(entry || { name: file.name }, result);
     if (refresh) patchAnalysisUI(entry, result);
-    else if (!refresh) { /* caller handles UI */ }
-  } catch (error) {
+
+    if (buttonEl) {
+      buttonEl.classList.add('is-analysed');
+      buttonEl.textContent = 'Analysed';
+      buttonEl.title = 'Already analysed (stored in Knowledge Base). Click to re-analyse.';
+    }
+
+    return result;
+  } catch (error: any) {
     toast('Analysis failed', error.message || String(error), true);
+    return null;
   } finally {
     restoreBtn();
   }
 }
 
 /* ------------------------------------------------------------------
-   patchAnalysisUI — surgically update key/BPM chips in place
-   after analysis, with a randomised reveal animation.
-   No full render() = no page blink.
+   patchAnalysisUI — surgically update key/BPM chips and project
+   harmony hero in place after analysis, with randomized reveal animation.
    ------------------------------------------------------------------ */
 const REVEAL_CLASSES = ['reveal-smoke', 'reveal-glass', 'reveal-poster', 'reveal-pop'] as const;
 
@@ -4295,14 +4704,12 @@ function animateChip(chip: HTMLElement) {
   }, { once: true });
 }
 
-function patchAnalysisUI(entry, result) {
-  // Update in-list row key cells (keycell__key / keycell__camelot)
-  const rowKey = document.querySelector<HTMLElement>(`.keycell__key`);
-  // We prefer the targeted detail-page chips:
-  const keyChip = document.querySelector<HTMLElement>('.statchip[data-analysis-chip="key"]');
+function patchAnalysisUI(entry: any, result: any) {
+  if (!result) return;
 
+  // 1. Update detail-page key chip:
+  const keyChip = document.querySelector<HTMLElement>('.statchip[data-analysis-chip="key"]');
   if (keyChip) {
-    // Rebuild label+value in place
     const label = keyChip.querySelector('.statchip__label') as HTMLElement;
     const value = keyChip.querySelector('.statchip__value') as HTMLElement;
     if (result.key) {
@@ -4310,24 +4717,44 @@ function patchAnalysisUI(entry, result) {
       if (value) value.textContent = `${result.key}${result.camelot ? ` (${result.camelot})` : ''}`;
     } else if (result.tonic && result.scale) {
       if (label) label.textContent = 'Scale';
-      if (value) value.textContent = `Tonic ${result.tonic} \u00b7 ${result.scale}`;
+      if (value) value.textContent = `Tonic ${result.tonic} · ${result.scale}`;
     }
     keyChip.style.display = '';
     animateChip(keyChip);
   }
 
-  // Also update sticky bar chip if visible
+  // 2. Update BPM stat chip:
+  const bpmChip = document.querySelector<HTMLElement>('.statchip[data-analysis-chip="bpm"]');
+  if (bpmChip && result.bpm) {
+    const value = bpmChip.querySelector('.statchip__value') as HTMLElement;
+    if (value) value.textContent = String(Math.round(result.bpm));
+    animateChip(bpmChip);
+  }
+
+  // 3. Update project hero harmony container (.page__harmony) in place!
+  // This updates the SVG keyboard, Camelot mini wheel, and World Scale / Raaga suggestions!
+  if (entry) {
+    const oldHarmony = document.querySelector<HTMLElement>('.page__harmony');
+    if (oldHarmony && oldHarmony.parentElement) {
+      const rec = record(entry.path);
+      const effectiveBpm = bpmFor(entry) || result.bpm;
+      const newHarmony = renderProjectHarmony(entry, rec, effectiveBpm);
+      oldHarmony.replaceWith(newHarmony);
+      animateChip(newHarmony);
+    }
+  }
+
+  // 4. Also update sticky bar chip if visible:
   const stickyBar = document.getElementById('projectStickyBar');
   if (stickyBar) {
     const stickyChips = stickyBar.querySelectorAll<HTMLElement>('.sticky-bar__chip');
     stickyChips.forEach(chip => {
       const txt = chip.textContent || '';
       if (txt.includes('BPM') && result.bpm) {
-        chip.textContent = `${result.bpm} BPM`;
+        chip.textContent = `${Math.round(result.bpm)} BPM`;
         animateChip(chip);
       }
     });
-    // Key chip in sticky bar
     let keyBarChip = stickyBar.querySelector<HTMLElement>('.sticky-bar__chip[data-sticky-key]');
     if (!keyBarChip && result.key) {
       keyBarChip = document.createElement('span');
@@ -4342,7 +4769,7 @@ function patchAnalysisUI(entry, result) {
     }
   }
 
-  // Update any in-list row that happens to be visible (keycell__key)
+  // 5. Update any in-list row that happens to be visible (keycell__key / keycell__camelot)
   const allKeyRows = document.querySelectorAll<HTMLElement>('.keycell__key');
   allKeyRows.forEach(cell => {
     if (result.key) cell.textContent = result.key;
@@ -4452,6 +4879,8 @@ async function storeAnalysis(entry, file, result) {
     detectedBpm: result.bpm,
     detectedTimeSignature: result.timeSignature || null,
     detectedTala: result.tala ? result.tala.name : null,
+    chordProgression: result.chordProgression,
+    analysis: result,
     analysedFrom: file.name
   });
 }
@@ -8894,6 +9323,10 @@ function renderScaleMidiTool() {
     });
 
     kbSection.append(svgKb);
+
+    // 2. Interactive 6-String Guitar Fretboard (below keyboard in scale tool)
+    const toolSvgFb = renderFretboardSvg(tonicPc, degrees, tuningA4);
+    kbSection.append(toolSvgFb);
 
     // Scale Action buttons: Play Scale, Play Drone, Drag Scale MIDI
     const scaleActions = el('div', 'scale-modal-actions');

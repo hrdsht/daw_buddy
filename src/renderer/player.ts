@@ -1179,11 +1179,15 @@ const Player = (() => {
 
   let isTicking = false;
   let rafId: number | null = null;
+  let bgTimerId: any = null;
 
   function startTick() {
     if (!isTicking) {
       isTicking = true;
       rafId = requestAnimationFrame(tick);
+    }
+    if (!bgTimerId) {
+      bgTimerId = setInterval(backgroundTick, 100);
     }
   }
 
@@ -1192,6 +1196,29 @@ const Player = (() => {
     if (rafId !== null) {
       cancelAnimationFrame(rafId);
       rafId = null;
+    }
+    if (bgTimerId !== null) {
+      clearInterval(bgTimerId);
+      bgTimerId = null;
+    }
+  }
+
+  function backgroundTick() {
+    if (audio.paused) {
+      stopTick();
+      return;
+    }
+    if (current && duration() > 0) {
+      // Enforce a trim region: loop back to the start, or stop and release it.
+      if (regionEnd !== null && !audio.paused && audio.currentTime >= regionEnd) {
+        if (regionLoop) audio.currentTime = regionStart;
+        else stopRegion();
+      }
+      const now = Date.now();
+      if (now - lastBroadcast > 100) {
+        lastBroadcast = now;
+        broadcastState();
+      }
     }
   }
 
@@ -1216,7 +1243,7 @@ const Player = (() => {
       timeEl.textContent = `${clock(audio.currentTime)} / ${clock(duration())}`;
       draw();
       const now = Date.now();
-      if (!audio.paused && now - lastBroadcast > 200) {
+      if (!audio.paused && now - lastBroadcast > 100) {
         lastBroadcast = now;
         broadcastState();
       }
@@ -1225,6 +1252,10 @@ const Player = (() => {
       rafId = requestAnimationFrame(tick);
     } else {
       isTicking = false;
+      if (bgTimerId !== null) {
+        clearInterval(bgTimerId);
+        bgTimerId = null;
+      }
     }
   }
 
@@ -1251,6 +1282,16 @@ const Player = (() => {
     if (current && !peaks) {
       timeEl.textContent = `${clock(audio.currentTime)} / ${clock(duration())}`;
       draw();
+    }
+  });
+
+  audio.addEventListener('timeupdate', () => {
+    if (!audio.paused && current && duration() > 0) {
+      const now = Date.now();
+      if (now - lastBroadcast > 100) {
+        lastBroadcast = now;
+        broadcastState();
+      }
     }
   });
 
