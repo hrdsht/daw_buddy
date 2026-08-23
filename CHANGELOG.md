@@ -9,6 +9,29 @@ is auto-generated on each GitHub Release; this file is the curated summary.
 
 - _Nothing yet._
 
+## [0.5.3-beta.2] — 2026-08-23
+
+### Added
+- **Slowed + Reverb Studio**:
+  - Full algorithmic slow-down and reverb generator inspired by slowedreverb.com.
+  - **Dual Invocations**:
+    - Popup modal via the `Verb` button beside the main waveform in the player transport.
+    - Inline standalone tool inside the **Tools** section.
+  - **Speed (%) & Pitch Controls**:
+    - Speed (%) mode (50%–100%) vs. "Slow by Pitch" semitones mode (-12 to 0 st) with live synchronized math conversions.
+    - Algorithmic Freeverb stereo impulse synthesis with 8 comb filters and 4 allpass filters per channel.
+    - Equal-power dry/wet mix curves and natural reverb tail preservation.
+    - RMS and peak loudness normalization to match original audio level without clipping.
+  - **Audio Quality & Export Format Selectors**:
+    - Sample rate selector: `44.1 kHz (44,100 Hz)` (default) or `48.0 kHz (48,000 Hz)`.
+    - WAV bit depth: `16-bit PCM` (default), `24-bit PCM`, or `32-bit Float`.
+    - MP3 bitrate slider: `128 kbps` to `320 kbps` (default `192 kbps`).
+    - Smart re-rendering on save when format/sample-rate/DSP settings change with progress bar.
+  - **Interactive Seekable Waveform Visualizer**:
+    - Amplitude peak waveform canvas with playhead cursor, duration timecode (`0:00 / 3:45`), and click-to-seek scrubbing.
+  - **Scale Suggestions Ranking Stability**:
+    - Fixed Raaga ranking stability by anchoring chroma match calculations to the base key and scale.
+
 ## [0.5.0-beta.2] — 2026-08-23
 
 ### Added

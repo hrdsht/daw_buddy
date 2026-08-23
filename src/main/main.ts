@@ -1173,6 +1173,19 @@ ipcMain.handle('tools:saveMidi', async (event, { defaultName, data }: any) => {
   return result.filePath;
 });
 
+ipcMain.handle('tools:saveAudio', async (event, { defaultName, data, format }: any) => {
+  const ext = format === 'mp3' ? 'mp3' : 'wav';
+  const filterName = format === 'mp3' ? 'MP3 Audio (*.mp3)' : 'WAV Audio (*.wav)';
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: `Save ${ext.toUpperCase()} Audio`,
+    defaultPath: defaultName || `SlowedReverb_Output.${ext}`,
+    filters: [{ name: filterName, extensions: [ext] }]
+  });
+  if (result.canceled || !result.filePath) return null;
+  await fsp.writeFile(result.filePath, Buffer.from(data));
+  return result.filePath;
+});
+
 /* ------------------------- smart renamer -------------------------- */
 
 ipcMain.handle('tools:smartClassify', async (event, folder, fileList) => {

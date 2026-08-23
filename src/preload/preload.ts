@@ -70,6 +70,8 @@ contextBridge.exposeInMainWorld('api', {
   dragAudio: (filename, data) => ipcRenderer.invoke('tools:dragAudio', { filename, data }),
   dragFiles: (filePaths: string[]) => ipcRenderer.invoke('tools:dragFiles', { filePaths }),
   saveMidi: (defaultName, data) => ipcRenderer.invoke('tools:saveMidi', { defaultName, data }),
+  saveAudio: (defaultName: string, data: number[] | Uint8Array, format: 'wav' | 'mp3') =>
+    ipcRenderer.invoke('tools:saveAudio', { defaultName, data, format }),
 
   smartClassify: (folder, files) =>
     ipcRenderer.invoke('tools:smartClassify', folder, files),

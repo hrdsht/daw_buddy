@@ -44,6 +44,19 @@ import {
   loadSoundsetBuffers,
   playMetronomePulse
 } from './metronome-sounds';
+import {
+  SlowedReverbOptions,
+  DEFAULT_SLOWED_REVERB_OPTIONS,
+  percentToSemitones,
+  semitonesToPercent,
+  getPlaybackRate,
+  renderSlowedReverbAudio,
+  encodeWavBuffer,
+  encodeMp3Buffer,
+  SlowedReverbWaveformPlayer,
+  formatDuration as formatSrDuration,
+  formatBytes as formatSrBytes
+} from './slowed-reverb';
 
 const $ = (id: string): any => document.getElementById(id);
 
@@ -917,6 +930,7 @@ function render() {
 
   if (view === 'thisweek') return renderThisWeek();
   if (view === 'tools') return renderStandaloneTools();
+  if (view === 'slowed-reverb') return renderSlowedReverbTool();
   if (view === 'randomizer') return renderRandomizerTool();
   if (view === 'scale-tool') return renderScaleMidiTool();
   if (view === 'dedupe') return renderDedupe();
@@ -934,6 +948,7 @@ function render() {
 // or the name of the page/tool everywhere else.
 const TOOL_TITLES: Record<string, string> = {
   tools: 'Tools',
+  'slowed-reverb': 'Slowed + Reverb Studio',
   randomizer: 'Music Randomizer',
   'scale-tool': 'Scale & Raaga Detector',
   dedupe: 'Sample cleanup',
@@ -3205,10 +3220,37 @@ function renderProjectHarmony(entry, rec, projectBpm) {
 // Audit the open set for missing samples and paint the result into the header
 // facts + a detail callout. Cached per session so tab switches don't re-scan;
 // the cache is cleared on a rescan (refresh()).
+const sampleAuditCollapsed = new Set<string>();
+
+function isSampleAuditCollapsed(entry: any): boolean {
+  if (!entry) return false;
+  const key = entry.sessionPath || entry.path || '';
+  if (!key) return false;
+  if (sampleAuditCollapsed.has(key)) return true;
+  try {
+    return localStorage.getItem('daw_buddy_sample_audit_collapsed:' + key) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function setSampleAuditCollapsed(entry: any, collapsed: boolean) {
+  if (!entry) return;
+  const key = entry.sessionPath || entry.path || '';
+  if (!key) return;
+  if (collapsed) {
+    sampleAuditCollapsed.add(key);
+    try { localStorage.setItem('daw_buddy_sample_audit_collapsed:' + key, 'true'); } catch {}
+  } else {
+    sampleAuditCollapsed.delete(key);
+    try { localStorage.removeItem('daw_buddy_sample_audit_collapsed:' + key); } catch {}
+  }
+}
+
 function runSampleAudit(entry, facts, box) {
   const cached = sampleAuditCache.get(entry.sessionPath);
   if (cached) {
-    paintSampleAudit(cached, facts, box);
+    paintSampleAudit(cached, facts, box, entry);
     return;
   }
   window.api
@@ -3220,14 +3262,17 @@ function runSampleAudit(entry, facts, box) {
         if (firstKey) sampleAuditCache.delete(firstKey);
       }
       sampleAuditCache.set(entry.sessionPath, res);
-      if (openProject === entry) paintSampleAudit(res, facts, box);
+      if (openProject === entry) paintSampleAudit(res, facts, box, entry);
     })
     .catch(() => {});
 }
 
-function paintSampleAudit(res, facts, box) {
+function paintSampleAudit(res, facts, box, entry?: any) {
   if (!res.supported || res.error || res.referenced === 0) return;
   box.innerHTML = '';
+
+  const projectEntry = entry || openProject;
+  const initiallyCollapsed = isSampleAuditCollapsed(projectEntry);
 
   if (res.missing && res.missing.length) {
     const n = res.missing.length;
@@ -3235,13 +3280,16 @@ function paintSampleAudit(res, facts, box) {
     chip.classList.add('statchip--alert');
     facts.append(chip);
 
-    const callout = el('div', 'callout callout--alert sample-audit__callout');
+    const callout = el(
+      'div',
+      `callout callout--alert sample-audit__callout${initiallyCollapsed ? ' sample-audit__callout--collapsed' : ''}`
+    );
 
     const header = el('div', 'sample-audit__header');
     header.setAttribute('role', 'button');
     header.setAttribute('tabindex', '0');
-    header.setAttribute('aria-expanded', 'true');
-    header.title = 'Click to collapse missing samples';
+    header.setAttribute('aria-expanded', initiallyCollapsed ? 'false' : 'true');
+    header.title = initiallyCollapsed ? 'Click to expand missing samples' : 'Click to collapse missing samples';
 
     const title = el('b', 'sample-audit__title', `${n} referenced sample${n === 1 ? '' : 's'} not found on disk`);
 
@@ -3271,6 +3319,7 @@ function paintSampleAudit(res, facts, box) {
         e.stopPropagation();
       }
       const isCollapsed = callout.classList.toggle('sample-audit__callout--collapsed');
+      setSampleAuditCollapsed(projectEntry, isCollapsed);
       header.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
       header.title = isCollapsed ? 'Click to expand missing samples' : 'Click to collapse missing samples';
     };
@@ -9009,7 +9058,131 @@ if (settingScaleTraditionSelectEl) {
 }
 
 /* ---- Metronome Settings & DAW Drag Box --------------------------- */
+function getEffectiveMetronomeBpm(): number {
+  const current = Player.getCurrent();
+  if (current && current.bpm && current.bpm > 30 && current.bpm < 400) {
+    return Math.round(current.bpm);
+  }
+  if (openProject && openProject.bpm && openProject.bpm > 30 && openProject.bpm < 400) {
+    return Math.round(openProject.bpm);
+  }
+  const inputEl = $('metroSettingBpm') as HTMLInputElement;
+  if (inputEl && Number(inputEl.value) > 30 && Number(inputEl.value) < 400) {
+    return Number(inputEl.value);
+  }
+  return 128; // Default 128 BPM if no audio was played last
+}
+
 const settingMetronomeSoundSelectEl = $('settingMetronomeSoundSelect') as HTMLSelectElement | null;
+const metroSettingBpmEl = $('metroSettingBpm') as HTMLInputElement | null;
+const metroSettingSigEl = $('metroSettingSig') as HTMLSelectElement | null;
+const metroSettingBarsEl = $('metroSettingBars') as HTMLSelectElement | null;
+
+if (metroSettingBpmEl && !metroSettingBpmEl.value) {
+  metroSettingBpmEl.value = String(getEffectiveMetronomeBpm());
+}
+
+let auditionTimerId: any = null;
+let auditionAudioCtx: AudioContext | null = null;
+let isAuditioning = false;
+let auditionPulseIndex = 0;
+
+function stopMetroAudition() {
+  if (auditionTimerId) {
+    clearInterval(auditionTimerId);
+    auditionTimerId = null;
+  }
+  if (auditionAudioCtx) {
+    try { auditionAudioCtx.close(); } catch {}
+    auditionAudioCtx = null;
+  }
+  isAuditioning = false;
+  auditionPulseIndex = 0;
+  if (auditionMetroSoundBtn) {
+    const sig = metroSettingSigEl?.value || '4/4';
+    auditionMetroSoundBtn.innerHTML = `<span>▶</span><span>Audition ${sig} Loop</span>`;
+    auditionMetroSoundBtn.classList.remove('is-active');
+  }
+}
+
+async function startMetroAudition() {
+  stopMetroAudition();
+
+  const soundId = settingMetronomeSoundSelectEl ? settingMetronomeSoundSelectEl.value : (Player.getMetronomeSound ? Player.getMetronomeSound() : 'ableton');
+  const bpm = getEffectiveMetronomeBpm();
+  const sig = metroSettingSigEl?.value || '4/4';
+
+  auditionAudioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+  if (auditionAudioCtx.state === 'suspended') {
+    await auditionAudioCtx.resume().catch(() => {});
+  }
+  await loadSoundsetBuffers(soundId, auditionAudioCtx);
+
+  // If main player is playing, pause it so only audition click is heard
+  if (Player.isPlaying()) {
+    Player.toggle();
+  }
+
+  isAuditioning = true;
+  auditionPulseIndex = 0;
+
+  if (auditionMetroSoundBtn) {
+    auditionMetroSoundBtn.innerHTML = `<span>⏸</span><span>Stop Audition (${sig} · ${bpm} BPM)</span>`;
+    auditionMetroSoundBtn.classList.add('is-active');
+  }
+
+  // Calculate interval in seconds for the selected time signature
+  const safeBpm = bpm > 20 && bpm < 400 ? bpm : 128;
+  const quarterSec = 60 / safeBpm;
+  let intervalSec = quarterSec;
+  if (sig === '6/8' || sig === '7/8' || sig === '5/8' || sig === '12/8') {
+    intervalSec = quarterSec / 2; // eighth notes
+  } else if (sig === '3/4' || sig === '4/4' || sig === '5/4') {
+    intervalSec = quarterSec; // quarter notes
+  }
+
+  // Pulse accent logic
+  function getPulseAccents(timeSig: string, index: number): { isDownbeat: boolean; isAccent: boolean } {
+    if (timeSig === '6/8') {
+      const beat = index % 6;
+      return { isDownbeat: beat === 0, isAccent: beat === 3 };
+    }
+    if (timeSig === '3/4') {
+      const beat = index % 3;
+      return { isDownbeat: beat === 0, isAccent: false };
+    }
+    if (timeSig === '7/8') {
+      const beat = index % 7;
+      return { isDownbeat: beat === 0, isAccent: beat === 3 || beat === 5 };
+    }
+    if (timeSig === '5/4') {
+      const beat = index % 5;
+      return { isDownbeat: beat === 0, isAccent: beat === 3 };
+    }
+    if (timeSig === '12/8') {
+      const beat = index % 12;
+      return { isDownbeat: beat === 0, isAccent: beat === 3 || beat === 6 || beat === 9 };
+    }
+    // Default 4/4
+    const beat = index % 4;
+    return { isDownbeat: beat === 0, isAccent: beat === 2 };
+  }
+
+  // Play immediately on click
+  const { isDownbeat, isAccent } = getPulseAccents(sig, auditionPulseIndex);
+  playMetronomePulse(auditionAudioCtx, soundId, isDownbeat, isAccent, 0.9);
+  auditionPulseIndex++;
+
+  // Loop continuously
+  const intervalMs = Math.max(50, Math.round(intervalSec * 1000));
+  auditionTimerId = setInterval(() => {
+    if (!isAuditioning || !auditionAudioCtx) return;
+    const { isDownbeat: db, isAccent: acc } = getPulseAccents(sig, auditionPulseIndex);
+    playMetronomePulse(auditionAudioCtx, soundId, db, acc, 0.85);
+    auditionPulseIndex++;
+  }, intervalMs);
+}
+
 if (settingMetronomeSoundSelectEl) {
   if (Player.getMetronomeSound) {
     settingMetronomeSoundSelectEl.value = Player.getMetronomeSound();
@@ -9021,29 +9194,55 @@ if (settingMetronomeSoundSelectEl) {
     }
     const def = getMetronomeSoundset(val);
     toast('Metronome Sound', `Default soundset set to ${def.name}`);
+    if (isAuditioning) {
+      startMetroAudition();
+    }
   });
 }
 
 const auditionMetroSoundBtn = $('auditionMetroSoundBtn');
 if (auditionMetroSoundBtn) {
-  auditionMetroSoundBtn.addEventListener('click', async () => {
-    const soundId = settingMetronomeSoundSelectEl ? settingMetronomeSoundSelectEl.value : (Player.getMetronomeSound ? Player.getMetronomeSound() : 'ableton');
-    const ac = new (window.AudioContext || (window as any).webkitAudioContext)();
-    await loadSoundsetBuffers(soundId, ac);
-    playMetronomePulse(ac, soundId, true, false, 0.9);
-    setTimeout(() => playMetronomePulse(ac, soundId, false, false, 0.75), 180);
-    setTimeout(() => playMetronomePulse(ac, soundId, false, false, 0.75), 360);
-    setTimeout(() => playMetronomePulse(ac, soundId, false, false, 0.75), 540);
+  auditionMetroSoundBtn.addEventListener('click', () => {
+    if (isAuditioning) {
+      stopMetroAudition();
+    } else {
+      startMetroAudition();
+    }
   });
 }
+
+if (metroSettingSigEl) {
+  metroSettingSigEl.addEventListener('change', () => {
+    if (isAuditioning) {
+      startMetroAudition();
+    } else if (auditionMetroSoundBtn) {
+      auditionMetroSoundBtn.innerHTML = `<span>▶</span><span>Audition ${metroSettingSigEl.value} Loop</span>`;
+    }
+  });
+}
+
+if (metroSettingBpmEl) {
+  metroSettingBpmEl.addEventListener('input', () => {
+    if (isAuditioning) {
+      startMetroAudition();
+    }
+  });
+}
+
+// Stop audition when main player starts playing
+Player.onChange(({ playing }: any) => {
+  if (playing && isAuditioning) {
+    stopMetroAudition();
+  }
+});
 
 const dragMetroAudioBtn = $('dragMetroAudioBtn');
 if (dragMetroAudioBtn) {
   dragMetroAudioBtn.addEventListener('dragstart', async (e: DragEvent) => {
     e.preventDefault();
-    const bpm = parseInt(($('metroSettingBpm') as HTMLInputElement)?.value, 10) || 120;
-    const sig = ($('metroSettingSig') as HTMLSelectElement)?.value || '4/4';
-    const bars = parseInt(($('metroSettingBars') as HTMLSelectElement)?.value, 10) || 4;
+    const bpm = parseInt(metroSettingBpmEl?.value || '', 10) || getEffectiveMetronomeBpm();
+    const sig = metroSettingSigEl?.value || '4/4';
+    const bars = parseInt(metroSettingBarsEl?.value || '', 10) || 4;
     const soundId = settingMetronomeSoundSelectEl?.value || (Player.getMetronomeSound ? Player.getMetronomeSound() : 'ableton');
     const cleanSig = sig.replace('/', '-');
     const fileName = `Metronome_${soundId}_${bpm}BPM_${cleanSig}_${bars}Bars.wav`;
@@ -9063,9 +9262,9 @@ if (dragMetroAudioBtn) {
   });
 
   dragMetroAudioBtn.addEventListener('click', async () => {
-    const bpm = parseInt(($('metroSettingBpm') as HTMLInputElement)?.value, 10) || 120;
-    const sig = ($('metroSettingSig') as HTMLSelectElement)?.value || '4/4';
-    const bars = parseInt(($('metroSettingBars') as HTMLSelectElement)?.value, 10) || 4;
+    const bpm = parseInt(metroSettingBpmEl?.value || '', 10) || getEffectiveMetronomeBpm();
+    const sig = metroSettingSigEl?.value || '4/4';
+    const bars = parseInt(metroSettingBarsEl?.value || '', 10) || 4;
     const soundId = settingMetronomeSoundSelectEl?.value || (Player.getMetronomeSound ? Player.getMetronomeSound() : 'ableton');
     const cleanSig = sig.replace('/', '-');
     const fileName = `Metronome_${soundId}_${bpm}BPM_${cleanSig}_${bars}Bars.wav`;
@@ -9089,9 +9288,9 @@ const dragMetroMidiBtn = $('dragMetroMidiBtn');
 if (dragMetroMidiBtn) {
   dragMetroMidiBtn.addEventListener('dragstart', async (e: DragEvent) => {
     e.preventDefault();
-    const bpm = parseInt(($('metroSettingBpm') as HTMLInputElement)?.value, 10) || 120;
-    const sig = ($('metroSettingSig') as HTMLSelectElement)?.value || '4/4';
-    const bars = parseInt(($('metroSettingBars') as HTMLSelectElement)?.value, 10) || 4;
+    const bpm = parseInt(metroSettingBpmEl?.value || '', 10) || getEffectiveMetronomeBpm();
+    const sig = metroSettingSigEl?.value || '4/4';
+    const bars = parseInt(metroSettingBarsEl?.value || '', 10) || 4;
     const cleanSig = sig.replace('/', '-');
     const fileName = `Metronome_${bpm}BPM_${cleanSig}_${bars}Bars.mid`;
 
@@ -9110,9 +9309,9 @@ if (dragMetroMidiBtn) {
   });
 
   dragMetroMidiBtn.addEventListener('click', async () => {
-    const bpm = parseInt(($('metroSettingBpm') as HTMLInputElement)?.value, 10) || 120;
-    const sig = ($('metroSettingSig') as HTMLSelectElement)?.value || '4/4';
-    const bars = parseInt(($('metroSettingBars') as HTMLSelectElement)?.value, 10) || 4;
+    const bpm = parseInt(metroSettingBpmEl?.value || '', 10) || getEffectiveMetronomeBpm();
+    const sig = metroSettingSigEl?.value || '4/4';
+    const bars = parseInt(metroSettingBarsEl?.value || '', 10) || 4;
     const cleanSig = sig.replace('/', '-');
     const fileName = `Metronome_${bpm}BPM_${cleanSig}_${bars}Bars.mid`;
     const midiBytes = generateMetronomeMidi(bpm, sig, bars);
@@ -11025,6 +11224,726 @@ function renderRandomizerTool(entry: any = null) {
   setTimeout(() => startToolWalkthrough('randomizer', false), 150);
 }
 
+/* ======================= Slowed + Reverb Studio ======================= */
+
+let slowedReverbState: {
+  file: { name: string; size: number; path?: string; rawBuffer?: ArrayBuffer } | null;
+  sourceBuffer: AudioBuffer | null;
+  renderedBuffer: AudioBuffer | null;
+  renderedAtSampleRate: number;
+  renderedAtRate: number;
+  renderedAtMix: number;
+  options: SlowedReverbOptions;
+  isProcessing: boolean;
+  statusText: string;
+  statusType: 'info' | 'success' | 'error';
+  player: SlowedReverbWaveformPlayer | null;
+} = {
+  file: null,
+  sourceBuffer: null,
+  renderedBuffer: null,
+  renderedAtSampleRate: 44100,
+  renderedAtRate: 0.87,
+  renderedAtMix: 0.35,
+  options: { ...DEFAULT_SLOWED_REVERB_OPTIONS },
+  isProcessing: false,
+  statusText: '',
+  statusType: 'info',
+  player: null
+};
+
+function buildSlowedReverbInterface(container: HTMLElement, isModal = false, onCloseModal?: () => void) {
+  container.innerHTML = '';
+  const root = el('div', 'slowed-reverb-container');
+
+  // Status & notifications
+  const statusBox = el('div', 'sr-status-box sr-status-box--info') as HTMLElement;
+  statusBox.style.display = 'none';
+
+  function updateStatus(text?: string, type?: 'info' | 'success' | 'error') {
+    if (text) {
+      slowedReverbState.statusText = text;
+      if (type) slowedReverbState.statusType = type;
+    }
+    if (!slowedReverbState.statusText) {
+      statusBox.style.display = 'none';
+      return;
+    }
+    statusBox.style.display = 'block';
+    statusBox.className = `sr-status-box sr-status-box--${slowedReverbState.statusType}`;
+    statusBox.textContent = slowedReverbState.statusText;
+  }
+
+  // Dropzone
+  const dropzone = el('div', 'sr-dropzone');
+  dropzone.append(el('div', 'sr-dropzone__icon', '📂'));
+  dropzone.append(el('div', 'sr-dropzone__title', 'Drop Audio File (WAV, MP3, FLAC, M4A, OGG) or Click to Browse'));
+  dropzone.append(el('div', 'sr-dropzone__sub', 'Drag & drop an audio file from your DAW or computer'));
+
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file';
+  fileInput.accept = 'audio/*,.wav,.mp3,.flac,.m4a,.ogg,.aif,.aiff';
+  fileInput.style.display = 'none';
+  dropzone.append(fileInput);
+
+  dropzone.addEventListener('click', (e) => {
+    if (e.target !== fileInput) fileInput.click();
+  });
+
+  const handleDragOver = (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropzone.classList.add('sr-dropzone--over');
+  };
+
+  const handleDragLeave = (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropzone.classList.remove('sr-dropzone--over');
+  };
+
+  const handleDrop = async (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropzone.classList.remove('sr-dropzone--over');
+    const files = e.dataTransfer?.files;
+    if (files && files.length > 0) {
+      await loadAudioFile(files[0]);
+    }
+  };
+
+  dropzone.addEventListener('dragover', handleDragOver);
+  dropzone.addEventListener('dragleave', handleDragLeave);
+  dropzone.addEventListener('drop', handleDrop);
+
+  fileInput.addEventListener('change', async () => {
+    if (fileInput.files && fileInput.files.length > 0) {
+      await loadAudioFile(fileInput.files[0]);
+    }
+  });
+
+  // Active File Info Box
+  const fileInfoBox = el('div', 'sr-file-loaded-box') as HTMLElement;
+  fileInfoBox.style.display = 'none';
+
+  async function loadAudioFile(fileOrBlob: File | { name: string; size: number; path?: string; arrayBuffer: () => Promise<ArrayBuffer> }) {
+    updateStatus('⏳ Reading and decoding audio file...', 'info');
+    processBtn.disabled = true;
+
+    try {
+      const arrayBuffer = await fileOrBlob.arrayBuffer();
+      const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
+      const audioCtx = new AudioCtxClass();
+      const decodedBuffer = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
+
+      slowedReverbState.file = {
+        name: fileOrBlob.name,
+        size: fileOrBlob.size,
+        path: (fileOrBlob as any).path,
+        rawBuffer: arrayBuffer
+      };
+      slowedReverbState.sourceBuffer = decodedBuffer;
+      slowedReverbState.renderedBuffer = null;
+
+      // Update file info display
+      fileInfoBox.innerHTML = '';
+      const infoLeft = el('div', 'sr-file-info');
+      infoLeft.append(el('div', 'sr-file-name', `🎵 ${fileOrBlob.name}`));
+      infoLeft.append(
+        el(
+          'div',
+          'sr-file-meta',
+          `${formatSrDuration(decodedBuffer.duration)} · ${decodedBuffer.numberOfChannels === 2 ? 'Stereo' : 'Mono'} · ${decodedBuffer.sampleRate} Hz · ${formatSrBytes(fileOrBlob.size)}`
+        )
+      );
+
+      const changeBtn = el('button', 'pill pill--sm', 'Change File');
+      changeBtn.addEventListener('click', () => fileInput.click());
+
+      fileInfoBox.append(infoLeft, changeBtn);
+      fileInfoBox.style.display = 'flex';
+      dropzone.style.display = 'none';
+      if (currentAudioBanner) currentAudioBanner.style.display = 'none';
+
+      processBtn.disabled = false;
+      updateStatus(`Loaded "${fileOrBlob.name}" — Click "Process Track" to render`, 'info');
+    } catch (err: any) {
+      updateStatus(`❌ Could not decode audio: ${err.message || err}`, 'error');
+      processBtn.disabled = true;
+    }
+  }
+
+  // Pre-fill active player track if available
+  let currentAudioBanner: HTMLElement | null = null;
+  const currentTrack = Player.getCurrent();
+  const existingDecoded = Player.getDecoded();
+  const trackName = currentTrack?.name || (currentTrack?.path ? basename(currentTrack.path) : (openProject ? openProject.name : null));
+
+  if ((currentTrack || existingDecoded) && !slowedReverbState.sourceBuffer) {
+    const banner = el('div', 'sr-current-audio-banner') as HTMLElement;
+    const bannerLeft = el('div', 'sr-current-audio-info');
+    const isPlaying = Player.isPlaying();
+    bannerLeft.append(
+      el('div', 'sr-current-audio-badge', isPlaying ? '▶ Playing in Player' : '🎧 Loaded in Player')
+    );
+    bannerLeft.append(
+      el('div', 'sr-current-audio-name', `Use "${trackName || 'Current Audio'}"?`)
+    );
+
+    const useBtn = el('button', 'pill pill--solid sr-use-current-btn', '⚡ Use This Audio') as HTMLButtonElement;
+    useBtn.type = 'button';
+    useBtn.title = `Load "${trackName || 'Current Audio'}" into Slowed + Reverb Studio`;
+
+    useBtn.addEventListener('click', async (e: MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      try {
+        updateStatus(`⏳ Loading "${trackName || 'Current Audio'}"...`, 'info');
+        // Priority 1: If audio buffer is already decoded in memory, use it immediately!
+        const buf = Player.getDecoded();
+        if (buf) {
+          slowedReverbState.file = {
+            name: trackName || 'CurrentAudio.wav',
+            size: Math.round(buf.duration * buf.sampleRate * buf.numberOfChannels * 2),
+            path: currentTrack?.path
+          };
+          slowedReverbState.sourceBuffer = buf;
+          slowedReverbState.renderedBuffer = null;
+
+          fileInfoBox.innerHTML = '';
+          const infoLeft = el('div', 'sr-file-info');
+          infoLeft.append(el('div', 'sr-file-name', `🎵 ${slowedReverbState.file.name}`));
+          infoLeft.append(
+            el(
+              'div',
+              'sr-file-meta',
+              `${formatSrDuration(buf.duration)} · ${buf.numberOfChannels === 2 ? 'Stereo' : 'Mono'} · ${buf.sampleRate} Hz`
+            )
+          );
+          const changeBtn = el('button', 'pill pill--sm', 'Change File');
+          changeBtn.addEventListener('click', () => {
+            fileInput.click();
+          });
+          fileInfoBox.append(infoLeft, changeBtn);
+          fileInfoBox.style.display = 'flex';
+          dropzone.style.display = 'none';
+          banner.style.display = 'none';
+          processBtn.disabled = false;
+          updateStatus(`Loaded "${slowedReverbState.file.name}" — Click "Process Track" to render`, 'info');
+          return;
+        }
+
+        // Priority 2: If path is available, read directly via window.api.readMedia
+        if (currentTrack?.path && window.api && window.api.readMedia) {
+          const rawBytes = await window.api.readMedia(currentTrack.path);
+          if (rawBytes) {
+            const blob = new Blob([rawBytes], { type: 'audio/wav' });
+            const fileObj = new File([blob], trackName || 'CurrentAudio.wav', { type: 'audio/wav' });
+            await loadAudioFile(fileObj);
+            banner.style.display = 'none';
+            return;
+          }
+        }
+
+        // Priority 3: Fetch blob from src
+        if (currentTrack?.src) {
+          const response = await fetch(currentTrack.src);
+          const blob = await response.blob();
+          const fileObj = new File([blob], trackName || 'CurrentAudio.wav', { type: blob.type || 'audio/wav' });
+          await loadAudioFile(fileObj);
+          banner.style.display = 'none';
+          return;
+        }
+
+        updateStatus('Could not read audio from player. Please drop the file manually.', 'error');
+      } catch (err: any) {
+        updateStatus(`Failed to load audio: ${err.message || err}`, 'error');
+      }
+    });
+
+    banner.append(bannerLeft, useBtn);
+    currentAudioBanner = banner;
+  }
+
+  // Controls Grid
+  const controlsGrid = el('div', 'sr-controls-grid');
+
+  // 1. Speed & Pitch Card
+  const speedCard = el('div', 'sr-card');
+  const speedHeader = el('div', 'sr-card__header');
+  const speedTitle = el('div', 'sr-card__title', 'Speed / Pitch Rate');
+  const speedVal = el('div', 'sr-card__val', slowedReverbState.options.isSemitones ? `${slowedReverbState.options.semitones} st` : `${slowedReverbState.options.speedPercent}%`);
+  speedHeader.append(speedTitle, speedVal);
+
+  const modeSwitchRow = el('div', 'sr-switch-wrap');
+  const modePctBtn = el('button', `sr-seg-btn ${!slowedReverbState.options.isSemitones ? 'is-active' : ''}`, 'Speed (%)');
+  const modeSemiBtn = el('button', `sr-seg-btn ${slowedReverbState.options.isSemitones ? 'is-active' : ''}`, 'Slow by Pitch (st)');
+  modeSwitchRow.append(modePctBtn, modeSemiBtn);
+
+  const speedSlider = document.createElement('input');
+  speedSlider.type = 'range';
+  speedSlider.className = 'sr-slider';
+
+  function updateSpeedSliderBounds() {
+    if (slowedReverbState.options.isSemitones) {
+      speedSlider.min = '-12';
+      speedSlider.max = '0';
+      speedSlider.step = '1';
+      speedSlider.value = String(slowedReverbState.options.semitones);
+      speedVal.textContent = `${slowedReverbState.options.semitones} st`;
+    } else {
+      speedSlider.min = '50';
+      speedSlider.max = '100';
+      speedSlider.step = '1';
+      speedSlider.value = String(slowedReverbState.options.speedPercent);
+      speedVal.textContent = `${slowedReverbState.options.speedPercent}%`;
+    }
+  }
+  updateSpeedSliderBounds();
+
+  modePctBtn.addEventListener('click', () => {
+    if (!slowedReverbState.options.isSemitones) return;
+    slowedReverbState.options.isSemitones = false;
+    slowedReverbState.options.speedPercent = Math.round(semitonesToPercent(slowedReverbState.options.semitones));
+    modePctBtn.classList.add('is-active');
+    modeSemiBtn.classList.remove('is-active');
+    updateSpeedSliderBounds();
+  });
+
+  modeSemiBtn.addEventListener('click', () => {
+    if (slowedReverbState.options.isSemitones) return;
+    slowedReverbState.options.isSemitones = true;
+    slowedReverbState.options.semitones = Math.round(percentToSemitones(slowedReverbState.options.speedPercent));
+    modeSemiBtn.classList.add('is-active');
+    modePctBtn.classList.remove('is-active');
+    updateSpeedSliderBounds();
+  });
+
+  speedSlider.addEventListener('input', () => {
+    const val = Number(speedSlider.value);
+    if (slowedReverbState.options.isSemitones) {
+      slowedReverbState.options.semitones = val;
+      speedVal.textContent = `${val} st`;
+    } else {
+      slowedReverbState.options.speedPercent = val;
+      speedVal.textContent = `${val}%`;
+    }
+  });
+
+  speedCard.append(speedHeader, modeSwitchRow, speedSlider);
+
+  // 2. Reverb Mix Card
+  const reverbCard = el('div', 'sr-card');
+  const reverbHeader = el('div', 'sr-card__header');
+  reverbHeader.append(el('div', 'sr-card__title', 'Reverb Mix (Wet / Dry)'));
+  const reverbVal = el('div', 'sr-card__val', `${slowedReverbState.options.reverbMix}%`);
+  reverbHeader.append(reverbVal);
+
+  const reverbSlider = document.createElement('input');
+  reverbSlider.type = 'range';
+  reverbSlider.className = 'sr-slider';
+  reverbSlider.min = '0';
+  reverbSlider.max = '100';
+  reverbSlider.step = '1';
+  reverbSlider.value = String(slowedReverbState.options.reverbMix);
+
+  reverbSlider.addEventListener('input', () => {
+    const val = Number(reverbSlider.value);
+    slowedReverbState.options.reverbMix = val;
+    reverbVal.textContent = `${val}%`;
+  });
+
+  reverbCard.append(reverbHeader, reverbSlider);
+
+  // 3. Audio Quality & Format Settings Card
+  const qualityCard = el('div', 'sr-card');
+  qualityCard.append(el('div', 'sr-card__title', 'Audio Quality & Export Formats'));
+
+  // Sample Rate
+  const srLabel = el('div', 'sr-file-meta', 'Sample Rate:');
+  const srRow = el('div', 'sr-segmented-row');
+  const sr44Btn = el('button', `sr-seg-btn ${slowedReverbState.options.sampleRate === 44100 ? 'is-active' : ''}`, '44.1 kHz (Default)');
+  const sr48Btn = el('button', `sr-seg-btn ${slowedReverbState.options.sampleRate === 48000 ? 'is-active' : ''}`, '48.0 kHz');
+  sr44Btn.addEventListener('click', () => {
+    slowedReverbState.options.sampleRate = 44100;
+    sr44Btn.classList.add('is-active');
+    sr48Btn.classList.remove('is-active');
+    updateSaveBtnLabels();
+  });
+  sr48Btn.addEventListener('click', () => {
+    slowedReverbState.options.sampleRate = 48000;
+    sr48Btn.classList.add('is-active');
+    sr44Btn.classList.remove('is-active');
+    updateSaveBtnLabels();
+  });
+  srRow.append(sr44Btn, sr48Btn);
+
+  // WAV Bit Depth
+  const bitLabel = el('div', 'sr-file-meta', 'WAV Bit Depth:');
+  const bitRow = el('div', 'sr-segmented-row');
+  const bit16Btn = el('button', `sr-seg-btn ${slowedReverbState.options.wavBitDepth === 16 ? 'is-active' : ''}`, '16-bit (Default)');
+  const bit24Btn = el('button', `sr-seg-btn ${slowedReverbState.options.wavBitDepth === 24 ? 'is-active' : ''}`, '24-bit PCM');
+  const bit32Btn = el('button', `sr-seg-btn ${slowedReverbState.options.wavBitDepth === 32 ? 'is-active' : ''}`, '32-bit Float');
+
+  bit16Btn.addEventListener('click', () => {
+    slowedReverbState.options.wavBitDepth = 16;
+    bit16Btn.classList.add('is-active');
+    bit24Btn.classList.remove('is-active');
+    bit32Btn.classList.remove('is-active');
+    updateSaveBtnLabels();
+  });
+  bit24Btn.addEventListener('click', () => {
+    slowedReverbState.options.wavBitDepth = 24;
+    bit24Btn.classList.add('is-active');
+    bit16Btn.classList.remove('is-active');
+    bit32Btn.classList.remove('is-active');
+    updateSaveBtnLabels();
+  });
+  bit32Btn.addEventListener('click', () => {
+    slowedReverbState.options.wavBitDepth = 32;
+    bit32Btn.classList.add('is-active');
+    bit16Btn.classList.remove('is-active');
+    bit24Btn.classList.remove('is-active');
+    updateSaveBtnLabels();
+  });
+  bitRow.append(bit16Btn, bit24Btn, bit32Btn);
+
+  // MP3 Bitrate
+  const mp3LabelRow = el('div', 'sr-card__header');
+  mp3LabelRow.append(el('div', 'sr-file-meta', 'MP3 Bitrate:'));
+  const mp3ValDisplay = el('div', 'sr-card__val', `${slowedReverbState.options.mp3Bitrate} kbps`);
+  mp3LabelRow.append(mp3ValDisplay);
+
+  const mp3Slider = document.createElement('input');
+  mp3Slider.type = 'range';
+  mp3Slider.className = 'sr-slider';
+  mp3Slider.min = '0';
+  mp3Slider.max = '4';
+  mp3Slider.step = '1';
+
+  const bitrates = [128, 160, 192, 256, 320];
+  const currentIdx = bitrates.indexOf(slowedReverbState.options.mp3Bitrate);
+  mp3Slider.value = String(currentIdx !== -1 ? currentIdx : 2);
+
+  mp3Slider.addEventListener('input', () => {
+    const kbps = bitrates[Number(mp3Slider.value)] || 192;
+    slowedReverbState.options.mp3Bitrate = kbps;
+    mp3ValDisplay.textContent = `${kbps} kbps`;
+    updateSaveBtnLabels();
+  });
+
+  qualityCard.append(srLabel, srRow, bitLabel, bitRow, mp3LabelRow, mp3Slider);
+
+  controlsGrid.append(speedCard, reverbCard, qualityCard);
+
+  // Process Action Button
+  const processBtn = el('button', 'sr-btn-process', '🚀 Process Slowed + Reverb Track') as HTMLButtonElement;
+  processBtn.type = 'button';
+  processBtn.disabled = !slowedReverbState.sourceBuffer;
+
+  // Waveform Box & Player
+  const waveformBox = el('div', 'sr-waveform-box') as HTMLElement;
+  waveformBox.style.display = 'none';
+
+  const canvas = document.createElement('canvas');
+  canvas.className = 'sr-waveform-canvas';
+  canvas.width = 640;
+  canvas.height = 90;
+
+  const transportRow = el('div', 'sr-transport-row');
+  const transportLeft = el('div', 'sr-transport-left');
+
+  const playBtn = el('button', 'sr-play-btn', '▶ Play') as HTMLButtonElement;
+  const timeDisplay = el('div', 'sr-time-display', '0:00 / 0:00');
+  transportLeft.append(playBtn, timeDisplay);
+
+  const seekHint = el('div', 'sr-seek-hint', 'Click waveform to seek');
+  transportRow.append(transportLeft, seekHint);
+
+  waveformBox.append(canvas, transportRow);
+
+  // Waveform player controller
+  const waveformPlayer = new SlowedReverbWaveformPlayer(
+    canvas,
+    (cur, total) => {
+      timeDisplay.textContent = `${formatSrDuration(cur)} / ${formatSrDuration(total)}`;
+      playBtn.innerHTML = waveformPlayer.getIsPlaying() ? '⏸ Pause' : '▶ Play';
+    },
+    () => {
+      // Pause main DAW Buddy player if it is currently playing
+      if (Player.isPlaying()) {
+        Player.toggle();
+      }
+    }
+  );
+  slowedReverbState.player = waveformPlayer;
+
+  // If the user starts playing a track on the main player, pause slowed-reverb playback
+  Player.onChange(({ playing }: any) => {
+    if (playing && waveformPlayer.getIsPlaying()) {
+      waveformPlayer.pause();
+      playBtn.innerHTML = '▶ Play';
+    }
+  });
+
+  playBtn.addEventListener('click', () => {
+    waveformPlayer.togglePlay();
+    playBtn.innerHTML = waveformPlayer.getIsPlaying() ? '⏸ Pause' : '▶ Play';
+  });
+
+  // Export Buttons Row
+  const exportRow = el('div', 'sr-export-row') as HTMLElement;
+  exportRow.style.display = 'none';
+
+  const saveWavBtn = el('button', 'sr-save-btn sr-save-btn--wav') as HTMLButtonElement;
+  const saveMp3Btn = el('button', 'sr-save-btn sr-save-btn--mp3') as HTMLButtonElement;
+
+  function updateSaveBtnLabels() {
+    saveWavBtn.innerHTML = `💾 Save WAV (${slowedReverbState.options.wavBitDepth}-bit · ${slowedReverbState.options.sampleRate / 1000}kHz)`;
+    saveMp3Btn.innerHTML = `🎵 Save MP3 (${slowedReverbState.options.mp3Bitrate}kbps · ${slowedReverbState.options.sampleRate / 1000}kHz)`;
+  }
+  updateSaveBtnLabels();
+
+  exportRow.append(saveWavBtn, saveMp3Btn);
+
+  // Check if re-render is needed
+  function needsReRender(targetSampleRate: number): boolean {
+    if (!slowedReverbState.renderedBuffer) return true;
+    const currentRate = getPlaybackRate(
+      slowedReverbState.options.isSemitones,
+      slowedReverbState.options.isSemitones ? slowedReverbState.options.semitones : slowedReverbState.options.speedPercent
+    );
+    const currentMix = slowedReverbState.options.reverbMix / 100;
+    if (slowedReverbState.renderedAtSampleRate !== targetSampleRate) return true;
+    if (Math.abs(slowedReverbState.renderedAtRate - currentRate) > 0.0001) return true;
+    if (Math.abs(slowedReverbState.renderedAtMix - currentMix) > 0.0001) return true;
+    return false;
+  }
+
+  // Core Processing Routine
+  async function runProcess(targetSampleRate?: number): Promise<AudioBuffer | null> {
+    if (!slowedReverbState.sourceBuffer) {
+      toast('No Audio File', 'Please load an audio file first', true);
+      return null;
+    }
+
+    const sr = targetSampleRate || slowedReverbState.options.sampleRate;
+    const playbackRate = getPlaybackRate(
+      slowedReverbState.options.isSemitones,
+      slowedReverbState.options.isSemitones ? slowedReverbState.options.semitones : slowedReverbState.options.speedPercent
+    );
+    const reverbPercent = slowedReverbState.options.reverbMix / 100;
+
+    processBtn.disabled = true;
+    processBtn.innerHTML = '⚙️ Rendering Offline Audio...';
+    updateStatus(`⚙️ Rendering Slowed + Reverb (${(playbackRate * 100).toFixed(0)}% speed · ${sr} Hz)...`, 'info');
+
+    try {
+      const rendered = await renderSlowedReverbAudio(slowedReverbState.sourceBuffer, {
+        playbackRate,
+        reverbPercent,
+        sampleRate: sr
+      });
+
+      slowedReverbState.renderedBuffer = rendered;
+      slowedReverbState.renderedAtSampleRate = sr;
+      slowedReverbState.renderedAtRate = playbackRate;
+      slowedReverbState.renderedAtMix = reverbPercent;
+
+      updateStatus(`✅ Render Complete! (${formatSrDuration(rendered.duration)} · ${sr} Hz · Ready to save)`, 'success');
+      processBtn.disabled = false;
+      processBtn.innerHTML = '🚀 Re-Process Track';
+
+      waveformPlayer.loadBuffer(rendered);
+      waveformBox.style.display = 'flex';
+      exportRow.style.display = 'flex';
+
+      return rendered;
+    } catch (err: any) {
+      updateStatus(`❌ Rendering failed: ${err.message || err}`, 'error');
+      processBtn.disabled = false;
+      processBtn.innerHTML = '🚀 Process Slowed + Reverb Track';
+      return null;
+    }
+  }
+
+  processBtn.addEventListener('click', () => runProcess());
+
+  // Save Handlers
+  saveWavBtn.addEventListener('click', async () => {
+    if (!slowedReverbState.sourceBuffer) return;
+    saveWavBtn.disabled = true;
+
+    try {
+      let buf = slowedReverbState.renderedBuffer;
+      if (needsReRender(slowedReverbState.options.sampleRate)) {
+        buf = await runProcess(slowedReverbState.options.sampleRate);
+        if (!buf) {
+          saveWavBtn.disabled = false;
+          return;
+        }
+      }
+
+      const bitDepth = slowedReverbState.options.wavBitDepth;
+      updateStatus(`📦 Encoding ${bitDepth}-bit WAV at ${slowedReverbState.options.sampleRate} Hz...`, 'info');
+
+      const wavBytes = encodeWavBuffer(buf!, bitDepth);
+      const baseName = (slowedReverbState.file?.name || 'track').replace(/\.[^/.]+$/, '');
+      const defaultName = `${baseName}_slowed_reverb_${bitDepth}bit.wav`;
+
+      if (window.api && window.api.saveAudio) {
+        const savedPath = await window.api.saveAudio(defaultName, wavBytes, 'wav');
+        if (savedPath) {
+          toast('WAV Exported', `Saved to ${basename(savedPath)}`);
+          updateStatus(`✅ Saved WAV to: ${savedPath}`, 'success');
+        } else {
+          updateStatus('Export cancelled', 'info');
+        }
+      } else {
+        const blob = new Blob([wavBytes.buffer as ArrayBuffer], { type: 'audio/wav' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = defaultName;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast('WAV Saved', defaultName);
+        updateStatus(`✅ Downloaded ${defaultName}`, 'success');
+      }
+    } catch (err: any) {
+      updateStatus(`❌ WAV save error: ${err.message || err}`, 'error');
+    } finally {
+      saveWavBtn.disabled = false;
+    }
+  });
+
+  saveMp3Btn.addEventListener('click', async () => {
+    if (!slowedReverbState.sourceBuffer) return;
+    saveMp3Btn.disabled = true;
+
+    try {
+      let buf = slowedReverbState.renderedBuffer;
+      if (needsReRender(slowedReverbState.options.sampleRate)) {
+        buf = await runProcess(slowedReverbState.options.sampleRate);
+        if (!buf) {
+          saveMp3Btn.disabled = false;
+          return;
+        }
+      }
+
+      const bitrate = slowedReverbState.options.mp3Bitrate;
+      updateStatus(`📦 Encoding ${bitrate}kbps MP3 at ${slowedReverbState.options.sampleRate} Hz...`, 'info');
+
+      const mp3Bytes = await encodeMp3Buffer(buf!, bitrate);
+      const baseName = (slowedReverbState.file?.name || 'track').replace(/\.[^/.]+$/, '');
+      const defaultName = `${baseName}_slowed_reverb_${bitrate}k.mp3`;
+
+      if (window.api && window.api.saveAudio) {
+        const savedPath = await window.api.saveAudio(defaultName, mp3Bytes, 'mp3');
+        if (savedPath) {
+          toast('MP3 Exported', `Saved to ${basename(savedPath)}`);
+          updateStatus(`✅ Saved MP3 to: ${savedPath}`, 'success');
+        } else {
+          updateStatus('Export cancelled', 'info');
+        }
+      } else {
+        const blob = new Blob([mp3Bytes.buffer as ArrayBuffer], { type: 'audio/mp3' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = defaultName;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast('MP3 Saved', defaultName);
+        updateStatus(`✅ Downloaded ${defaultName}`, 'success');
+      }
+    } catch (err: any) {
+      updateStatus(`❌ MP3 save error: ${err.message || err}`, 'error');
+    } finally {
+      saveMp3Btn.disabled = false;
+    }
+  });
+
+  // Restore if buffer already present
+  if (slowedReverbState.file && slowedReverbState.sourceBuffer) {
+    fileInfoBox.style.display = 'flex';
+    dropzone.style.display = 'none';
+    processBtn.disabled = false;
+    if (slowedReverbState.renderedBuffer) {
+      waveformPlayer.loadBuffer(slowedReverbState.renderedBuffer);
+      waveformBox.style.display = 'flex';
+      exportRow.style.display = 'flex';
+    }
+  }
+
+  root.append(statusBox);
+  if (currentAudioBanner) root.append(currentAudioBanner);
+  root.append(dropzone, fileInfoBox, controlsGrid, processBtn, waveformBox, exportRow);
+  container.append(root);
+}
+
+function renderSlowedReverbTool() {
+  viewEl.innerHTML = '';
+  const section = el('div', 'section');
+  section.append(
+    headRow(
+      'Slowed + Reverb Studio',
+      'Slow down any audio track by speed or pitch and immerse it in lush algorithmic stereo reverb.',
+      'slowed-reverb'
+    )
+  );
+
+  buildSlowedReverbInterface(section, false);
+  viewEl.append(section);
+}
+
+function openSlowedReverbModal() {
+  const existingOverlay = document.getElementById('slowedReverbModalOverlay');
+  if (existingOverlay) existingOverlay.remove();
+
+  const overlay = el('div', 'slowed-reverb-modal-overlay');
+  overlay.id = 'slowedReverbModalOverlay';
+
+  const modal = el('div', 'slowed-reverb-modal');
+
+  const header = el('div', 'slowed-reverb-modal__header');
+  const titles = el('div', 'slowed-reverb-modal__titles');
+  titles.append(el('h3', 'slowed-reverb-modal__title', '✨ Slowed + Reverb Studio'));
+  titles.append(el('div', 'slowed-reverb-modal__sub', 'Algorithmic resampled slow-down with lush Freeverb'));
+
+  const closeBtn = el('button', 'pill pill--sm', '✕ Close');
+  header.append(titles, closeBtn);
+
+  modal.append(header);
+
+  const closeModal = () => {
+    if (slowedReverbState.player) {
+      slowedReverbState.player.stop();
+    }
+    overlay.remove();
+    document.removeEventListener('keydown', onKeyDown);
+  };
+
+  closeBtn.addEventListener('click', closeModal);
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) closeModal();
+  });
+
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') closeModal();
+  };
+  document.addEventListener('keydown', onKeyDown);
+
+  buildSlowedReverbInterface(modal, true, closeModal);
+  overlay.append(modal);
+  document.body.append(overlay);
+}
+
+// Global listener for verb button popup invocation
+window.addEventListener('open-slowed-reverb-modal', () => {
+  openSlowedReverbModal();
+});
+
 function renderStandaloneTools() {
   viewEl.innerHTML = '';
 
@@ -11033,6 +11952,12 @@ function renderStandaloneTools() {
 
   const grid = el('div', 'tool-grid');
   [
+    {
+      view: 'slowed-reverb',
+      icon: 'activity',
+      title: 'Slowed + Reverb Studio',
+      text: 'Slow down tracks by speed or pitch and immerse them in lush algorithmic stereo reverb.'
+    },
     {
       view: 'randomizer',
       icon: 'dice',
@@ -11108,10 +12033,15 @@ function openSheet() {
   if (metroSoundSelect && Player.getMetronomeSound) {
     metroSoundSelect.value = Player.getMetronomeSound();
   }
+  const metroBpmInput = $('metroSettingBpm') as HTMLInputElement | null;
+  if (metroBpmInput) {
+    metroBpmInput.value = String(getEffectiveMetronomeBpm());
+  }
   sheetEl.hidden = false;
   scrimEl.hidden = false;
 }
 function closeSheet() {
+  stopMetroAudition();
   sheetEl.hidden = true;
   scrimEl.hidden = true;
 }

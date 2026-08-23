@@ -106,12 +106,13 @@
           <button
             id="verbBtn"
             class="chip-btn has-gear-hint"
-            title="Click to toggle reverb · Right-click or click ⚙ for Reverb settings"
+            title="Click to toggle reverb · Right-click or ⚙ for Settings · Click ✨ for Slowed + Reverb Studio"
             aria-haspopup="dialog"
             aria-expanded="false"
           >
             <span>Verb</span>
             <span class="chip-gear-hint" id="verbGearHint" title="Reverb settings (Right-click or click ⚙)">⚙</span>
+            <span class="chip-fx-hint" id="verbSlowedHint" title="Slowed + Reverb Studio (Popup Generator)">✨</span>
           </button>
           <button id="clipBtn" class="chip-btn" title="Soft clipper">
             Clip
@@ -193,7 +194,17 @@
         <output id="reverbMixValue" for="reverbMix">35%</output>
       </label>
 
-      <p class="reverb-panel__hint">Click Verb to bypass · Right-click it to reopen</p>
+      <button
+        id="openSlowedReverbModalBtn"
+        type="button"
+        class="pill pill--solid"
+        style="width: 100%; margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 6px; background: linear-gradient(135deg, rgba(0, 229, 255, 0.2), rgba(0, 180, 219, 0.25)); border: 1px solid #00e5ff; color: #00e5ff; font-weight: 600; cursor: pointer;"
+        title="Open Slowed + Reverb Studio Generator Tool"
+      >
+        <span>✨ Slowed + Reverb Studio 🚀</span>
+      </button>
+
+      <p class="reverb-panel__hint" style="margin-top: 8px;">Click Verb to bypass · Right-click it to reopen</p>
     </section>
 
     <!-- ========================= settings ========================= -->
@@ -368,26 +379,26 @@
             </select>
           </div>
           <div style="display: flex; gap: 8px;">
-            <button id="auditionMetroSoundBtn" class="pill pill--solid" type="button" style="flex: 1; height: 36px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;">
-              <span>▶</span><span>Audition 1-2-3-4</span>
+            <button id="auditionMetroSoundBtn" class="pill pill--solid audition-metro-btn" type="button" style="flex: 1; height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;">
+              <span>▶</span><span>Audition 4/4 Loop</span>
             </button>
           </div>
         </div>
 
-        <div class="metro-drag-box" style="background: var(--raised); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; margin-top: 8px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <strong style="font-size: 12.5px; color: var(--text);">Drag Click Track to DAW</strong>
-            <span class="muted" style="font-size: 11px;">Drop directly onto DAW audio/MIDI track</span>
+        <div class="metro-drag-box">
+          <div class="metro-drag-box__header">
+            <strong>Drag Click Track to DAW</strong>
+            <span class="muted">Drop directly onto DAW audio/MIDI track</span>
           </div>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 12px;">
-            <div>
-              <label for="metroSettingBpm" class="muted" style="display: block; font-size: 10.5px; text-transform: uppercase; margin-bottom: 3px;">BPM</label>
-              <input id="metroSettingBpm" class="input mono" type="number" min="30" max="300" value="120" style="width: 100%; height: 32px;" />
+          <div class="metro-settings-grid">
+            <div class="metro-field-group">
+              <label for="metroSettingBpm" class="metro-field-label">BPM</label>
+              <input id="metroSettingBpm" class="input mono metro-field-input" type="number" min="30" max="300" value="128" />
             </div>
-            <div>
-              <label for="metroSettingSig" class="muted" style="display: block; font-size: 10.5px; text-transform: uppercase; margin-bottom: 3px;">Time Sig</label>
-              <select id="metroSettingSig" class="input" style="width: 100%; height: 32px; cursor: pointer;">
+            <div class="metro-field-group">
+              <label for="metroSettingSig" class="metro-field-label">Time Sig</label>
+              <select id="metroSettingSig" class="input metro-field-input metro-field-select">
                 <option value="4/4">4/4</option>
                 <option value="3/4">3/4</option>
                 <option value="6/8">6/8</option>
@@ -396,9 +407,9 @@
                 <option value="12/8">12/8</option>
               </select>
             </div>
-            <div>
-              <label for="metroSettingBars" class="muted" style="display: block; font-size: 10.5px; text-transform: uppercase; margin-bottom: 3px;">Bars</label>
-              <select id="metroSettingBars" class="input" style="width: 100%; height: 32px; cursor: pointer;">
+            <div class="metro-field-group">
+              <label for="metroSettingBars" class="metro-field-label">Bars</label>
+              <select id="metroSettingBars" class="input metro-field-input metro-field-select">
                 <option value="2">2 Bars</option>
                 <option value="4" selected>4 Bars</option>
                 <option value="8">8 Bars</option>
@@ -407,12 +418,12 @@
             </div>
           </div>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-            <button id="dragMetroAudioBtn" class="pill pill--solid metro-dropcard" type="button" draggable="true" title="Drag Audio Click Track (.wav) to DAW or click to export WAV">
+          <div class="metro-actions-grid">
+            <button id="dragMetroAudioBtn" class="pill metro-dropcard" type="button" draggable="true" title="Drag Audio Click Track (.wav) to DAW or click to export WAV">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
               <span>🎵 Drag Audio (.wav)</span>
             </button>
-            <button id="dragMetroMidiBtn" class="pill pill--solid metro-dropcard" type="button" draggable="true" title="Drag MIDI Click Track (.mid) to DAW or click to export MIDI">
+            <button id="dragMetroMidiBtn" class="pill metro-dropcard" type="button" draggable="true" title="Drag MIDI Click Track (.mid) to DAW or click to export MIDI">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13M7 11l5 5 5-5M4 20h16"/></svg>
               <span>🎹 Drag MIDI (.mid)</span>
             </button>

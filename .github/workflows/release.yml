@@ -51,7 +51,7 @@ jobs:
             echo "Release $GITHUB_REF_NAME already exists — reusing it."
           else
             gh release create "$GITHUB_REF_NAME" \
-              --prerelease --generate-notes --verify-tag \
+              --prerelease --latest --generate-notes --verify-tag \
               --title "DAW Buddy $GITHUB_REF_NAME"
           fi
         env:

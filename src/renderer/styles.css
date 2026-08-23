@@ -2325,6 +2325,139 @@ body.theme-light .page__sticky-bar {
   color: var(--text);
 }
 
+/* Scale Notes & Sargam Solfege Badges */
+.scale-notes-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.scale-notes__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.scale-notes__title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 0;
+}
+
+.scale-notes__sub {
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--dim, #8b9bb4);
+}
+
+.scale-notes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(68px, 1fr));
+  gap: 8px;
+}
+
+.note-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 8px 6px;
+  background: color-mix(in srgb, var(--raised) 94%, transparent);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md, 8px);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  text-align: center;
+}
+
+.note-badge:hover {
+  background: color-mix(in srgb, var(--amber, #00f0ff) 14%, var(--raised));
+  border-color: var(--amber, #00f0ff);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--amber, #00f0ff) 30%, transparent);
+}
+
+.note-badge:active {
+  transform: translateY(0);
+}
+
+.note-badge--tonic {
+  background: color-mix(in srgb, var(--amber, #00f0ff) 18%, var(--raised)) !important;
+  border-color: var(--amber, #00f0ff) !important;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--amber, #00f0ff) 35%, transparent) !important;
+}
+
+.note-badge__name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--amber, #00f0ff);
+}
+
+.note-badge__sargam {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text, #f0f4f2);
+}
+
+.note-badge__degree {
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--muted);
+}
+
+.note-badge__freq {
+  font-size: 9.5px;
+  font-family: var(--mono);
+  color: var(--dim, #8b9bb4);
+}
+
+/* World Traditions Explorer */
+.scale-world-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.scale-tradition-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.scale-tradition-tab {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 6px 13px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.scale-tradition-tab:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.scale-tradition-tab--active {
+  background: color-mix(in srgb, var(--amber, #00f0ff) 20%, var(--raised)) !important;
+  border-color: var(--amber, #00f0ff) !important;
+  color: var(--amber, #00f0ff) !important;
+  font-weight: 700 !important;
+  box-shadow: 0 0 10px color-mix(in srgb, var(--amber, #00f0ff) 30%, transparent) !important;
+}
+
 /* Raagas Section in Camelot Modal */
 .scale-ragas-section {
   display: flex;
@@ -6155,28 +6288,136 @@ body.multi-select-mode .filerow__select-handle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 10px 14px;
+  gap: 9px;
+  padding: 12px 18px;
   cursor: grab;
   user-select: none;
   font-weight: 600;
-  font-size: 12.5px;
-  border: 1px solid var(--line);
-  background: color-mix(in srgb, var(--raised) 90%, transparent);
+  font-size: 13px;
+  border-radius: var(--r-md, 8px);
+  border: 1px solid color-mix(in srgb, var(--amber, #00f0ff) 40%, var(--line));
+  background: color-mix(in srgb, var(--raised) 94%, transparent);
+  color: var(--text, #f0f4f2) !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
   transition: all 0.18s ease;
 }
 
+.metro-dropcard svg {
+  color: var(--amber, #00f0ff);
+  flex-shrink: 0;
+}
+
+.metro-dropcard span {
+  color: var(--text, #f0f4f2) !important;
+  font-weight: 600;
+}
+
 .metro-dropcard:hover {
-  background: color-mix(in srgb, var(--teal, #00f0ff) 18%, var(--raised));
-  border-color: var(--teal, #00f0ff);
-  color: var(--text-bright, #fff);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--teal, #00f0ff) 30%, transparent);
+  background: color-mix(in srgb, var(--amber, #00f0ff) 22%, var(--raised));
+  border-color: var(--amber, #00f0ff);
+  color: #ffffff !important;
+  box-shadow: 0 0 18px color-mix(in srgb, var(--amber, #00f0ff) 45%, transparent);
   transform: translateY(-1px);
+}
+
+.metro-dropcard:hover span {
+  color: #ffffff !important;
 }
 
 .metro-dropcard:active {
   cursor: grabbing;
   transform: scale(0.98);
+}
+
+/* Metronome Drag Box & Settings Input Grid */
+.metro-drag-box {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md, 8px);
+  padding: 16px;
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.metro-drag-box__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.metro-drag-box__header strong {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.metro-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.metro-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.metro-field-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.metro-field-input {
+  width: 100% !important;
+  height: 38px !important;
+  padding: 0 12px !important;
+  border-radius: var(--r, 6px) !important;
+  border: 1px solid var(--line) !important;
+  background: var(--surface, #141917) !important;
+  color: var(--text, #f0f4f2) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  box-sizing: border-box !important;
+  line-height: 36px !important;
+}
+
+.metro-field-select {
+  cursor: pointer !important;
+  appearance: none !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2300f0ff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 10px center !important;
+  background-size: 12px !important;
+  padding-right: 28px !important;
+}
+
+.metro-field-input:focus {
+  border-color: var(--amber, #00f0ff) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--amber, #00f0ff) 25%, transparent) !important;
+}
+
+.metro-actions-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.audition-metro-btn {
+  transition: all 0.18s ease;
+  font-weight: 600;
+}
+
+.audition-metro-btn.is-active {
+  background: var(--amber, #00f0ff) !important;
+  color: var(--amber-ink, #000) !important;
+  box-shadow: 0 0 14px color-mix(in srgb, var(--amber, #00f0ff) 45%, transparent) !important;
 }
 
 /* =================== Scale Change & Modulation Detector =================== */
@@ -7946,6 +8187,463 @@ button.is-loading {
 .pill.is-analysed:hover {
   border-color: var(--accent);
 }
+
+/* ==================================================================
+   Slowed + Reverb Generator Studio & Modal
+   ================================================================== */
+
+.chip-fx-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  opacity: 0.8;
+  margin-left: 2px;
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.chip-fx-hint:hover {
+  opacity: 1;
+  transform: scale(1.2);
+}
+
+.slowed-reverb-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.slowed-reverb-modal {
+  background: var(--surface, #1e2430);
+  border: 1px solid var(--line, #2f3846);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 680px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), 0 0 24px rgba(0, 229, 255, 0.12);
+  overflow: hidden;
+  animation: modalEnter 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.slowed-reverb-modal__header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--raised, #262d3d);
+}
+
+.slowed-reverb-modal__titles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.slowed-reverb-modal__title {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text-bright, #fff);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.slowed-reverb-modal__sub {
+  font-size: 12px;
+  color: var(--muted, #8b9bb4);
+  margin: 0;
+}
+
+.slowed-reverb-container {
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* Quick Import Banner for Playing Audio */
+.sr-current-audio-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 18px;
+  background: color-mix(in srgb, var(--amber, #00f0ff) 14%, var(--raised));
+  border: 1px solid color-mix(in srgb, var(--amber, #00f0ff) 45%, var(--line));
+  border-radius: var(--r-md, 8px);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3), 0 0 16px color-mix(in srgb, var(--amber, #00f0ff) 20%, transparent);
+  animation: fadeIn 0.2s ease;
+}
+
+.sr-current-audio-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.sr-current-audio-badge {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--amber, #00f0ff);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.sr-current-audio-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text, #f0f4f2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sr-use-current-btn {
+  flex-shrink: 0;
+  padding: 9px 18px;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--amber, #00f0ff) 40%, transparent);
+}
+
+/* Dropzone */
+.sr-dropzone {
+  border: 2px dashed var(--line, #384252);
+  border-radius: 10px;
+  padding: 24px 16px;
+  text-align: center;
+  background: var(--raised, rgba(255, 255, 255, 0.02));
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.sr-dropzone:hover,
+.sr-dropzone--over {
+  border-color: #00e5ff;
+  background: rgba(0, 229, 255, 0.05);
+  box-shadow: 0 0 16px rgba(0, 229, 255, 0.1);
+}
+
+.sr-dropzone__icon {
+  font-size: 28px;
+  margin-bottom: 2px;
+}
+
+.sr-dropzone__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text, #dcdde1);
+}
+
+.sr-dropzone__sub {
+  font-size: 11.5px;
+  color: var(--muted, #7f8fa6);
+}
+
+/* Loaded file box */
+.sr-file-loaded-box {
+  background: var(--raised, #242c3b);
+  border: 1px solid var(--line, #364152);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sr-file-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow: hidden;
+}
+
+.sr-file-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #00e5ff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sr-file-meta {
+  font-size: 11.5px;
+  color: var(--muted, #8b9bb4);
+  font-family: var(--mono-font, 'IBM Plex Mono', monospace);
+}
+
+/* Grid of controls */
+.sr-controls-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.sr-card {
+  background: var(--raised, #242c3b);
+  border: 1px solid var(--line, #364152);
+  border-radius: 8px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sr-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sr-card__title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text, #dcdde1);
+}
+
+.sr-card__val {
+  font-size: 13px;
+  font-weight: 700;
+  color: #00e5ff;
+  font-family: var(--mono-font, 'IBM Plex Mono', monospace);
+}
+
+.sr-switch-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--muted, #8b9bb4);
+}
+
+.sr-slider {
+  width: 100%;
+  accent-color: #00e5ff;
+  cursor: pointer;
+  margin: 4px 0;
+}
+
+.sr-segmented-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sr-seg-btn {
+  flex: 1;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--line, #364152);
+  background: var(--surface, #1e2430);
+  color: var(--muted, #8b9bb4);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s ease;
+}
+
+.sr-seg-btn:hover {
+  background: var(--hover, #2b3547);
+  color: var(--text, #fff);
+}
+
+.sr-seg-btn.is-active {
+  background: color-mix(in srgb, #00e5ff 18%, transparent);
+  border-color: #00e5ff;
+  color: #00e5ff;
+}
+
+/* Process Button */
+.sr-btn-process {
+  padding: 12px 18px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #00b4db, #0083b0);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 14px rgba(0, 180, 219, 0.3);
+}
+
+.sr-btn-process:hover:not(:disabled) {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0, 180, 219, 0.45);
+}
+
+.sr-btn-process:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.sr-status-box {
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.sr-status-box--info {
+  background: rgba(0, 229, 255, 0.08);
+  color: #00e5ff;
+  border: 1px solid rgba(0, 229, 255, 0.2);
+}
+
+.sr-status-box--success {
+  background: rgba(76, 209, 55, 0.1);
+  color: #4cd137;
+  border: 1px solid rgba(76, 209, 55, 0.25);
+}
+
+.sr-status-box--error {
+  background: rgba(232, 65, 24, 0.1);
+  color: #e84118;
+  border: 1px solid rgba(232, 65, 24, 0.25);
+}
+
+/* Waveform Box */
+.sr-waveform-box {
+  background: var(--raised, #242c3b);
+  border: 1px solid var(--line, #364152);
+  border-radius: 8px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sr-waveform-canvas {
+  width: 100%;
+  height: 90px;
+  border-radius: 6px;
+  background: #151922;
+  cursor: pointer;
+  display: block;
+}
+
+.sr-transport-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sr-transport-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sr-play-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  background: #00e5ff;
+  color: #000;
+  font-size: 13px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.sr-play-btn:hover {
+  filter: brightness(1.1);
+}
+
+.sr-time-display {
+  font-family: var(--mono-font, 'IBM Plex Mono', monospace);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text, #dcdde1);
+}
+
+.sr-seek-hint {
+  font-size: 11px;
+  color: var(--muted, #7f8fa6);
+}
+
+/* Save / Export Row */
+.sr-export-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sr-save-btn {
+  flex: 1;
+  min-width: 180px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.15s ease;
+}
+
+.sr-save-btn--wav {
+  background: #009688;
+  color: #fff;
+  box-shadow: 0 3px 10px rgba(0, 150, 136, 0.3);
+}
+
+.sr-save-btn--wav:hover {
+  background: #00796b;
+}
+
+.sr-save-btn--mp3 {
+  background: #673ab7;
+  color: #fff;
+  box-shadow: 0 3px 10px rgba(103, 58, 183, 0.3);
+}
+
+.sr-save-btn--mp3:hover {
+  background: #512da8;
+}
+
 
 
 

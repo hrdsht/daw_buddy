@@ -1,11 +1,11 @@
 # DAW Buddy 🎵
 
-> **The intelligent, private desktop companion built specifically for music producers, sound designers, and audio engineers.**
+> **The fast, private desktop workstation companion for music producers, audio engineers, and sound designers.**
 
-[![Tests](https://img.shields.io/badge/tests-21%20passing-brightgreen.svg)](https://github.com/hrdsht/daw_buddy/actions)
+[![Tests](https://img.shields.io/badge/tests-26%20passing-brightgreen.svg)](https://github.com/hrdsht/daw_buddy/actions)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue.svg)](https://github.com/hrdsht/daw_buddy/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/hrdsht/daw_buddy/blob/main/LICENSE)
-[![Version](https://img.shields.io/badge/version-v0.4.9--beta2-orange.svg)](https://github.com/hrdsht/daw_buddy/releases)
+[![Version](https://img.shields.io/badge/version-v0.5.3--beta.2-orange.svg)](https://github.com/hrdsht/daw_buddy/releases)
 [![Gumroad](https://img.shields.io/badge/Gumroad-Get%20Free%20Download-ff90e8.svg?logo=gumroad&logoColor=white)](https://7675947827359.gumroad.com/l/daw_buddy)
 [![Website](https://img.shields.io/badge/Webpage-dawbuddy.ba55ick.com-2dd4bf.svg)](https://dawbuddy.ba55ick.com)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-ba55ick-FFDD00.svg?style=flat&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/ba55ick)
@@ -27,7 +27,7 @@ Every music producer knows the chaos of the studio drive: hundreds of cryptic pr
 
 Standard operating system file explorers (Windows Explorer, macOS Finder, Linux File Manager) are "musically blind" — they cannot tell you the **tempo (BPM)**, **musical key**, **Camelot wheel code**, **tuning deviation in cents**, **project save history**, or **render versions** without forcing you to launch heavy DAWs and wait for gigabytes of plugins to load.
 
-**DAW Buddy was built to solve this exact problem.** 
+**DAW Buddy was built to solve this exact problem.**
 
 Inspired by custom in-house tools discussed by world-class producers like [KSHMR](https://www.youtube.com/channel/UCFMjkrMT7Gvg84v0av-DIwA) on the [XLNT Podcast](https://www.youtube.com/@XLNTSOUND), DAW Buddy is a fast, lightweight, and **100% private** desktop workstation companion. It reads musical metadata straight out of raw session files (`.als`, `.flp`, `.logicx`, `.ptx`, `.cpr`, `.rpp`, `.bwproject`), organizes your discography, and provides a powerful suite of lossless audio and music theory tools.
 
@@ -38,7 +38,9 @@ Inspired by custom in-house tools discussed by world-class producers like [KSHMR
 Whether you are mixing a multi-platinum album or producing your very first beat, DAW Buddy is engineered to elevate your workflow:
 
 ### 🏆 For Pro Producers, Mix Engineers & Sound Designers:
-- ⚡ **Instant Session Indexing**: Reads BPM, key, version count, and save timelines across Ableton Live, FL Studio, Logic Pro, Pro Tools, Cubase, Bitwig, and REAPER in milliseconds without touching your CPU.
+- ⚡ **Instant Session Indexing**: Reads BPM, key, version count, and save timelines across Ableton Live, FL Studio, Logic Pro, Pro Tools, Cubase, Bitwig, Studio One, and REAPER in milliseconds without touching your CPU.
+- ✨ **Slowed + Reverb Studio**: Resample tracks by speed (%) or pitch semitones, convolve with algorithmic stereo Freeverb, normalize loudness, preview on an interactive seekable waveform, and export in 16/24/32-bit WAV or 128–320kbps MP3.
+- ⏱️ **10 Authentic DAW Metronome Soundsets**: Audition downbeat/upbeat clicks from Ableton Live, FL Studio, Logic Pro, Cubase, Pro Tools, MPC, Maschine, Reason, Sonar, and Electronic Synth. Drag rendered audio (.wav) or MIDI (.mid) click tracks directly into your DAW timeline.
 - 🏷️ **Smart Stem Classifier & Bulk Renamer**: AI-assisted heuristic engine that categorizes messy bounce stems into mix-ready instrument groups (*Kicks, Snares, Basses, Leads, Vocals, FX*) with custom dictionary learning and reversible rollback manifests.
 - 🎛️ **Lossless Audio Finisher & Silence Stripper**: Peak/RMS normalization, beat/bar boundary fitting, and threshold-based leading/trailing silence removal with safety transient padding.
 - 🎙️ **Vocal Reconstruction Suite**: Split continuous vocal takes into isolated blocks for third-party pitch-correction or voice transformation (Melodyne, Auto-Tune, ElevenLabs), and re-assemble them with sample-accurate timing.
@@ -51,12 +53,12 @@ Whether you are mixing a multi-platinum album or producing your very first beat,
 
 ### 🎓 For Beginners, Arrangers & Songwriters:
 - 🎲 **Producer Randomizer & Genre Challenge**: Beat creative block instantly with one-click idea generation: random key, scale, tempo, time signatures, and 48+ curated genre challenges across 9 categories (*Afro House, Organic & Botanica, Bollywood Fusion, Dubstep, Drum & Bass, Melodic Techno*, etc.) with YouTube reference search.
-- 🌍 **Interactive 3D Globe & World Scales**: An interactive 3D globe with authentic scale traditions across **Western & Jazz Modes, Indian Classical Raagas & Thaats (with Sargam swaras & Prahar times), Arabic Maqamat, Chinese Pentatonic Modes, Mediterranean & Spanish Flamenco, and Celtic Folk**.
+- 🎸 **Interactive 6-String Guitar Fretboard & Piano Keyboard**: Visualize notes, solfege intervals, scale degrees, and Indian Sargam swaras across interactive fretboard and keyboard instruments.
+- 🌍 **Interactive 3D Globe & World Scales**: Spin a 3D globe and explore authentic scale traditions across **Western & Jazz Modes, Indian Classical Raagas & Thaats (with Sargam swaras & Prahar times), Arabic Maqamat, Chinese Pentatonic Modes, Mediterranean & Spanish Flamenco, and Celtic Folk**.
 - 🎹 **Scale & Raaga Detector**: Drop any raw audio sample or MIDI file to instantly detect key, scale, tuning deviation in cents, and discover matching cultural traditions.
 - 🎼 **Live Phrase Audition & Drag-to-DAW MIDI**: Audition authentic ascending (*Aaroh*) and descending (*Avaroh*) melodic phrases in real-time, and drag SMF MIDI guide tracks directly into your DAW's piano roll.
-- ❓ **Interactive Tool Tutorials**: Built-in non-intrusive step-by-step interactive walkthrough tours for every studio tool, re-playable anytime with one click.
 - 🎨 **Comic Speech Bubble Theme Lab**: Right-click the theme button (or click its `⚙` gear) to choose from Dark, Light, AMOLED, Minimalist, Ableton-style, and Studio Classic surfaces with 14+ accent colors.
-- ⚙️ **Visual Settings & Right-Click Indicators**: Buttons and pills with advanced settings (like **Theme** for Theme Lab and **Verb** for Reverb DSP shaping) feature a subtle gear icon (`⚙`) and respond to both right-click and direct gear clicks to reveal deep parameter controls.
+- ⚙️ **Visual Settings & Right-Click Indicators**: Buttons and pills with advanced settings (like **Theme** for Theme Lab and **Verb** for Reverb DSP shaping & Slowed+Reverb popup) feature a subtle gear icon (`⚙`) and respond to both right-click and direct gear clicks to reveal deep parameter controls.
 
 <p align="center">
   <img src="docs/assets/daw-buddy-randomizer.png" alt="Producer Randomizer & Genre Challenge" width="48%" />
@@ -67,16 +69,18 @@ Whether you are mixing a multi-platinum album or producing your very first beat,
 
 ### 🌟 Key Features Summary
 
+- **✨ Slowed + Reverb Studio**: High-quality offline DSP resampler, Freeverb algorithmic stereo reverb, loudness normalization, seekable waveform player, and 16/24/32-bit WAV & MP3 export.
+- **⏱️ 10 DAW Metronomes & Drag-to-DAW**: Authentic click soundsets for major DAWs with 1-2-3-4 playback and direct Audio/MIDI timeline drag.
 - **🎲 Producer Randomizer & Genre Challenge**: Full world scale database, BPM, Tala meters, and 48+ curated genre challenges with YouTube inspiration.
+- **🎸 6-String Fretboard & Piano Visualizer**: Interactive acoustic string shimmer, fret position mapping, and scale degree solfege.
 - **🎹 Scale & World Tradition Detector**: Instant Chroma matching, cents tuning, Sargam swaras, and direct Drag-to-DAW MIDI export.
 - **🌐 Interactive 3D World Globe**: Spin and explore global musical traditions with regional onboarding and customizable DAW scale filters.
 - **🏷️ Smart Stem Classifier & Renamer**: Heuristic stem grouping with dictionary overrides and rollback manifests.
 - **🎛️ Lossless Audio Finisher**: RMS/Peak normalization, bar/beat boundary trimming, and zero-loss silence padding.
 - **🎙️ Vocal Reconstruction Suite**: Split continuous vocal takes into isolated blocks for third-party pitch-correction or voice transformation (Melodyne, Auto-Tune, ElevenLabs), and re-assemble them with sample-accurate timing.
-- **💾 Duplicate Sample Auditor**: Reclaims drive space via non-destructive hard-linking.
+- **💾 Duplicate Sample Auditor**: Reclaims drive space via non-destructive hard-linking with collapsible sample missing warnings.
 - **⚡ Zero-Friction Export**: Drag `[ WAV ]`, `[ MP3 ]`, and `[ FLAC ]` pills directly from the session browser straight into Discord, Telegram, or your DAW tracks.
 - **🗕 Floating Mini Player with Loop & DAW Drag**: Compact floating companion with interactive waveform scrubbing, continuous track repeat (`🔁 Repeat`), DAW minimization shortcut, and direct track drag.
-
 
 ## ⬇️ Download & Install (easiest)
 
@@ -96,7 +100,7 @@ Then run it:
 - **macOS** — open the `.dmg`, drag the app to Applications, then **right-click the app → Open** the first time (this clears Gatekeeper's warning for unsigned apps).
 - **Linux** — make the AppImage executable and run it:
 
-  ```
+  ```bash
   chmod +x DAW.Buddy-*.AppImage
   ./DAW.Buddy-*.AppImage
   ```

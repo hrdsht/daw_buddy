@@ -428,6 +428,13 @@ const Player = (() => {
   if (verbBtn) {
     verbBtn.addEventListener('click', (event: MouseEvent) => {
       const target = event.target as HTMLElement;
+      if (target && target.closest('#verbSlowedHint')) {
+        event.stopPropagation();
+        event.preventDefault();
+        closeReverbPanel();
+        window.dispatchEvent(new CustomEvent('open-slowed-reverb-modal'));
+        return;
+      }
       if (target && target.closest('.chip-gear-hint')) {
         event.stopPropagation();
         event.preventDefault();
@@ -440,6 +447,14 @@ const Player = (() => {
       event.preventDefault();
       if (reverbPanel.hidden) openReverbPanel();
       else closeReverbPanel();
+    });
+  }
+
+  const openModalBtn = document.getElementById('openSlowedReverbModalBtn');
+  if (openModalBtn) {
+    openModalBtn.addEventListener('click', () => {
+      closeReverbPanel();
+      window.dispatchEvent(new CustomEvent('open-slowed-reverb-modal'));
     });
   }
 
@@ -612,7 +627,7 @@ const Player = (() => {
   }
 
   function getPulseInterval(sig: string, bpm: number): number {
-    const safeBpm = bpm > 20 && bpm < 400 ? bpm : 120;
+    const safeBpm = bpm > 20 && bpm < 400 ? bpm : 128;
     const quarterSec = 60 / safeBpm;
 
     if (sig === '6/8') {
@@ -1266,7 +1281,7 @@ const Player = (() => {
         else stopRegion();
       }
       if (metronomeEnabled && !audio.paused) {
-        const bpm = metronomeBpm || (current && current.bpm) || 120;
+        const bpm = metronomeBpm || (current && current.bpm) || 128;
         const interval = getPulseInterval(metronomeSig, bpm);
         const currentPulse = Math.floor(audio.currentTime / interval);
         if (currentPulse !== lastMetronomeTickIndex && currentPulse >= 0) {
