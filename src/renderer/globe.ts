@@ -343,6 +343,14 @@ export class InteractiveGlobe {
 
   private startLoop() {
     const render = () => {
+      if (!this.canvas.isConnected) {
+        this.animFrameId = null;
+        return;
+      }
+      if (document.hidden) {
+        this.animFrameId = requestAnimationFrame(render);
+        return;
+      }
       this.updatePhysics();
       this.draw();
       this.animFrameId = requestAnimationFrame(render);

@@ -249,15 +249,8 @@ waveWrap.addEventListener('click', (e: MouseEvent) => {
 
 // Drag to DAW
 dragBtn.addEventListener('dragstart', async (e: DragEvent) => {
+  e.preventDefault();
   if (!currentTrackPath) return;
-  if (e.dataTransfer) {
-    e.dataTransfer.setData('text/plain', currentTrackPath);
-    e.dataTransfer.effectAllowed = 'copy';
-    const canvas = document.createElement('canvas');
-    canvas.width = 1;
-    canvas.height = 1;
-    e.dataTransfer.setDragImage(canvas, 0, 0);
-  }
   if (window.api && window.api.dragFiles) {
     await window.api.dragFiles([currentTrackPath]);
   }

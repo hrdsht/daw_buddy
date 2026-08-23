@@ -2575,8 +2575,76 @@ body.theme-light .page__sticky-bar {
   padding: 0 4px;
 }
 
+.sample-audit__callout {
+  transition: padding 0.15s ease, margin-bottom 0.15s ease;
+}
+
+.sample-audit__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.sample-audit__title {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  transition: color 0.15s ease;
+}
+
+.sample-audit__header:hover .sample-audit__title {
+  color: var(--text-bright, #fff);
+}
+
+.sample-audit__toggle {
+  background: transparent;
+  border: none;
+  color: var(--dim, var(--muted));
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.sample-audit__header:hover .sample-audit__toggle,
+.sample-audit__toggle:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--alert) 18%, transparent);
+}
+
+.sample-audit__chevron {
+  display: block;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: 50% 50%;
+  transform: rotate(0deg); /* Points upward in default expanded state */
+}
+
+.sample-audit__callout--collapsed .sample-audit__chevron {
+  transform: rotate(180deg); /* Clockwise rotation to point downward when collapsed */
+}
+
+.sample-audit__body {
+  margin-top: 2px;
+}
+
+.sample-audit__callout--collapsed .sample-audit__body {
+  display: none;
+}
+
+.sample-audit__callout--collapsed {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+}
+
 .sample-audit__list {
-  margin-top: 10px;
+  margin-top: 8px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -2603,6 +2671,11 @@ body.theme-light .page__sticky-bar {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.sample-audit__more {
+  margin-top: 6px;
+  font-size: 12px;
 }
 
 .page__actions {
@@ -5886,6 +5959,7 @@ body.multi-select-mode .filerow__select-handle {
 
 /* =================== Project Audio Metronome Widget =================== */
 .project-metro-group {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -5900,7 +5974,9 @@ body.multi-select-mode .filerow__select-handle {
   font-weight: 600;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
+  cursor: pointer;
+  user-select: none;
 }
 
 .pill--metro.is-on {
@@ -5911,7 +5987,47 @@ body.multi-select-mode .filerow__select-handle {
 }
 
 .pill--metro.is-disabled-audio {
-  opacity: 0.75;
+  opacity: 0.85;
+}
+
+.metro-sound-indicator {
+  font-size: 10px;
+  opacity: 0.7;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.pill--metro:hover .metro-sound-indicator {
+  opacity: 1;
+  transform: scale(1.15);
+}
+
+.pill--metro-drag {
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: grab;
+  user-select: none;
+  font-size: 12px;
+  padding: 5px 11px;
+  background: color-mix(in srgb, var(--hover) 80%, transparent);
+  border: 1px solid var(--line);
+  color: var(--text);
+  transition: all 0.15s ease;
+}
+
+.pill--metro-drag:hover {
+  background: color-mix(in srgb, var(--teal, #00f0ff) 15%, var(--raised));
+  border-color: var(--teal, #00f0ff);
+  color: var(--text-bright, #fff);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--teal, #00f0ff) 25%, transparent);
+}
+
+.pill--metro-drag:active {
+  cursor: grabbing;
+  transform: scale(0.98);
 }
 
 .project-metro-sigs {
@@ -5936,6 +6052,131 @@ body.multi-select-mode .filerow__select-handle {
   color: #000;
   border-color: var(--teal, #00f0ff);
   box-shadow: 0 0 8px color-mix(in srgb, var(--teal, #00f0ff) 40%, transparent);
+}
+
+/* Floating Metronome Sound Selection Popup */
+.metro-sound-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 60;
+  min-width: 270px;
+  max-height: 380px;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  animation: fadeIn 0.15s ease-out;
+}
+
+.metro-sound-pop__head {
+  padding: 4px 8px 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11.5px;
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.metro-sound-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12.5px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.12s ease;
+}
+
+.metro-sound-item:hover {
+  background: var(--hover);
+  color: var(--text-bright, #fff);
+}
+
+.metro-sound-item.is-selected {
+  background: color-mix(in srgb, var(--amber) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--amber) 35%, transparent);
+}
+
+.metro-sound-item__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.metro-sound-item__title {
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.metro-sound-item__desc {
+  font-size: 10.5px;
+  color: var(--dim);
+}
+
+.metro-sound-item__preview {
+  padding: 3px 6px;
+  font-size: 11px;
+  border-radius: 4px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.metro-sound-item__preview:hover {
+  background: var(--teal, #00f0ff);
+  color: #000;
+  border-color: var(--teal, #00f0ff);
+}
+
+/* Metronome Drop Cards in Settings */
+.metro-dropcard {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  cursor: grab;
+  user-select: none;
+  font-weight: 600;
+  font-size: 12.5px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--raised) 90%, transparent);
+  transition: all 0.18s ease;
+}
+
+.metro-dropcard:hover {
+  background: color-mix(in srgb, var(--teal, #00f0ff) 18%, var(--raised));
+  border-color: var(--teal, #00f0ff);
+  color: var(--text-bright, #fff);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--teal, #00f0ff) 30%, transparent);
+  transform: translateY(-1px);
+}
+
+.metro-dropcard:active {
+  cursor: grabbing;
+  transform: scale(0.98);
 }
 
 /* =================== Scale Change & Modulation Detector =================== */

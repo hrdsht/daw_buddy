@@ -146,6 +146,18 @@ export function initCrashLogger(customDir?: string) {
       const err = reason instanceof Error ? reason : new Error(String(reason));
       recordCrash('main', err);
     });
+
+    // Register Electron native process crash events
+    if (app && typeof app.on === 'function') {
+      app.on('render-process-gone', (event: any, webContents: any, details: any) => {
+        console.error('[CrashLogger] Render Process Gone:', details);
+        recordCrash('process-gone', `Renderer Process Terminated: ${details?.reason || 'unknown'} (exitCode: ${details?.exitCode})`, details);
+      });
+      app.on('child-process-gone', (event: any, details: any) => {
+        console.error('[CrashLogger] Child Process Gone:', details);
+        recordCrash('process-gone', `Child Process Terminated (${details?.type || 'process'}): ${details?.reason || 'unknown'} (exitCode: ${details?.exitCode})`, details);
+      });
+    }
   } catch (e) {
     console.error('[CrashLogger] Failed to initialize crash logger:', e);
   }

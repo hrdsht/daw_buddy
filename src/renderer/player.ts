@@ -6,6 +6,12 @@ import {
   formatReverbFrequency,
   normalizeReverbSettings
 } from './reverb';
+import {
+  METRONOME_SOUNDSETS,
+  playMetronomePulse,
+  loadSoundsetBuffers,
+  preloadAllMetronomeSoundsets
+} from './metronome-sounds';
 
 /**
  * Playback and waveform drawing.
@@ -52,6 +58,27 @@ const Player = (() => {
   };
 
   let audioContext = null;
+  let audioContextIdleTimer = null;
+
+  function schedulePlayerAudioContextSuspend() {
+    if (audioContextIdleTimer) clearTimeout(audioContextIdleTimer);
+    audioContextIdleTimer = setTimeout(() => {
+      if (audioContext && audioContext.state === 'running' && audio.paused && !droneOsc && !standaloneTimer && !metronomeEnabled) {
+        audioContext.suspend().catch(() => {});
+      }
+    }, 2500);
+  }
+
+  function ensurePlayerAudioContextRunning() {
+    if (audioContextIdleTimer) {
+      clearTimeout(audioContextIdleTimer);
+      audioContextIdleTimer = null;
+    }
+    if (audioContext && audioContext.state === 'suspended') {
+      audioContext.resume().catch(() => {});
+    }
+  }
+
   let sourceNode = null;
   let dryGain = null;
   let wetGain = null;
@@ -173,8 +200,7 @@ const Player = (() => {
    */
   function buildChain() {
     if (!audioContext) audioContext = new AudioContext();
-    // Browsers start a context suspended until the user has interacted.
-    if (audioContext.state === 'suspended') audioContext.resume();
+    ensurePlayerAudioContextRunning();
     if (chainBuilt) return;
 
     sourceNode = audioContext.createMediaElementSource(audio);
@@ -569,7 +595,10 @@ const Player = (() => {
   }
 
   function stopDrone() {
-    if (!droneOsc) return;
+    if (!droneOsc) {
+      schedulePlayerAudioContextSuspend();
+      return;
+    }
     try {
       droneGain.gain.cancelScheduledValues(audioContext.currentTime);
       droneGain.gain.setValueAtTime(droneGain.gain.value, audioContext.currentTime);
@@ -579,6 +608,7 @@ const Player = (() => {
       /* already stopped */
     }
     droneOsc = null;
+    schedulePlayerAudioContextSuspend();
   }
 
   function getPulseInterval(sig: string, bpm: number): number {
@@ -622,28 +652,32 @@ const Player = (() => {
     return { isDownbeat: beatInBar === 0, isAccent: beatInBar === 2 };
   }
 
+  let metronomeSound = 'ableton';
+  try {
+    const saved = localStorage.getItem('dawBuddyMetronomeSound');
+    if (saved) metronomeSound = saved;
+  } catch {}
+
+  function setMetronomeSound(soundId: string) {
+    metronomeSound = soundId || 'ableton';
+    try {
+      localStorage.setItem('dawBuddyMetronomeSound', metronomeSound);
+    } catch {}
+    if (audioContext && metronomeSound !== 'synth') {
+      loadSoundsetBuffers(metronomeSound, audioContext).catch(() => {});
+    }
+    emit();
+    broadcastState();
+  }
+
+  function getMetronomeSound(): string {
+    return metronomeSound;
+  }
+
   function playClick(isDownbeat = false, isAccent = false) {
     if (!audioContext) audioContext = new AudioContext();
-    if (audioContext.state === 'suspended') audioContext.resume();
-    const now = audioContext.currentTime;
-
-    const osc = audioContext.createOscillator();
-    const gain = audioContext.createGain();
-
-    const freq = isDownbeat ? 1400 : isAccent ? 1050 : 800;
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(freq, now);
-    osc.frequency.exponentialRampToValueAtTime(80, now + 0.035);
-
-    const clickVol = isDownbeat ? 0.9 : isAccent ? 0.75 : 0.6;
-    gain.gain.setValueAtTime(clickVol, now);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.035);
-
-    osc.connect(gain);
-    gain.connect(audioContext.destination);
-
-    osc.start(now);
-    osc.stop(now + 0.04);
+    ensurePlayerAudioContextRunning();
+    playMetronomePulse(audioContext, metronomeSound, isDownbeat, isAccent, 0.85);
   }
 
   let standaloneTimer: any = null;
@@ -674,6 +708,7 @@ const Player = (() => {
       clearInterval(standaloneTimer);
       standaloneTimer = null;
     }
+    schedulePlayerAudioContextSuspend();
   }
 
   function setMetronome(enabled: boolean) {
@@ -1087,7 +1122,7 @@ const Player = (() => {
   function play() {
     // A plain play is always the whole file — drop any trim region first.
     clearRegion();
-    if (audioContext && audioContext.state === 'suspended') audioContext.resume();
+    ensurePlayerAudioContextRunning();
     audio.loop = repeatEnabled;
     audio.play().catch(() => {
       /* a load was cancelled by another load — harmless */
@@ -1119,7 +1154,7 @@ const Player = (() => {
     regionEnd = Math.min(duration(), endSec == null ? duration() : endSec);
     regionLoop = loop;
     if (regionEnd - regionStart < 0.01) return; // nothing to hear
-    if (audioContext && audioContext.state === 'suspended') audioContext.resume();
+    ensurePlayerAudioContextRunning();
     audio.currentTime = regionStart;
     audio.play().catch(() => {});
   }
@@ -1309,6 +1344,7 @@ const Player = (() => {
     draw();
     emit();
     broadcastState();
+    schedulePlayerAudioContextSuspend();
   });
   audio.addEventListener('ended', () => {
     if (repeatEnabled) {
@@ -1322,6 +1358,7 @@ const Player = (() => {
     draw();
     emit();
     broadcastState();
+    schedulePlayerAudioContextSuspend();
   });
 
   window.addEventListener('resize', draw);
@@ -1377,6 +1414,9 @@ const Player = (() => {
     getMetronomeSignature: () => metronomeSig,
     setMetronomeBpm,
     getMetronomeBpm: () => metronomeBpm,
+    setMetronomeSound,
+    getMetronomeSound,
+    getMetronomeSoundsets: () => METRONOME_SOUNDSETS,
     isPlaying: () => !audio.paused && Boolean(current),
     getDecoded: () => decoded,
     getCurrent: () => current,

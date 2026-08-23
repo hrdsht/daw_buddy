@@ -2,6 +2,7 @@
 
 const { app, BrowserWindow, ipcMain, dialog, shell, Tray, Menu, nativeImage } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const fsp = require('fs/promises');
 
 const { scanRoots, scanFolder } = require('./lib/scanner');
@@ -1066,14 +1067,22 @@ ipcMain.handle('tools:renameUndo', () => renamer.undo(undoLog()));
 function getDragIcon(customIcon?: string) {
   try {
     const iconPath = customIcon || path.join(__dirname, '..', 'renderer', 'assets', 'dawbuddy-logo-v2.png');
-    const img = nativeImage.createFromPath(iconPath);
-    if (!img.isEmpty()) {
-      return img.resize({ width: 32, height: 32 });
+    if (fs.existsSync(iconPath)) {
+      const img = nativeImage.createFromPath(iconPath);
+      if (!img.isEmpty()) {
+        return img.resize({ width: 32, height: 32 });
+      }
     }
   } catch (err: any) {
     console.error('[getDragIcon] Failed to load drag icon:', err?.message);
   }
-  return nativeImage.createEmpty();
+  // Guaranteed non-empty 16x16 base64 PNG icon to prevent Windows Shell DoDragDrop crashes
+  return nativeImage.createFromBuffer(
+    Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAUSURBVDhPY/wPBAwUACMYNWDUAEgYAAAhAgENqR9H9gAAAABJRU5ErkJggg==',
+      'base64'
+    )
+  );
 }
 
 ipcMain.handle('tools:dragFiles', async (event, { filePaths, icon }: any) => {
@@ -1083,9 +1092,9 @@ ipcMain.handle('tools:dragFiles', async (event, { filePaths, icon }: any) => {
     }
     const validFiles: string[] = [];
     for (const fp of filePaths) {
-      if (typeof fp === 'string' && fp.trim()) {
+      if (typeof fp === 'string' && fp.trim() && fs.existsSync(fp)) {
         try {
-          const stat = await fsp.stat(fp);
+          const stat = fs.statSync(fp);
           if (stat.isFile()) validFiles.push(fp);
         } catch {
           // ignore missing
@@ -1118,10 +1127,10 @@ ipcMain.handle('tools:dragFiles', async (event, { filePaths, icon }: any) => {
 ipcMain.handle('tools:dragMidi', async (event, { filename, data }: any) => {
   try {
     const tempDir = path.join(app.getPath('temp'), 'daw-buddy-midi');
-    await fsp.mkdir(tempDir, { recursive: true });
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
     const safeName = (filename || 'scale.mid').replace(/[^a-zA-Z0-9_#.-]/g, '_');
     const filePath = path.join(tempDir, safeName);
-    await fsp.writeFile(filePath, Buffer.from(data));
+    fs.writeFileSync(filePath, Buffer.from(data));
     const dragIcon = getDragIcon();
     event.sender.startDrag({
       file: filePath,
@@ -1130,6 +1139,25 @@ ipcMain.handle('tools:dragMidi', async (event, { filename, data }: any) => {
     return { success: true, filePath };
   } catch (err: any) {
     console.error('[midi] Drag failed:', err.message);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('tools:dragAudio', async (event, { filename, data }: any) => {
+  try {
+    const tempDir = path.join(app.getPath('temp'), 'daw-buddy-audio');
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+    const safeName = (filename || 'click.wav').replace(/[^a-zA-Z0-9_#.-]/g, '_');
+    const filePath = path.join(tempDir, safeName);
+    fs.writeFileSync(filePath, Buffer.from(data));
+    const dragIcon = getDragIcon();
+    event.sender.startDrag({
+      file: filePath,
+      icon: dragIcon
+    });
+    return { success: true, filePath };
+  } catch (err: any) {
+    console.error('[audio] Drag failed:', err.message);
     return { success: false, error: err.message };
   }
 });

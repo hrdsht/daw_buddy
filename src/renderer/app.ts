@@ -35,6 +35,15 @@ import {
   ScoredWorldScale
 } from './world-scales';
 import { showRegionOnboardingModal } from './onboarding';
+import {
+  METRONOME_SOUNDSETS,
+  getMetronomeSoundsets,
+  getMetronomeSoundset,
+  generateMetronomeWav,
+  generateMetronomeMidi,
+  loadSoundsetBuffers,
+  playMetronomePulse
+} from './metronome-sounds';
 
 const $ = (id: string): any => document.getElementById(id);
 
@@ -1688,7 +1697,22 @@ function stemsFolderFor(entry) {
    ================================================================== */
 
 let _audioCtx: AudioContext | null = null;
+let _audioCtxSuspendTimer: any = null;
+
+function scheduleAudioContextIdleSuspend() {
+  if (_audioCtxSuspendTimer) clearTimeout(_audioCtxSuspendTimer);
+  _audioCtxSuspendTimer = setTimeout(() => {
+    if (_audioCtx && _audioCtx.state === 'running' && !currentScaleSession && !activeChordGain) {
+      _audioCtx.suspend().catch(() => {});
+    }
+  }, 2500);
+}
+
 function getAudioContext(): AudioContext | null {
+  if (_audioCtxSuspendTimer) {
+    clearTimeout(_audioCtxSuspendTimer);
+    _audioCtxSuspendTimer = null;
+  }
   if (!_audioCtx) {
     const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
     if (AudioCtx) _audioCtx = new AudioCtx();
@@ -1735,6 +1759,7 @@ function stopActiveChord(fadeSec = 0.045): void {
             osc.disconnect();
           } catch (_) {}
         });
+        scheduleAudioContextIdleSuspend();
       }, Math.ceil(fadeSec * 1000) + 15);
     }
   } catch (_) {}
@@ -1744,7 +1769,10 @@ function stopActiveChord(fadeSec = 0.045): void {
 
 function stopScalePlayback() {
   stopActiveChord(0.045);
-  if (!currentScaleSession) return;
+  if (!currentScaleSession) {
+    scheduleAudioContextIdleSuspend();
+    return;
+  }
   const sess = currentScaleSession;
   currentScaleSession = null;
   sess.timers.forEach((t) => clearTimeout(t));
@@ -1763,6 +1791,7 @@ function stopScalePlayback() {
   if (sess.onStop) {
     try { sess.onStop(); } catch (_) {}
   }
+  scheduleAudioContextIdleSuspend();
 }
 
 function playSynthNote(pc: number, octave = 4, a4 = 440, duration = 0.85): { osc: OscillatorNode; gain: GainNode } | null {
@@ -1790,6 +1819,7 @@ function playSynthNote(pc: number, octave = 4, a4 = 440, duration = 0.85): { osc
     gain.connect(ctx.destination);
     osc.start(now);
     osc.stop(now + duration + 0.05);
+    setTimeout(() => scheduleAudioContextIdleSuspend(), Math.ceil(duration * 1000) + 100);
     return { osc, gain };
   } catch (err) {
     console.error('Audio synth error:', err);
@@ -1830,6 +1860,7 @@ function playSynthChord(midiNotes: number[], a4 = 440, duration = 1.35): void {
       osc.stop(now + duration + 0.06);
       activeChordOscs.push(osc);
     });
+    setTimeout(() => scheduleAudioContextIdleSuspend(), Math.ceil(duration * 1000) + 100);
   } catch (err) {
     console.error('Chord synth error:', err);
   }
@@ -2314,6 +2345,7 @@ function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
   let selectedCode = rec.camelot || (rec.tonic && rec.scale === 'major' ? codeFor(rec.tonic, 'maj') : codeFor(rec.tonic, 'min')) || '8A';
   let selectedTonic = rec.tonic || CAMELOT_KEYS[selectedCode] || 'A';
   let selectedScale = rec.scale || (selectedCode.endsWith('B') ? 'major' : 'minor');
+  let baseKeyScale = selectedScale;
   const selectedTuningA4 = rec.tuningA4 || 440;
 
   const inspectorCol = el('div', 'camelot-modal__inspector');
@@ -2361,7 +2393,10 @@ function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
       const degName = k.degree ? (DEGREE_NAMES[degInterval] || `${k.degree}`) : 'out of scale';
       const sargam = k.degree ? (SARGAM_NAMES[degInterval] || '') : '';
       rect.innerHTML = `<title>${k.name} (${degName}${sargam ? ` · ${sargam}` : ''})</title>`;
-      rect.addEventListener('click', () => playSynthNote(k.pc, 4 + k.octave, selectedTuningA4));
+      rect.addEventListener('click', () => {
+        playSynthNote(k.pc, 4 + k.octave, selectedTuningA4);
+        if (svgFb && svgFb.vibrateNote) svgFb.vibrateNote(k.pc);
+      });
       svgKb.appendChild(rect);
     });
 
@@ -2377,35 +2412,39 @@ function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
       const degName = k.degree ? (DEGREE_NAMES[degInterval] || `${k.degree}`) : 'out of scale';
       const sargam = k.degree ? (SARGAM_NAMES[degInterval] || '') : '';
       rect.innerHTML = `<title>${k.name} (${degName}${sargam ? ` · ${sargam}` : ''})</title>`;
-      rect.addEventListener('click', () => playSynthNote(k.pc, 4 + k.octave, selectedTuningA4));
+      rect.addEventListener('click', () => {
+        playSynthNote(k.pc, 4 + k.octave, selectedTuningA4);
+        if (svgFb && svgFb.vibrateNote) svgFb.vibrateNote(k.pc);
+      });
       svgKb.appendChild(rect);
     });
-
     topCard.append(svgKb);
 
-    // 2. Interactive 6-String Guitar Fretboard (below keyboard)
+    // 2. 6-String Interactive Guitar Fretboard
     const svgFb = renderFretboardSvg(tonicPc, degrees, selectedTuningA4);
     topCard.append(svgFb);
-
     inspectorCol.append(topCard);
 
-    // 3. Notes & Indian Sargam Solfege (Centered and expanded)
-    const notesSection = el('div', 'scale-notes-section scale-notes-section--centered');
-    notesSection.append(el('h4', 'scale-notes__title', 'Scale Notes & Indian Sargam Solfege'));
+    // 3. Centered & Expanded Scale Degrees & Indian Sargam Solfege Card
+    const notesSection = el('div', 'scale-notes-section');
+    const notesSecHead = el('div', 'scale-notes__header');
+    notesSecHead.append(el('h4', 'scale-notes__title', 'Scale Notes & Sargam Solfege'));
+    notesSecHead.append(el('span', 'scale-notes__sub', `${degrees.length} Notes in Scale · Tuning A4 = ${selectedTuningA4.toFixed(1)} Hz`));
+    notesSection.append(notesSecHead);
 
-    const notesGrid = el('div', 'scale-notes-grid scale-notes-grid--expanded');
-    degrees.forEach((interval) => {
-      const notePc = (tonicPc + interval) % 12;
+    const notesGrid = el('div', 'scale-notes-grid');
+    degrees.forEach((deg, idx) => {
+      const notePc = (tonicPc + deg) % 12;
       const noteName = DSP.NOTES[notePc];
-      const sargam = SARGAM_NAMES[interval] || '';
-      const degName = DEGREE_NAMES[interval] || '';
-      const octave = interval < 12 ? (notePc < tonicPc ? 5 : 4) : (4 + Math.floor(interval / 12));
-      const midiVal = 12 * (octave + 1) + notePc;
-      const freq = (selectedTuningA4 * Math.pow(2, (midiVal - 69) / 12)).toFixed(1);
+      const sargamName = SARGAM_NAMES[deg] || '–';
+      const degName = DEGREE_NAMES[idx] || `${idx + 1}`;
+      const octave = idx === 0 || deg < 12 ? 4 : 5;
+      const freq = (selectedTuningA4 * Math.pow(2, (notePc - 9 + (octave - 4) * 12) / 12)).toFixed(1);
 
-      const noteCard = el('div', `note-badge-card ${interval === 0 ? 'note-badge-card--tonic' : ''}`);
+      const noteCard = el('button', `note-badge ${idx === 0 ? 'note-badge--tonic' : ''}`);
+      noteCard.title = `Click to play ${noteName} (${sargamName} · ${degName} · ${freq} Hz)`;
       noteCard.append(el('div', 'note-badge__name', noteName));
-      noteCard.append(el('div', 'note-badge__sargam', sargam.split(' ')[0]));
+      noteCard.append(el('div', 'note-badge__sargam', sargamName));
       noteCard.append(el('div', 'note-badge__degree', degName));
       noteCard.append(el('div', 'note-badge__freq', `${freq} Hz`));
       noteCard.addEventListener('click', () => {
@@ -2418,8 +2457,9 @@ function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
     inspectorCol.append(notesSection);
 
     // World Musical Traditions & Scales Explorer Box
+    const baseDegrees = DSP.SCALES[baseKeyScale] || (selectedCode.endsWith('B') ? DSP.SCALES.major : DSP.SCALES.minor);
     const ragaChroma = new Float64Array(12);
-    degrees.forEach((d) => {
+    baseDegrees.forEach((d) => {
       ragaChroma[(tonicPc + d) % 12] = 1.0;
     });
 
@@ -2530,6 +2570,7 @@ function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
 
         midiBtn.draggable = true;
         midiBtn.addEventListener('dragstart', async (e: DragEvent) => {
+          e.preventDefault();
           if (e.dataTransfer) {
             e.dataTransfer.setData('text/plain', rMidiFileName);
             e.dataTransfer.effectAllowed = 'copy';
@@ -2643,14 +2684,7 @@ function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
     const midiFileName = `${entry.name.replace(/[^a-zA-Z0-9_-]/g, '_')}_${selectedTonic}_${selectedScale}.mid`;
     midiBtn.draggable = true;
     midiBtn.addEventListener('dragstart', async (e: DragEvent) => {
-      if (e.dataTransfer) {
-        e.dataTransfer.setData('text/plain', midiFileName);
-        e.dataTransfer.effectAllowed = 'copy';
-        const canvas = document.createElement('canvas');
-        canvas.width = 1;
-        canvas.height = 1;
-        e.dataTransfer.setDragImage(canvas, 0, 0);
-      }
+      e.preventDefault();
       if (window.api.dragMidi) await window.api.dragMidi(midiFileName, Array.from(midiBytes));
     });
     midiBtn.addEventListener('click', async () => {
@@ -2686,7 +2720,8 @@ function openCamelotModal(entry: any, rec: any, projectBpm: number | null) {
   function selectCode(code: string) {
     selectedCode = code;
     selectedTonic = CAMELOT_KEYS[code] || selectedTonic;
-    selectedScale = code.endsWith('B') ? 'major' : 'minor';
+    baseKeyScale = code.endsWith('B') ? 'major' : 'minor';
+    selectedScale = baseKeyScale;
     renderWheel();
     updateInspector();
   }
@@ -2975,14 +3010,7 @@ function renderProjectHarmony(entry, rec, projectBpm) {
   const midiFileName = `${entry.name.replace(/[^a-zA-Z0-9_-]/g, '_')}_${effectiveTonic}_${effectiveScale || 'scale'}.mid`;
 
   midiBtn.addEventListener('dragstart', async (e: DragEvent) => {
-    if (e.dataTransfer) {
-      e.dataTransfer.setData('text/plain', midiFileName);
-      e.dataTransfer.effectAllowed = 'copy';
-      const canvas = document.createElement('canvas');
-      canvas.width = 1;
-      canvas.height = 1;
-      e.dataTransfer.setDragImage(canvas, 0, 0);
-    }
+    e.preventDefault();
     if (window.api.dragMidi) {
       await window.api.dragMidi(midiFileName, Array.from(midiBytes));
     }
@@ -3057,14 +3085,7 @@ function renderProjectHarmony(entry, rec, projectBpm) {
 
       chip.draggable = true;
       chip.addEventListener('dragstart', async (e: DragEvent) => {
-        if (e.dataTransfer) {
-          e.dataTransfer.setData('text/plain', rMidiFileName);
-          e.dataTransfer.effectAllowed = 'copy';
-          const canvas = document.createElement('canvas');
-          canvas.width = 1;
-          canvas.height = 1;
-          e.dataTransfer.setDragImage(canvas, 0, 0);
-        }
+        e.preventDefault();
         if (window.api.dragMidi) await window.api.dragMidi(rMidiFileName, Array.from(rMidiBytes));
       });
 
@@ -3214,10 +3235,25 @@ function paintSampleAudit(res, facts, box) {
     chip.classList.add('statchip--alert');
     facts.append(chip);
 
-    const callout = el('div', 'callout callout--alert');
-    callout.append(
-      el('b', null, `${n} referenced sample${n === 1 ? '' : 's'} not found on disk`)
-    );
+    const callout = el('div', 'callout callout--alert sample-audit__callout');
+
+    const header = el('div', 'sample-audit__header');
+    header.setAttribute('role', 'button');
+    header.setAttribute('tabindex', '0');
+    header.setAttribute('aria-expanded', 'true');
+    header.title = 'Click to collapse missing samples';
+
+    const title = el('b', 'sample-audit__title', `${n} referenced sample${n === 1 ? '' : 's'} not found on disk`);
+
+    const toggle = el('button', 'sample-audit__toggle');
+    toggle.type = 'button';
+    toggle.setAttribute('aria-label', 'Toggle missing samples list');
+    toggle.innerHTML = `<svg class="sample-audit__chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="18 15 12 9 6 15"></polyline></svg>`;
+
+    header.append(title, toggle);
+    callout.append(header);
+
+    const body = el('div', 'sample-audit__body');
     const list = el('div', 'sample-audit__list');
     res.missing.slice(0, 40).forEach((m) => {
       const item = el('div', 'sample-audit__item');
@@ -3225,8 +3261,28 @@ function paintSampleAudit(res, facts, box) {
       if (m.relativePath) item.append(el('span', 'sample-audit__path', m.relativePath));
       list.append(item);
     });
-    callout.append(list);
-    if (n > 40) callout.append(el('div', 'muted', `…and ${n - 40} more`));
+    body.append(list);
+    if (n > 40) body.append(el('div', 'muted sample-audit__more', `…and ${n - 40} more`));
+    callout.append(body);
+
+    const toggleCollapse = (e?: Event) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      const isCollapsed = callout.classList.toggle('sample-audit__callout--collapsed');
+      header.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+      header.title = isCollapsed ? 'Click to expand missing samples' : 'Click to collapse missing samples';
+    };
+
+    header.addEventListener('click', toggleCollapse);
+    header.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggleCollapse();
+      }
+    });
+
     box.append(callout);
   } else {
     // All references resolve — a quiet, reassuring chip.
@@ -3562,12 +3618,192 @@ function renderProjectPage() {
   });
   actions.append(colorBtn);
 
-  /* Audio-synced Metronome widget */
+  /* Audio-synced Metronome widget, DAW Soundset Picker & Drag to DAW Click Track */
   const metroGroup = el('div', 'project-metro-group');
-  const metroBtn = el('button', 'pill pill--metro', '⏱ Metronome');
-  metroBtn.title = 'Audio-synced metronome click (active during audio playback)';
+  const metroBtn = el('button', 'pill pill--metro');
+  const updateMetroBtnText = () => {
+    const soundId = Player.getMetronomeSound ? Player.getMetronomeSound() : 'ableton';
+    const soundDef = getMetronomeSoundset(soundId);
+    metroBtn.innerHTML = `<span>⏱ Metronome</span><span class="metro-sound-indicator" title="Current sound: ${soundDef.name} (Right-click to change)">▾</span>`;
+  };
+  updateMetroBtnText();
+  metroBtn.title = 'Audio-synced metronome click (Left-click to toggle, Right-click to choose DAW sound)';
 
   const metroSigWrap = el('div', 'project-metro-sigs');
+
+  // Metronome Soundset Popup Menu
+  let soundPop: HTMLElement | null = null;
+  const closeSoundPop = () => {
+    if (soundPop) {
+      soundPop.remove();
+      soundPop = null;
+    }
+  };
+
+  const openSoundPop = (anchorEl: HTMLElement) => {
+    closeSoundPop();
+    soundPop = el('div', 'metro-sound-pop');
+    
+    const head = el('div', 'metro-sound-pop__head');
+    head.append(el('span', null, 'Metronome Sound (DAW)'));
+    const closeBtn = el('button', 'round', '✕');
+    closeBtn.style.fontSize = '10px';
+    closeBtn.style.padding = '2px 4px';
+    closeBtn.addEventListener('click', (e: MouseEvent) => {
+      e.stopPropagation();
+      closeSoundPop();
+    });
+    head.append(closeBtn);
+    soundPop.append(head);
+
+    const currentSoundId = Player.getMetronomeSound ? Player.getMetronomeSound() : 'ableton';
+    const soundsets = getMetronomeSoundsets();
+
+    soundsets.forEach((s) => {
+      const item = el('button', `metro-sound-item ${s.id === currentSoundId ? 'is-selected' : ''}`);
+      item.type = 'button';
+
+      const info = el('div', 'metro-sound-item__info');
+      const title = el('div', 'metro-sound-item__title');
+      title.append(el('span', null, s.name));
+      if (s.id === currentSoundId) {
+        title.append(el('span', 'mono', '✓'));
+      }
+      info.append(title);
+      info.append(el('div', 'metro-sound-item__desc', s.description));
+      item.append(info);
+
+      const preview = el('button', 'metro-sound-item__preview', '▶');
+      preview.type = 'button';
+      preview.title = `Audition ${s.name} click`;
+      preview.addEventListener('click', async (e: MouseEvent) => {
+        e.stopPropagation();
+        const ac = new (window.AudioContext || (window as any).webkitAudioContext)();
+        await loadSoundsetBuffers(s.id, ac);
+        // Play 1 downbeat + 3 upbeats
+        playMetronomePulse(ac, s.id, true, false, 0.9);
+        setTimeout(() => playMetronomePulse(ac, s.id, false, false, 0.75), 180);
+        setTimeout(() => playMetronomePulse(ac, s.id, false, false, 0.75), 360);
+        setTimeout(() => playMetronomePulse(ac, s.id, false, false, 0.75), 540);
+      });
+      item.append(preview);
+
+      item.addEventListener('click', () => {
+        if (Player.setMetronomeSound) {
+          Player.setMetronomeSound(s.id);
+        }
+        updateMetroBtnText();
+        closeSoundPop();
+        toast('Metronome Sound', `Switched to ${s.name}`);
+      });
+
+      soundPop.append(item);
+    });
+
+    metroGroup.append(soundPop);
+
+    const outsideClick = (e: MouseEvent) => {
+      if (soundPop && !soundPop.contains(e.target as Node) && !anchorEl.contains(e.target as Node)) {
+        closeSoundPop();
+        document.removeEventListener('pointerdown', outsideClick);
+      }
+    };
+    setTimeout(() => document.addEventListener('pointerdown', outsideClick), 10);
+  };
+
+  metroBtn.addEventListener('contextmenu', (e: MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openSoundPop(metroBtn);
+  });
+
+  // Drag Metronome to DAW Button
+  const metroDragBtn = el('button', 'pill pill--metro-drag');
+  metroDragBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13M7 11l5 5 5-5M4 20h16"/></svg><span>Drag Click</span>`;
+  metroDragBtn.title = 'Drag metronome click audio (.wav) or MIDI to your DAW (Right-click to toggle Audio vs MIDI)';
+  metroDragBtn.draggable = true;
+
+  let dragFormat: 'audio' | 'midi' = 'audio';
+
+  const triggerMetronomeDrag = async (e: DragEvent) => {
+    e.preventDefault();
+    const effectiveBpm = projectBpm || (Player.getMetronomeBpm && Player.getMetronomeBpm()) || 120;
+    const effectiveSig = Player.getMetronomeSignature() || projectSig || '4/4';
+    const soundId = Player.getMetronomeSound ? Player.getMetronomeSound() : 'ableton';
+    const cleanProj = (entry.name || 'Click').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const cleanSig = effectiveSig.replace('/', '-');
+
+    if (dragFormat === 'audio') {
+      const fileName = `${cleanProj}_Metronome_${effectiveBpm}BPM_${cleanSig}.wav`;
+      if (e.dataTransfer) {
+        e.dataTransfer.setData('text/plain', fileName);
+        e.dataTransfer.effectAllowed = 'copy';
+        const canvas = document.createElement('canvas');
+        canvas.width = 1;
+        canvas.height = 1;
+        e.dataTransfer.setDragImage(canvas, 0, 0);
+      }
+      const wavBytes = await generateMetronomeWav(soundId, effectiveBpm, effectiveSig, 4);
+      if (window.api && window.api.dragAudio) {
+        await window.api.dragAudio(fileName, Array.from(wavBytes));
+      }
+    } else {
+      const midiFileName = `${cleanProj}_Metronome_${effectiveBpm}BPM_${cleanSig}.mid`;
+      if (e.dataTransfer) {
+        e.dataTransfer.setData('text/plain', midiFileName);
+        e.dataTransfer.effectAllowed = 'copy';
+        const canvas = document.createElement('canvas');
+        canvas.width = 1;
+        canvas.height = 1;
+        e.dataTransfer.setDragImage(canvas, 0, 0);
+      }
+      const midiBytes = generateMetronomeMidi(effectiveBpm, effectiveSig, 8);
+      if (window.api && window.api.dragMidi) {
+        await window.api.dragMidi(midiFileName, Array.from(midiBytes));
+      }
+    }
+  };
+
+  metroDragBtn.addEventListener('dragstart', triggerMetronomeDrag);
+
+  metroDragBtn.addEventListener('contextmenu', (e: MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragFormat = dragFormat === 'audio' ? 'midi' : 'audio';
+    metroDragBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13M7 11l5 5 5-5M4 20h16"/></svg><span>Drag ${dragFormat.toUpperCase()}</span>`;
+    toast('Drag Metronome', `Format switched to ${dragFormat === 'audio' ? 'Audio (.wav)' : 'MIDI (.mid)'}`);
+  });
+
+  metroDragBtn.addEventListener('click', async (e: MouseEvent) => {
+    e.stopPropagation();
+    const effectiveBpm = projectBpm || (Player.getMetronomeBpm && Player.getMetronomeBpm()) || 120;
+    const effectiveSig = Player.getMetronomeSignature() || projectSig || '4/4';
+    const soundId = Player.getMetronomeSound ? Player.getMetronomeSound() : 'ableton';
+    const cleanProj = (entry.name || 'Click').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const cleanSig = effectiveSig.replace('/', '-');
+
+    if (dragFormat === 'audio') {
+      const fileName = `${cleanProj}_Metronome_${effectiveBpm}BPM_${cleanSig}.wav`;
+      const wavBytes = await generateMetronomeWav(soundId, effectiveBpm, effectiveSig, 4);
+      if (window.api && window.api.dragAudio) {
+        await window.api.dragAudio(fileName, Array.from(wavBytes));
+      } else {
+        const blob = new Blob([wavBytes.buffer as ArrayBuffer], { type: 'audio/wav' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } else {
+      const midiFileName = `${cleanProj}_Metronome_${effectiveBpm}BPM_${cleanSig}.mid`;
+      const midiBytes = generateMetronomeMidi(effectiveBpm, effectiveSig, 8);
+      if (window.api && window.api.saveMidi) {
+        await window.api.saveMidi(midiFileName, Array.from(midiBytes));
+      }
+    }
+  });
 
   const updateMetroUI = () => {
     const isPlaying = Player.isPlaying();
@@ -3577,10 +3813,10 @@ function renderProjectPage() {
     metroBtn.classList.toggle('is-on', isMetroOn);
     if (!isPlaying) {
       metroBtn.classList.add('is-disabled-audio');
-      metroBtn.title = 'Metronome active when audio plays (press ▶ on any render or audio file to sync)';
+      metroBtn.title = 'Metronome active when audio plays (press ▶ on any render or audio file to sync - Right-click to change sound)';
     } else {
       metroBtn.classList.remove('is-disabled-audio');
-      metroBtn.title = 'Toggle audio-synced metronome click';
+      metroBtn.title = 'Toggle audio-synced metronome click (Right-click to change sound)';
     }
 
     metroSigWrap.innerHTML = '';
@@ -3625,8 +3861,9 @@ function renderProjectPage() {
     updateMetroUI();
   });
 
-  metroGroup.append(metroBtn, metroSigWrap);
+  metroGroup.append(metroBtn, metroSigWrap, metroDragBtn);
   actions.append(metroGroup);
+  updateMetroUI();
   updateMetroUI();
 
   /* Scale Modulation / Change Detector Button */
@@ -3647,15 +3884,36 @@ function renderProjectPage() {
       let channelData: Float32Array | null = null;
       let sampleRate = 44100;
 
-      // 1. Check if audio is already decoded in player for this project
+      // 1. Check if audio is already decoded or playing in player for this project
       const currentLoaded = Player.getCurrent();
       const decodedBuf = Player.getDecoded();
 
-      if (decodedBuf && currentLoaded && (currentLoaded.project === entry.name || currentLoaded.path.includes(entry.name) || currentLoaded.path.startsWith(entry.path))) {
+      const isCurrentForThisProject = currentLoaded && (
+        currentLoaded.project === entry.name ||
+        (typeof currentLoaded.project === 'object' && (
+          currentLoaded.project?.name === entry.name ||
+          currentLoaded.project?.path === entry.path ||
+          currentLoaded.project?.sessionPath === entry.sessionPath
+        )) ||
+        currentLoaded.path.includes(entry.name) ||
+        (entry.path && currentLoaded.path.startsWith(entry.path)) ||
+        (entry.folder && currentLoaded.path.startsWith(entry.folder)) ||
+        (entry.isGroup && Array.isArray(entry.versions) && entry.versions.some((v: any) => currentLoaded.path.includes(v.name) || currentLoaded.path.startsWith(v.path)))
+      );
+
+      if (decodedBuf && isCurrentForThisProject) {
         channelData = decodedBuf.getChannelData(0);
         sampleRate = decodedBuf.sampleRate;
-      } else {
-        // 2. Otherwise find the main render/audio file in this project
+      } else if (currentLoaded && isCurrentForThisProject && currentLoaded.path) {
+        const buf = await Player.decode({ path: currentLoaded.path, name: currentLoaded.name });
+        if (buf) {
+          channelData = buf.getChannelData(0);
+          sampleRate = buf.sampleRate;
+        }
+      }
+
+      // 2. Otherwise find the main render/audio file in this project
+      if (!channelData) {
         const renderRes = await window.api.findRenders(
           entry.sessionPath,
           entry.root,
@@ -3663,14 +3921,41 @@ function renderProjectPage() {
           siblingsOf(entry)
         );
 
-        let audioFileToAnalyze = renderRes.renders && renderRes.renders.length > 0
-          ? renderRes.renders[0].path
-          : null;
+        let audioFileToAnalyze = renderRes?.renders?.[0]?.primary?.path || renderRes?.renders?.[0]?.files?.[0]?.path || null;
+
+        // If grouped project and no render found in primary session, check sibling versions
+        if (!audioFileToAnalyze && entry.isGroup && Array.isArray(entry.versions)) {
+          for (const ver of entry.versions) {
+            if (ver.sessionPath === entry.sessionPath) continue;
+            try {
+              const verRes = await window.api.findRenders(
+                ver.sessionPath,
+                ver.root || entry.root,
+                stemsFolderFor(ver),
+                siblingsOf(ver)
+              );
+              const verFile = verRes?.renders?.[0]?.primary?.path || verRes?.renders?.[0]?.files?.[0]?.path;
+              if (verFile) {
+                audioFileToAnalyze = verFile;
+                break;
+              }
+            } catch {}
+          }
+        }
 
         if (!audioFileToAnalyze && entry.sessionPath) {
           const siblings = siblingsOf(entry);
           const firstAudio = siblings.find((s: string) => /\.(wav|mp3|flac|aif|aiff)$/i.test(s));
           if (firstAudio) audioFileToAnalyze = firstAudio;
+        }
+
+        if (!audioFileToAnalyze && entry.folder) {
+          try {
+            const allAudio = await window.api.listAllAudio(entry.folder);
+            if (allAudio && allAudio.length > 0) {
+              audioFileToAnalyze = allAudio[0].path || allAudio[0];
+            }
+          } catch {}
         }
 
         if (!audioFileToAnalyze) {
@@ -4221,11 +4506,8 @@ function buildRenderRow(entry, render) {
     pill.draggable = true;
 
     pill.addEventListener('dragstart', async (e: DragEvent) => {
+      e.preventDefault();
       e.stopPropagation();
-      if (e.dataTransfer) {
-        e.dataTransfer.setData('text/plain', fmtFile.path);
-        e.dataTransfer.effectAllowed = 'copy';
-      }
       if (window.api && window.api.dragFiles) {
         await window.api.dragFiles([fmtFile.path]);
       }
@@ -4515,11 +4797,8 @@ function buildStemRow(entry, file) {
     pill.title = `Hold & Drag ${extClean} directly · Click to audition (${formatBytes(file.size)})`;
     pill.draggable = true;
     pill.addEventListener('dragstart', async (e: DragEvent) => {
+      e.preventDefault();
       e.stopPropagation();
-      if (e.dataTransfer) {
-        e.dataTransfer.setData('text/plain', file.path);
-        e.dataTransfer.effectAllowed = 'copy';
-      }
       if (window.api && window.api.dragFiles) {
         await window.api.dragFiles([file.path]);
       }
@@ -7586,11 +7865,8 @@ function renderAllAudioList(list: HTMLElement, entry: any, files: any[]) {
         pill.title = `Hold & Drag ${extClean} directly · Click to audition (${formatBytes(file.size)})`;
         pill.draggable = true;
         pill.addEventListener('dragstart', async (e: DragEvent) => {
+          e.preventDefault();
           e.stopPropagation();
-          if (e.dataTransfer) {
-            e.dataTransfer.setData('text/plain', file.path);
-            e.dataTransfer.effectAllowed = 'copy';
-          }
           if (window.api && window.api.dragFiles) {
             await window.api.dragFiles([file.path]);
           }
@@ -8732,6 +9008,120 @@ if (settingScaleTraditionSelectEl) {
   });
 }
 
+/* ---- Metronome Settings & DAW Drag Box --------------------------- */
+const settingMetronomeSoundSelectEl = $('settingMetronomeSoundSelect') as HTMLSelectElement | null;
+if (settingMetronomeSoundSelectEl) {
+  if (Player.getMetronomeSound) {
+    settingMetronomeSoundSelectEl.value = Player.getMetronomeSound();
+  }
+  settingMetronomeSoundSelectEl.addEventListener('change', () => {
+    const val = settingMetronomeSoundSelectEl.value;
+    if (Player.setMetronomeSound) {
+      Player.setMetronomeSound(val);
+    }
+    const def = getMetronomeSoundset(val);
+    toast('Metronome Sound', `Default soundset set to ${def.name}`);
+  });
+}
+
+const auditionMetroSoundBtn = $('auditionMetroSoundBtn');
+if (auditionMetroSoundBtn) {
+  auditionMetroSoundBtn.addEventListener('click', async () => {
+    const soundId = settingMetronomeSoundSelectEl ? settingMetronomeSoundSelectEl.value : (Player.getMetronomeSound ? Player.getMetronomeSound() : 'ableton');
+    const ac = new (window.AudioContext || (window as any).webkitAudioContext)();
+    await loadSoundsetBuffers(soundId, ac);
+    playMetronomePulse(ac, soundId, true, false, 0.9);
+    setTimeout(() => playMetronomePulse(ac, soundId, false, false, 0.75), 180);
+    setTimeout(() => playMetronomePulse(ac, soundId, false, false, 0.75), 360);
+    setTimeout(() => playMetronomePulse(ac, soundId, false, false, 0.75), 540);
+  });
+}
+
+const dragMetroAudioBtn = $('dragMetroAudioBtn');
+if (dragMetroAudioBtn) {
+  dragMetroAudioBtn.addEventListener('dragstart', async (e: DragEvent) => {
+    e.preventDefault();
+    const bpm = parseInt(($('metroSettingBpm') as HTMLInputElement)?.value, 10) || 120;
+    const sig = ($('metroSettingSig') as HTMLSelectElement)?.value || '4/4';
+    const bars = parseInt(($('metroSettingBars') as HTMLSelectElement)?.value, 10) || 4;
+    const soundId = settingMetronomeSoundSelectEl?.value || (Player.getMetronomeSound ? Player.getMetronomeSound() : 'ableton');
+    const cleanSig = sig.replace('/', '-');
+    const fileName = `Metronome_${soundId}_${bpm}BPM_${cleanSig}_${bars}Bars.wav`;
+
+    if (e.dataTransfer) {
+      e.dataTransfer.setData('text/plain', fileName);
+      e.dataTransfer.effectAllowed = 'copy';
+      const canvas = document.createElement('canvas');
+      canvas.width = 1;
+      canvas.height = 1;
+      e.dataTransfer.setDragImage(canvas, 0, 0);
+    }
+    const wavBytes = await generateMetronomeWav(soundId, bpm, sig, bars);
+    if (window.api && window.api.dragAudio) {
+      await window.api.dragAudio(fileName, Array.from(wavBytes));
+    }
+  });
+
+  dragMetroAudioBtn.addEventListener('click', async () => {
+    const bpm = parseInt(($('metroSettingBpm') as HTMLInputElement)?.value, 10) || 120;
+    const sig = ($('metroSettingSig') as HTMLSelectElement)?.value || '4/4';
+    const bars = parseInt(($('metroSettingBars') as HTMLSelectElement)?.value, 10) || 4;
+    const soundId = settingMetronomeSoundSelectEl?.value || (Player.getMetronomeSound ? Player.getMetronomeSound() : 'ableton');
+    const cleanSig = sig.replace('/', '-');
+    const fileName = `Metronome_${soundId}_${bpm}BPM_${cleanSig}_${bars}Bars.wav`;
+
+    const wavBytes = await generateMetronomeWav(soundId, bpm, sig, bars);
+    if (window.api && window.api.dragAudio) {
+      await window.api.dragAudio(fileName, Array.from(wavBytes));
+    } else {
+      const blob = new Blob([wavBytes.buffer as ArrayBuffer], { type: 'audio/wav' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  });
+}
+
+const dragMetroMidiBtn = $('dragMetroMidiBtn');
+if (dragMetroMidiBtn) {
+  dragMetroMidiBtn.addEventListener('dragstart', async (e: DragEvent) => {
+    e.preventDefault();
+    const bpm = parseInt(($('metroSettingBpm') as HTMLInputElement)?.value, 10) || 120;
+    const sig = ($('metroSettingSig') as HTMLSelectElement)?.value || '4/4';
+    const bars = parseInt(($('metroSettingBars') as HTMLSelectElement)?.value, 10) || 4;
+    const cleanSig = sig.replace('/', '-');
+    const fileName = `Metronome_${bpm}BPM_${cleanSig}_${bars}Bars.mid`;
+
+    if (e.dataTransfer) {
+      e.dataTransfer.setData('text/plain', fileName);
+      e.dataTransfer.effectAllowed = 'copy';
+      const canvas = document.createElement('canvas');
+      canvas.width = 1;
+      canvas.height = 1;
+      e.dataTransfer.setDragImage(canvas, 0, 0);
+    }
+    const midiBytes = generateMetronomeMidi(bpm, sig, bars);
+    if (window.api && window.api.dragMidi) {
+      await window.api.dragMidi(fileName, Array.from(midiBytes));
+    }
+  });
+
+  dragMetroMidiBtn.addEventListener('click', async () => {
+    const bpm = parseInt(($('metroSettingBpm') as HTMLInputElement)?.value, 10) || 120;
+    const sig = ($('metroSettingSig') as HTMLSelectElement)?.value || '4/4';
+    const bars = parseInt(($('metroSettingBars') as HTMLSelectElement)?.value, 10) || 4;
+    const cleanSig = sig.replace('/', '-');
+    const fileName = `Metronome_${bpm}BPM_${cleanSig}_${bars}Bars.mid`;
+    const midiBytes = generateMetronomeMidi(bpm, sig, bars);
+    if (window.api && window.api.saveMidi) {
+      await window.api.saveMidi(fileName, Array.from(midiBytes));
+    }
+  });
+}
+
 const animScaleRangeSlider = $('animScaleRangeSlider') as HTMLInputElement | null;
 if (animScaleRangeSlider) {
   animScaleRangeSlider.addEventListener('input', async () => {
@@ -9366,14 +9756,7 @@ function renderScaleMidiTool() {
     const sMidiFileName = `${scaleToolState.file.name.replace(/\.[^/.]+$/, '')}_Scale_${selectedTonic}_${selectedScale}.mid`;
     scaleMidiBtn.draggable = true;
     scaleMidiBtn.addEventListener('dragstart', async (e: DragEvent) => {
-      if (e.dataTransfer) {
-        e.dataTransfer.setData('text/plain', sMidiFileName);
-        e.dataTransfer.effectAllowed = 'copy';
-        const canvas = document.createElement('canvas');
-        canvas.width = 1;
-        canvas.height = 1;
-        e.dataTransfer.setDragImage(canvas, 0, 0);
-      }
+      e.preventDefault();
       if (window.api.dragMidi) await window.api.dragMidi(sMidiFileName, Array.from(sMidiBytes));
     });
     scaleMidiBtn.addEventListener('click', async () => {
@@ -9528,14 +9911,7 @@ function renderScaleMidiTool() {
 
       progMidiBtn.draggable = true;
       progMidiBtn.addEventListener('dragstart', async (e: DragEvent) => {
-        if (e.dataTransfer) {
-          e.dataTransfer.setData('text/plain', pMidiFileName);
-          e.dataTransfer.effectAllowed = 'copy';
-          const canvas = document.createElement('canvas');
-          canvas.width = 1;
-          canvas.height = 1;
-          e.dataTransfer.setDragImage(canvas, 0, 0);
-        }
+        e.preventDefault();
         if (window.api.dragMidi) await window.api.dragMidi(pMidiFileName, Array.from(pMidiBytes));
       });
 
@@ -9561,8 +9937,10 @@ function renderScaleMidiTool() {
     }
 
     // World Musical Traditions & Scales Explorer in Scale Tool
+    const baseScale = res.scale || 'major';
+    const baseDegrees = DSP.SCALES[baseScale.toLowerCase()] || res.degrees || DSP.SCALES.major;
     const toolChroma = new Float64Array(12);
-    degrees.forEach((d) => {
+    baseDegrees.forEach((d) => {
       toolChroma[(tonicPc + d) % 12] = 1.0;
     });
 
@@ -9667,14 +10045,7 @@ function renderScaleMidiTool() {
 
         midiBtn.draggable = true;
         midiBtn.addEventListener('dragstart', async (e: DragEvent) => {
-          if (e.dataTransfer) {
-            e.dataTransfer.setData('text/plain', rMidiFileName);
-            e.dataTransfer.effectAllowed = 'copy';
-            const canvas = document.createElement('canvas');
-            canvas.width = 1;
-            canvas.height = 1;
-            e.dataTransfer.setDragImage(canvas, 0, 0);
-          }
+          e.preventDefault();
           if (window.api.dragMidi) await window.api.dragMidi(rMidiFileName, Array.from(rMidiBytes));
         });
         midiBtn.addEventListener('click', async (e) => {
@@ -10062,14 +10433,7 @@ function renderRandomizerTool(entry: any = null) {
   keyCard.draggable = true;
   keyCard.title = `Drag "${state.tonic} ${state.scaleName}" MIDI directly into your DAW, or click to audition`;
   keyCard.addEventListener('dragstart', async (e: DragEvent) => {
-    if (e.dataTransfer) {
-      e.dataTransfer.setData('text/plain', keyScaleMidiFileName);
-      e.dataTransfer.effectAllowed = 'copy';
-      const canvas = document.createElement('canvas');
-      canvas.width = 1;
-      canvas.height = 1;
-      e.dataTransfer.setDragImage(canvas, 0, 0);
-    }
+    e.preventDefault();
     if (window.api.dragMidi) await window.api.dragMidi(keyScaleMidiFileName, Array.from(keyScaleMidiBytes));
   });
 
@@ -10131,15 +10495,8 @@ function renderRandomizerTool(entry: any = null) {
   dragScaleMidiBtn.title = 'Drag onto any DAW track (or click to export) Scale MIDI';
   dragScaleMidiBtn.draggable = true;
   dragScaleMidiBtn.addEventListener('dragstart', async (e: DragEvent) => {
+    e.preventDefault();
     e.stopPropagation();
-    if (e.dataTransfer) {
-      e.dataTransfer.setData('text/plain', keyScaleMidiFileName);
-      e.dataTransfer.effectAllowed = 'copy';
-      const canvas = document.createElement('canvas');
-      canvas.width = 1;
-      canvas.height = 1;
-      e.dataTransfer.setDragImage(canvas, 0, 0);
-    }
     if (window.api.dragMidi) await window.api.dragMidi(keyScaleMidiFileName, Array.from(keyScaleMidiBytes));
   });
   dragScaleMidiBtn.addEventListener('click', async (e) => {
@@ -10195,14 +10552,7 @@ function renderRandomizerTool(entry: any = null) {
   meterCard.draggable = true;
   meterCard.title = `Drag 8-Bar ${state.timeSignature} (${state.bpm} BPM) Metronome Guide MIDI into your DAW, or click to toggle pulse`;
   meterCard.addEventListener('dragstart', async (e: DragEvent) => {
-    if (e.dataTransfer) {
-      e.dataTransfer.setData('text/plain', rhythmGuideFileName);
-      e.dataTransfer.effectAllowed = 'copy';
-      const canvas = document.createElement('canvas');
-      canvas.width = 1;
-      canvas.height = 1;
-      e.dataTransfer.setDragImage(canvas, 0, 0);
-    }
+    e.preventDefault();
     if (window.api.dragMidi) await window.api.dragMidi(rhythmGuideFileName, Array.from(rhythmGuideBytes));
   });
 
@@ -10228,15 +10578,8 @@ function renderRandomizerTool(entry: any = null) {
   dragRhythmBtn.title = `Drag 8-Bar ${state.timeSignature} Click/Metronome MIDI to DAW track to align samples visually`;
   dragRhythmBtn.draggable = true;
   dragRhythmBtn.addEventListener('dragstart', async (e: DragEvent) => {
+    e.preventDefault();
     e.stopPropagation();
-    if (e.dataTransfer) {
-      e.dataTransfer.setData('text/plain', rhythmGuideFileName);
-      e.dataTransfer.effectAllowed = 'copy';
-      const canvas = document.createElement('canvas');
-      canvas.width = 1;
-      canvas.height = 1;
-      e.dataTransfer.setDragImage(canvas, 0, 0);
-    }
     if (window.api.dragMidi) await window.api.dragMidi(rhythmGuideFileName, Array.from(rhythmGuideBytes));
   });
   dragRhythmBtn.addEventListener('click', async (e) => {
@@ -10351,14 +10694,7 @@ function renderRandomizerTool(entry: any = null) {
   const sMidiFileName = `Random_${state.tonic}_${state.scaleName.replace(/[^a-zA-Z0-9_-]/g, '_')}_${state.bpm}BPM.mid`;
   scaleMidiBtn.draggable = true;
   scaleMidiBtn.addEventListener('dragstart', async (e: DragEvent) => {
-    if (e.dataTransfer) {
-      e.dataTransfer.setData('text/plain', sMidiFileName);
-      e.dataTransfer.effectAllowed = 'copy';
-      const canvas = document.createElement('canvas');
-      canvas.width = 1;
-      canvas.height = 1;
-      e.dataTransfer.setDragImage(canvas, 0, 0);
-    }
+    e.preventDefault();
     if (window.api.dragMidi) await window.api.dragMidi(sMidiFileName, Array.from(sMidiBytes));
   });
   scaleMidiBtn.addEventListener('click', async () => {
@@ -10508,14 +10844,7 @@ function renderRandomizerTool(entry: any = null) {
 
       midiBtn.draggable = true;
       midiBtn.addEventListener('dragstart', async (e: DragEvent) => {
-        if (e.dataTransfer) {
-          e.dataTransfer.setData('text/plain', rMidiFileName);
-          e.dataTransfer.effectAllowed = 'copy';
-          const canvas = document.createElement('canvas');
-          canvas.width = 1;
-          canvas.height = 1;
-          e.dataTransfer.setDragImage(canvas, 0, 0);
-        }
+        e.preventDefault();
         if (window.api.dragMidi) await window.api.dragMidi(rMidiFileName, Array.from(rMidiBytes));
       });
       midiBtn.addEventListener('click', async (e) => {
@@ -10775,6 +11104,10 @@ function renderStandaloneTools() {
 }
 
 function openSheet() {
+  const metroSoundSelect = $('settingMetronomeSoundSelect') as HTMLSelectElement | null;
+  if (metroSoundSelect && Player.getMetronomeSound) {
+    metroSoundSelect.value = Player.getMetronomeSound();
+  }
   sheetEl.hidden = false;
   scrimEl.hidden = false;
 }
@@ -11370,14 +11703,7 @@ function updateSelectionBar() {
   dragBtn.title = 'Click or drag this button directly into your DAW or a folder!';
   dragBtn.draggable = true;
   dragBtn.addEventListener('dragstart', async (e: DragEvent) => {
-    if (e.dataTransfer) {
-      e.dataTransfer.setData('text/plain', filePaths.join('\n'));
-      e.dataTransfer.effectAllowed = 'copy';
-      const canvas = document.createElement('canvas');
-      canvas.width = 1;
-      canvas.height = 1;
-      e.dataTransfer.setDragImage(canvas, 0, 0);
-    }
+    e.preventDefault();
     if (window.api.dragFiles) {
       await window.api.dragFiles(filePaths);
     }
@@ -11448,18 +11774,10 @@ function attachDraggableAndSelectable(rowElement: HTMLElement, item: SelectedIte
 
   // Native File Dragging
   rowElement.addEventListener('dragstart', async (e: DragEvent) => {
+    e.preventDefault();
     let pathsToDrag = [item.path];
     if (SelectionState.active && SelectionState.isSelected(item.id)) {
       pathsToDrag = SelectionState.getFilePaths();
-    }
-
-    if (e.dataTransfer) {
-      e.dataTransfer.setData('text/plain', pathsToDrag.join('\n'));
-      e.dataTransfer.effectAllowed = 'copy';
-      const canvas = document.createElement('canvas');
-      canvas.width = 1;
-      canvas.height = 1;
-      e.dataTransfer.setDragImage(canvas, 0, 0);
     }
 
     if (window.api.dragFiles) {

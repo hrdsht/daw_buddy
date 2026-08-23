@@ -9,6 +9,36 @@ is auto-generated on each GitHub Release; this file is the curated summary.
 
 - _Nothing yet._
 
+## [0.5.0-beta.2] — 2026-08-23
+
+### Added
+- **10 Authentic DAW Metronome Soundsets**:
+  - Bundled authentic high-resolution downbeat/upbeat soundsets for Ableton Live (Default Clave), FL Studio, Logic Pro, Steinberg Cubase, Pro Tools (Default & Marimba), NI Maschine, Akai MPC, Reason Studios, Cakewalk Sonar, and Electronic Synth.
+  - Right-click metronome sound picker popup with instant 1-2-3-4 audition playback.
+- **Drag-and-Drop Metronome (Audio & MIDI) into DAWs**:
+  - Added companion drag button in project window allowing instant dragging of rendered Audio (.wav) and MIDI (.mid) click tracks into any DAW.
+  - Added dedicated Metronome & Click Tracks section in Settings with custom BPM, Time Signature (`4/4`, `3/4`, `6/8`, `7/8`, `5/4`, `12/8`), and Bar Length (`2`, `4`, `8`, `16`) dragcards.
+- **Collapsible Missing Samples Callout**:
+  - Interactive animated header with rotating chevron (`^` $\rightarrow$ `v`) to expand/collapse sample audit lists and preserve vertical workspace.
+
+### Fixed
+- **Drag & Drop Process Crash (Windows OLE / COM Collision)**:
+  - Added `e.preventDefault()` across all 22 native file and MIDI `dragstart` event listeners, resolving hard Windows OLE `DRAGDROP_E_ALREADYREGISTERED` collisions when starting drag-and-drop operations into DAWs and File Explorer.
+  - Hardened `getDragIcon` in the main process with a non-empty 16×16 base64 PNG icon fallback, preventing Windows Shell null-pointer dereferences.
+  - Added synchronous file existence validation before triggering `webContents.startDrag()`.
+- **Scale Change Detector Audio File Resolution**:
+  - Fixed "No audio file or bounce found" false-positive by properly resolving primary group renders, in-flight decoded buffers, and session sibling bounces.
+- **Native Process Termination Capture in Crash Logger**:
+  - Registered Electron's `app.on('render-process-gone')` and `app.on('child-process-gone')` to capture native Chromium/GPU process crashes in `latest-crash.json` and present the crash recovery banner upon restart.
+- **Fretboard SVG Anti-Flicker & Layout Stability**:
+  - Replaced dynamic CSS `filter: drop-shadow(...)` and `transform: translateY()` on SVG `<line>` / `<g>` with hardware-accelerated expanding SVG ripple circles (`<circle class="fret-note-ripple">`) and acoustic stroke shimmer (`@keyframes stringShimmer`).
+  - Eliminated full-document `getBoundingClientRect()` reflow bottlenecks on note clicks.
+
+### Performance
+- **WebAudio Idle CPU Reduction & Auto-Suspension**:
+  - Implemented automatic idle suspension for `AudioContext` instances in both the main app and player transport after 2.5 seconds of silence, releasing OS WASAPI audio processing thread polling and reducing idle CPU from ~5.8% to <0.5%.
+  - Added DOM connection and visibility guards to 3D Globe animation loops, pausing rendering while minimized or hidden.
+
 ## [0.5.0-beta] — 2026-08-23
 
 ### Added

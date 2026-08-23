@@ -145,14 +145,7 @@ export function updateSelectionBar() {
   dragBtn.title = 'Click or drag this button directly into your DAW or a folder!';
   dragBtn.draggable = true;
   dragBtn.addEventListener('dragstart', async (e: DragEvent) => {
-    if (e.dataTransfer) {
-      e.dataTransfer.setData('text/plain', filePaths.join('\n'));
-      e.dataTransfer.effectAllowed = 'copy';
-      const canvas = document.createElement('canvas');
-      canvas.width = 1;
-      canvas.height = 1;
-      e.dataTransfer.setDragImage(canvas, 0, 0);
-    }
+    e.preventDefault();
     if (window.api && window.api.dragFiles) {
       await window.api.dragFiles(filePaths);
     }
@@ -228,18 +221,10 @@ export function attachDraggableAndSelectable(rowElement: HTMLElement, item: Sele
 
   // Native File Dragging
   rowElement.addEventListener('dragstart', async (e: DragEvent) => {
+    e.preventDefault();
     let pathsToDrag = [item.path];
     if (SelectionState.active && SelectionState.isSelected(item.id)) {
       pathsToDrag = SelectionState.getFilePaths();
-    }
-
-    if (e.dataTransfer) {
-      e.dataTransfer.setData('text/plain', pathsToDrag.join('\n'));
-      e.dataTransfer.effectAllowed = 'copy';
-      const canvas = document.createElement('canvas');
-      canvas.width = 1;
-      canvas.height = 1;
-      e.dataTransfer.setDragImage(canvas, 0, 0);
     }
 
     if (window.api && window.api.dragFiles) {
