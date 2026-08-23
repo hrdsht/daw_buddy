@@ -293,7 +293,6 @@
       letter-spacing: -0.02em;
       color: #ffffff;
       margin-bottom: 6px;
-      text-shadow: 0 4px 18px rgba(0,0,0,0.8);
     }
     .slide-desc {
       font-size: 18px;
@@ -846,6 +845,9 @@
             clonedCanvas.style.left = '0';
             clonedCanvas.style.width = '1080px';
             clonedCanvas.style.height = '1350px';
+            clonedDoc.querySelectorAll('*').forEach(el => {
+              el.style.textShadow = 'none';
+            });
           }
         }
       });
@@ -889,6 +891,9 @@
               clonedCanvas.style.left = '0';
               clonedCanvas.style.width = '1080px';
               clonedCanvas.style.height = '1350px';
+              clonedDoc.querySelectorAll('*').forEach(el => {
+                el.style.textShadow = 'none';
+              });
             }
           }
         });
