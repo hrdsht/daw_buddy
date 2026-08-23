@@ -270,29 +270,31 @@
       font-size: 15px;
       font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: 0.1em;
+      letter-spacing: 0.05em;
       color: #ff3366;
       margin-bottom: 6px;
       display: flex;
       align-items: center;
       gap: 8px;
     }
-    .slide-category::before {
-      content: '';
+    .cat-dot {
+      display: inline-block;
       width: 8px;
       height: 8px;
       border-radius: 50%;
       background: #ff3366;
-      box-shadow: 0 0 10px #ff3366;
+      flex-shrink: 0;
     }
     .slide-title {
       font-family: 'Space Grotesk', sans-serif;
       font-size: 38px;
       font-weight: 700;
       line-height: 1.15;
-      letter-spacing: -0.02em;
+      letter-spacing: normal;
       color: #ffffff;
       margin-bottom: 6px;
+      text-shadow: none;
+      background: transparent;
     }
     .slide-desc {
       font-size: 18px;
@@ -700,7 +702,7 @@
           </div>
 
           <div class="slide-hero">
-            <div class="slide-category">${data.cat}</div>
+            <div class="slide-category"><span class="cat-dot"></span><span>${data.cat}</span></div>
             <h1 class="slide-title">${data.title}</h1>
             <p class="slide-desc">${data.desc}</p>
           </div>
