@@ -1,7 +1,7 @@
 import { applyAppearance } from './dom';
 
 const savedStyle = localStorage.getItem('dawBuddyThemeStyle') || 'minimalist';
-const savedAccent = localStorage.getItem('dawBuddyAccent') || (savedStyle === 'minimalist' ? 'cyan' : 'green');
+const savedAccent = localStorage.getItem('dawBuddyAccent') || (savedStyle === 'minimalist' ? 'cyan' : (savedStyle === 'bloo' ? 'bloo' : 'green'));
 const savedSurface = localStorage.getItem('dawBuddySurface') || 'dark';
 applyAppearance(savedAccent, savedSurface, savedStyle);
 

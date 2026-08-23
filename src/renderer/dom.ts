@@ -148,11 +148,12 @@ export function toast(title: string, body: string, isAlert = false) {
   }, 5000);
 }
 
-export const THEME_STYLES = ['minimalist', 'ableton', 'classic'];
+export const THEME_STYLES = ['minimalist', 'ableton', 'classic', 'bloo'];
 export const MINIMALIST_ACCENTS = ['cyan', 'mint', 'lime', 'pink', 'mono'];
 export const ABLETON_ACCENTS = ['mint', 'magenta', 'yellow', 'sky', 'lavender', 'amber', 'coral'];
 export const CLASSIC_ACCENTS = ['green', 'blue', 'yellow', 'amber', 'red'];
-export const ACCENTS = Array.from(new Set([...MINIMALIST_ACCENTS, ...ABLETON_ACCENTS, ...CLASSIC_ACCENTS]));
+export const BLOO_ACCENTS = ['bloo', 'cyan', 'sky', 'indigo', 'amber'];
+export const ACCENTS = Array.from(new Set([...MINIMALIST_ACCENTS, ...ABLETON_ACCENTS, ...CLASSIC_ACCENTS, ...BLOO_ACCENTS]));
 export const SURFACES = ['dark', 'light', 'amoled'];
 
 export const ABLETON_CLIP_PALETTE = [
@@ -237,10 +238,11 @@ export function currentSurface(): 'dark' | 'light' | 'amoled' {
   return 'dark';
 }
 
-export function currentThemeStyle(): 'minimalist' | 'ableton' | 'classic' {
+export function currentThemeStyle(): 'minimalist' | 'ableton' | 'classic' | 'bloo' {
   const style = document.body.dataset.themeStyle;
   if (style === 'ableton') return 'ableton';
   if (style === 'classic') return 'classic';
+  if (style === 'bloo') return 'bloo';
   return 'minimalist';
 }
 
@@ -251,10 +253,10 @@ export function applyAppearance(accent?: string, surface?: string, themeStyle?: 
   if (!THEME_STYLES.includes(themeStyle)) themeStyle = 'minimalist';
 
   if (!accent) {
-    accent = localStorage.getItem('dawBuddyAccent') || (themeStyle === 'minimalist' ? 'cyan' : (themeStyle === 'ableton' ? 'mint' : 'green'));
+    accent = localStorage.getItem('dawBuddyAccent') || (themeStyle === 'minimalist' ? 'cyan' : (themeStyle === 'ableton' ? 'mint' : (themeStyle === 'bloo' ? 'bloo' : 'green')));
   }
   if (!ACCENTS.includes(accent)) {
-    accent = themeStyle === 'minimalist' ? 'cyan' : (themeStyle === 'ableton' ? 'mint' : 'green');
+    accent = themeStyle === 'minimalist' ? 'cyan' : (themeStyle === 'ableton' ? 'mint' : (themeStyle === 'bloo' ? 'bloo' : 'green'));
   }
 
   if (!surface) {
@@ -269,6 +271,7 @@ export function applyAppearance(accent?: string, surface?: string, themeStyle?: 
   document.body.classList.toggle('theme-classic', themeStyle === 'classic');
   document.body.classList.toggle('theme-minimalist', themeStyle === 'minimalist');
   document.body.classList.toggle('theme-ableton', themeStyle === 'ableton');
+  document.body.classList.toggle('theme-bloo', themeStyle === 'bloo');
 
   const themeToggleEl = $('themeToggle');
   const light = surface === 'light';
@@ -292,9 +295,11 @@ export function applyAppearance(accent?: string, surface?: string, themeStyle?: 
   const minSwatches = $('minimalistSwatches');
   const abletonSwatches = $('abletonSwatches');
   const classicSwatches = $('classicSwatches');
+  const blooSwatches = $('blooSwatches');
   if (minSwatches) minSwatches.hidden = themeStyle !== 'minimalist';
   if (abletonSwatches) abletonSwatches.hidden = themeStyle !== 'ableton';
   if (classicSwatches) classicSwatches.hidden = themeStyle !== 'classic';
+  if (blooSwatches) blooSwatches.hidden = themeStyle !== 'bloo';
 
   // Highlight active swatches and surface buttons
   document.querySelectorAll('.swatch').forEach((node: any) =>

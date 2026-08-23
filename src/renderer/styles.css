@@ -271,6 +271,118 @@ body[data-theme-style="classic"].theme-amoled {
   --line: rgba(220, 242, 214, 0.1);
 }
 
+/* ==================================================================
+   BLOO LO-FI WIREFRAME THEME (Blueprint Lo-Fi UI Kit)
+   ================================================================== */
+body[data-theme-style="bloo"] {
+  --bg: #00253a;
+  --surface: #071e2e;
+  --raised: #0f2c42;
+  --hover: #183a54;
+  --active: #224968;
+  --text: #f0f8ff;
+  --muted: #8eb2c7;
+  --dim: #55798e;
+
+  --amber: #0093ed;
+  --amber-ink: #ffffff;
+  --sage: #7dd8ff;
+  --alert: #ff4766;
+
+  --line: rgba(0, 147, 237, 0.28);
+  --line-crisp: rgba(125, 216, 255, 0.45);
+
+  --r: 10px;
+  --r-lg: 14px;
+  --accent-glow: 0 0 16px rgba(0, 147, 237, 0.45);
+}
+
+/* Bloo Accents (Dark) */
+body[data-theme-style="bloo"][data-accent="bloo"] { --amber: #0093ed; --amber-ink: #ffffff; --sage: #7dd8ff; --accent-glow: 0 0 16px rgba(0, 147, 237, 0.45); }
+body[data-theme-style="bloo"][data-accent="cyan"] { --amber: #7dd8ff; --amber-ink: #00253a; --sage: #0093ed; --accent-glow: 0 0 16px rgba(125, 216, 255, 0.45); }
+body[data-theme-style="bloo"][data-accent="sky"] { --amber: #38bdf8; --amber-ink: #001f33; --sage: #0284c7; --accent-glow: 0 0 16px rgba(56, 189, 248, 0.45); }
+body[data-theme-style="bloo"][data-accent="indigo"] { --amber: #6366f1; --amber-ink: #ffffff; --sage: #818cf8; --accent-glow: 0 0 16px rgba(99, 102, 241, 0.45); }
+body[data-theme-style="bloo"][data-accent="amber"] { --amber: #ff9f1c; --amber-ink: #1a0a00; --sage: #ffbf69; --accent-glow: 0 0 16px rgba(255, 159, 28, 0.45); }
+
+/* Bloo Light Mode (Clean Blueprint Paper) */
+body[data-theme-style="bloo"].theme-light {
+  --bg: #f0f7fc;
+  --surface: #ffffff;
+  --raised: #e1eff8;
+  --hover: #d3e7f4;
+  --active: #c2ddef;
+  --text: #00253a;
+  --muted: #3d637b;
+  --dim: #6d8e9f;
+  --amber: #0077c8;
+  --amber-ink: #ffffff;
+  --sage: #0284c7;
+  --alert: #d92648;
+  --line: rgba(0, 119, 200, 0.22);
+  --line-crisp: #b3d7ee;
+  --r: 10px;
+  --r-lg: 14px;
+  --accent-glow: 0 2px 10px rgba(0, 119, 200, 0.25);
+}
+
+body[data-theme-style="bloo"].theme-light[data-accent="bloo"] { --amber: #0077c8; --amber-ink: #ffffff; --sage: #0284c7; }
+body[data-theme-style="bloo"].theme-light[data-accent="cyan"] { --amber: #0093ed; --amber-ink: #ffffff; --sage: #0369a1; }
+body[data-theme-style="bloo"].theme-light[data-accent="sky"] { --amber: #0284c7; --amber-ink: #ffffff; --sage: #0369a1; }
+body[data-theme-style="bloo"].theme-light[data-accent="indigo"] { --amber: #4f46e5; --amber-ink: #ffffff; --sage: #4338ca; }
+body[data-theme-style="bloo"].theme-light[data-accent="amber"] { --amber: #d97706; --amber-ink: #ffffff; --sage: #b45309; }
+
+/* Bloo AMOLED (Pitch Black with Blueprint Neon Borders) */
+body[data-theme-style="bloo"].theme-amoled {
+  --bg: #000000;
+  --surface: #030a0f;
+  --raised: #08151f;
+  --hover: #0e2130;
+  --active: #152e42;
+  --line: rgba(0, 147, 237, 0.38);
+  --line-crisp: rgba(125, 216, 255, 0.5);
+  --r: 10px;
+  --r-lg: 14px;
+}
+
+/* Bloo Wireframe Geometric Outlines */
+body[data-theme-style="bloo"] .sidebar {
+  border-right: 1.5px solid var(--line);
+  background: var(--surface);
+}
+
+body[data-theme-style="bloo"] .player {
+  border-top: 1.5px solid var(--line);
+  background: var(--surface);
+}
+
+body[data-theme-style="bloo"] .filerow {
+  border-radius: var(--r);
+  border: 1px solid transparent;
+  transition: all 120ms ease;
+}
+
+body[data-theme-style="bloo"] .filerow:hover {
+  border-color: var(--line);
+  background: var(--hover);
+}
+
+body[data-theme-style="bloo"] .hero {
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-lg);
+  background: linear-gradient(145deg, var(--surface), var(--raised));
+}
+
+body[data-theme-style="bloo"] .pill {
+  border-radius: 9999px;
+  border: 1px solid var(--line);
+}
+
+body[data-theme-style="bloo"] .pill--solid {
+  border-color: transparent;
+  background: var(--amber);
+  color: var(--amber-ink);
+}
+
 /* ---- Appearance controls (Settings) ----------------------------------- */
 .appearance-row {
   display: flex;
@@ -322,6 +434,12 @@ body[data-theme-style="classic"].theme-amoled {
 .swatch--yellow { background: #e8d15a; }
 .swatch--amber { background: #f0a63a; }
 .swatch--red { background: #ef6f63; }
+/* Bloo Wireframe swatches */
+.swatch--bloo-blue { background: #0093ed; }
+.swatch--bloo-cyan { background: #7dd8ff; }
+.swatch--bloo-sky { background: #38bdf8; }
+.swatch--bloo-indigo { background: #6366f1; }
+.swatch--bloo-amber { background: #ff9f1c; }
 
 .surface-btn.is-on {
   background: var(--amber);

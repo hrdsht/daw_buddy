@@ -79,6 +79,7 @@ import {
   MINIMALIST_ACCENTS,
   ABLETON_ACCENTS,
   CLASSIC_ACCENTS,
+  BLOO_ACCENTS,
   ACCENTS,
   SURFACES,
   ABLETON_CLIP_PALETTE,
@@ -89,7 +90,7 @@ import { startFeatureWalkthrough, startProjectWalkthrough, startToolWalkthrough 
 
 // Initialize saved appearance (Default: Minimalist, Dark, Cyan)
 const savedStyle = localStorage.getItem('dawBuddyThemeStyle') || 'minimalist';
-const savedAccent = localStorage.getItem('dawBuddyAccent') || (savedStyle === 'minimalist' ? 'cyan' : 'green');
+const savedAccent = localStorage.getItem('dawBuddyAccent') || (savedStyle === 'minimalist' ? 'cyan' : (savedStyle === 'bloo' ? 'bloo' : 'green'));
 let savedSurface = localStorage.getItem('dawBuddySurface');
 if (!savedSurface) {
   savedSurface = localStorage.getItem('dawBuddyTheme') === 'light' ? 'light' : 'dark';
@@ -115,6 +116,7 @@ themeToggleEl.addEventListener('contextmenu', (event: MouseEvent) => {
 });
 
 const ACCENT_COLOR_MAP: Record<string, string> = {
+  bloo: '#0093ed',
   cyan: '#00e5ff',
   mint: '#00d699',
   lime: '#9be62a',
@@ -123,6 +125,7 @@ const ACCENT_COLOR_MAP: Record<string, string> = {
   magenta: '#ff2e93',
   yellow: '#ffea00',
   sky: '#29a9ff',
+  indigo: '#6366f1',
   lavender: '#9d7aff',
   amber: '#ff851b',
   coral: '#f78c80',
@@ -199,7 +202,8 @@ function toggleThemeComicBubble() {
   const styles = [
     { key: 'minimalist', label: '🎛️ Minimal' },
     { key: 'ableton', label: '🎹 Ableton Like' },
-    { key: 'classic', label: '🎚️ Classic' }
+    { key: 'classic', label: '🎚️ Classic' },
+    { key: 'bloo', label: '📐 Bloo Wireframe' }
   ];
 
   styles.forEach((st) => {
@@ -207,7 +211,7 @@ function toggleThemeComicBubble() {
     btn.type = 'button';
     btn.addEventListener('click', (e: MouseEvent) => {
       e.stopPropagation();
-      const defAccent = st.key === 'minimalist' ? 'cyan' : (st.key === 'ableton' ? 'mint' : 'green');
+      const defAccent = st.key === 'minimalist' ? 'cyan' : (st.key === 'ableton' ? 'mint' : (st.key === 'bloo' ? 'bloo' : 'green'));
       applyAppearance(defAccent, currentSurface(), st.key);
       updateBubbleStates();
     });
@@ -226,8 +230,8 @@ function toggleThemeComicBubble() {
   function renderSwatches() {
     swatchesContainer.innerHTML = '';
     const curStyle = currentThemeStyle();
-    const curAccent = document.body.dataset.accent || (curStyle === 'minimalist' ? 'cyan' : 'green');
-    const list = curStyle === 'minimalist' ? MINIMALIST_ACCENTS : (curStyle === 'ableton' ? ABLETON_ACCENTS : CLASSIC_ACCENTS);
+    const curAccent = document.body.dataset.accent || (curStyle === 'minimalist' ? 'cyan' : (curStyle === 'bloo' ? 'bloo' : 'green'));
+    const list = curStyle === 'minimalist' ? MINIMALIST_ACCENTS : (curStyle === 'ableton' ? ABLETON_ACCENTS : (curStyle === 'bloo' ? BLOO_ACCENTS : CLASSIC_ACCENTS));
 
     list.forEach((acc) => {
       const sw = el('button', `comic-bubble-swatch${curAccent === acc ? ' is-active' : ''}`);
@@ -289,20 +293,20 @@ function toggleThemeComicBubble() {
   }, 10);
 }
 
-// Settings — Theme style switch (Minimalist vs Ableton Like vs Studio Classic)
+// Settings — Theme style switch (Minimalist vs Ableton Like vs Studio Classic vs Bloo Wireframe)
 if ($('themeStyles')) {
   $('themeStyles').addEventListener('click', (event: MouseEvent) => {
     const btn = (event.target as HTMLElement).closest('.style-btn') as HTMLElement;
     if (btn) {
       const style = btn.getAttribute('data-style') || 'minimalist';
-      const defaultAccent = style === 'minimalist' ? 'cyan' : (style === 'ableton' ? 'mint' : 'green');
+      const defaultAccent = style === 'minimalist' ? 'cyan' : (style === 'ableton' ? 'mint' : (style === 'bloo' ? 'bloo' : 'green'));
       applyAppearance(defaultAccent, currentSurface(), style);
     }
   });
 }
 
 // Settings — Accent swatches across all theme styles
-['minimalistSwatches', 'abletonSwatches', 'classicSwatches'].forEach((id) => {
+['minimalistSwatches', 'abletonSwatches', 'classicSwatches', 'blooSwatches'].forEach((id) => {
   const el = $(id);
   if (el) {
     el.addEventListener('click', (event: MouseEvent) => {
