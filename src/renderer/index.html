@@ -114,8 +114,15 @@
             <span class="chip-gear-hint" id="verbGearHint" title="Reverb settings (Right-click or click ⚙)">⚙</span>
             <span class="chip-fx-hint" id="verbSlowedHint" title="Slowed + Reverb Studio (Popup Generator)">✨</span>
           </button>
-          <button id="clipBtn" class="chip-btn" title="Soft clipper">
-            Clip
+          <button
+            id="clipBtn"
+            class="chip-btn has-gear-hint"
+            title="Click to toggle clipper · Right-click or ⚙ for Settings"
+            aria-haspopup="dialog"
+            aria-expanded="false"
+          >
+            <span>Clip</span>
+            <span class="chip-gear-hint" id="clipGearHint" title="Clipper settings (Right-click or click ⚙)">⚙</span>
           </button>
           <input
             id="volume"
@@ -130,6 +137,58 @@
         </div>
       </footer>
     </div>
+
+    <section
+      id="clipPanel"
+      class="reverb-panel clip-panel"
+      role="dialog"
+      aria-label="Clipper settings"
+      hidden
+    >
+      <header class="reverb-panel__head">
+        <div>
+          <strong>Audition clipper</strong>
+          <span>DSP transfer curve &amp; drive</span>
+        </div>
+        <button id="clipReset" class="reverb-reset" type="button">Reset</button>
+      </header>
+
+      <!-- Live Interactive Waveform & Transfer Curve Visualizer -->
+      <div class="clip-visualizer-wrap">
+        <canvas id="clipCurveCanvas" width="260" height="110"></canvas>
+        <div class="clip-visualizer-labels">
+          <span>-1.0</span>
+          <span>Transfer Curve</span>
+          <span>+1.0</span>
+        </div>
+      </div>
+
+      <!-- Curve Selection -->
+      <div class="clip-curve-selector">
+        <span class="clip-control-label">Curve Type</span>
+        <div id="clipCurveOptions" class="clip-curve-pills">
+          <button type="button" class="clip-pill" data-curve="hard" title="Hard Brickwall Limiting">Hard</button>
+          <button type="button" class="clip-pill is-active" data-curve="tanh" title="Soft Tanh Analog Saturation">Tanh</button>
+          <button type="button" class="clip-pill" data-curve="cubic" title="Cubic Tape Knee">Cubic</button>
+          <button type="button" class="clip-pill" data-curve="atan" title="Germanium Diode Atan">Atan</button>
+          <button type="button" class="clip-pill" data-curve="quintic" title="Modern Quintic EDM Clip">Quintic</button>
+        </div>
+      </div>
+
+      <label class="reverb-control">
+        <span>Gain Strength (Drive)</span>
+        <output id="clipGainValue" for="clipGain">+4.0 dB</output>
+        <input id="clipGain" type="range" min="0" max="18" step="0.5" value="4.0" />
+      </label>
+
+      <label class="reverb-control">
+        <span>Ceiling (Output Trim)</span>
+        <output id="clipCeilingValue" for="clipCeiling">0.0 dB</output>
+        <input id="clipCeiling" type="range" min="-6" max="0" step="0.2" value="0.0" />
+      </label>
+
+      <p class="reverb-panel__hint" style="margin-top: 8px;">Click Clip to bypass · Right-click it to reopen</p>
+    </section>
 
     <section
       id="reverbPanel"

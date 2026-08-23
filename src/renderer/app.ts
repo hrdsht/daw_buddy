@@ -12273,9 +12273,12 @@ verbBtn.addEventListener('click', () => {
   Player.setReverb(on ? 0.35 : 0);
 });
 
-clipBtn.addEventListener('click', () => {
+clipBtn.addEventListener('click', (event: MouseEvent) => {
+  const target = event.target as HTMLElement;
+  // If user clicked the gear hint, player.ts handles opening the panel
+  if (target && target.closest('.chip-gear-hint')) return;
   const on = clipBtn.classList.toggle('is-on');
-  Player.setSoftClip(on ? 0.4 : 0);
+  Player.setClipperEnabled(on);
 });
 
 Player.onChange(({ path: playing }) => {

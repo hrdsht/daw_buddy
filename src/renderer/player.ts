@@ -7,6 +7,13 @@ import {
   normalizeReverbSettings
 } from './reverb';
 import {
+  DEFAULT_CLIPPER_SETTINGS,
+  makeClipCurve,
+  normalizeClipperSettings,
+  ClipperSettings,
+  ClipperCurve
+} from './clipper';
+import {
   METRONOME_SOUNDSETS,
   playMetronomePulse,
   loadSoundsetBuffers,
@@ -57,6 +64,17 @@ const Player = (() => {
     mix: document.getElementById('reverbMixValue') as HTMLOutputElement
   };
 
+  const clipBtn = document.getElementById('clipBtn');
+  const clipPanel = document.getElementById('clipPanel');
+  const clipReset = document.getElementById('clipReset');
+  const clipCurveCanvas = document.getElementById('clipCurveCanvas') as HTMLCanvasElement;
+  const clipCurveCtx = clipCurveCanvas ? clipCurveCanvas.getContext('2d') : null;
+  const clipGainInput = document.getElementById('clipGain') as HTMLInputElement;
+  const clipGainValue = document.getElementById('clipGainValue') as HTMLOutputElement;
+  const clipCeilingInput = document.getElementById('clipCeiling') as HTMLInputElement;
+  const clipCeilingValue = document.getElementById('clipCeilingValue') as HTMLOutputElement;
+  const clipCurveOptions = document.getElementById('clipCurveOptions');
+
   let audioContext = null;
   let audioContextIdleTimer = null;
 
@@ -98,6 +116,9 @@ const Player = (() => {
   let repeatEnabled = false;
   let impulseTimer = null;
   let reverbSettings = loadReverbSettings();
+
+  let clipperEnabled = false;
+  let clipperSettings = loadClipperSettings();
 
   let metronomeEnabled = false;
   let metronomeSig = '4/4';
@@ -285,20 +306,231 @@ const Player = (() => {
     return impulse;
   }
 
-  /**
-   * Soft clipping via tanh. Hard clipping squares off the peaks and sounds
-   * like damage; tanh bends them, which is what a saturator does.
-   */
-  function makeClipCurve(amount) {
-    const samples = 8192;
-    const curve = new Float32Array(samples);
-    const drive = 1 + amount * 12;
-
-    for (let i = 0; i < samples; i += 1) {
-      const x = (i * 2) / samples - 1;
-      curve[i] = Math.tanh(x * drive) / Math.tanh(drive);
+  function loadClipperSettings(): ClipperSettings {
+    try {
+      const saved = JSON.parse(localStorage.getItem('daw-buddy.clipper-settings.v1') || '{}');
+      return normalizeClipperSettings(saved);
+    } catch {
+      return { ...DEFAULT_CLIPPER_SETTINGS };
     }
-    return curve;
+  }
+
+  function saveClipperSettings() {
+    try {
+      localStorage.setItem(
+        'daw-buddy.clipper-settings.v1',
+        JSON.stringify(clipperSettings)
+      );
+    } catch {
+      // Auditioning still works if storage is unavailable.
+    }
+  }
+
+  function applyClipperSettings() {
+    if (!chainBuilt) return;
+    if (clipperEnabled) {
+      shaper.curve = makeClipCurve(
+        clipperSettings.curve,
+        clipperSettings.gainDb,
+        clipperSettings.ceilingDb
+      );
+    } else {
+      shaper.curve = null;
+    }
+    drawClipVisualizer();
+  }
+
+  function syncClipperControls() {
+    if (clipGainInput) clipGainInput.value = String(clipperSettings.gainDb);
+    if (clipGainValue) clipGainValue.textContent = (clipperSettings.gainDb > 0 ? '+' : '') + clipperSettings.gainDb.toFixed(1) + ' dB';
+    if (clipCeilingInput) clipCeilingInput.value = String(clipperSettings.ceilingDb);
+    if (clipCeilingValue) clipCeilingValue.textContent = clipperSettings.ceilingDb.toFixed(1) + ' dB';
+
+    if (clipCurveOptions) {
+      clipCurveOptions.querySelectorAll('.clip-pill').forEach((btn: any) => {
+        btn.classList.toggle('is-active', btn.getAttribute('data-curve') === clipperSettings.curve);
+      });
+    }
+    drawClipVisualizer();
+  }
+
+  function drawClipVisualizer(peakIn: number = 0) {
+    if (!clipCurveCanvas || !clipCurveCtx) return;
+    const w = clipCurveCanvas.width;
+    const h = clipCurveCanvas.height;
+    const c = clipCurveCtx;
+
+    c.clearRect(0, 0, w, h);
+
+    // Background
+    c.fillStyle = '#080a0f';
+    c.fillRect(0, 0, w, h);
+
+    const midX = w / 2;
+    const midY = h / 2;
+
+    // Grid lines
+    c.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    c.lineWidth = 1;
+    c.setLineDash([2, 2]);
+
+    // Center axes
+    c.beginPath();
+    c.moveTo(0, midY);
+    c.lineTo(w, midY);
+    c.moveTo(midX, 0);
+    c.lineTo(midX, h);
+    c.stroke();
+
+    // Linear reference line (y = x)
+    c.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    c.beginPath();
+    c.moveTo(8, h - 8);
+    c.lineTo(w - 8, 8);
+    c.stroke();
+    c.setLineDash([]);
+
+    // Ceiling threshold lines
+    const C = Math.pow(10, clipperSettings.ceilingDb / 20);
+    const ceilYTop = midY - C * (midY - 8);
+    const ceilYBot = midY + C * (midY - 8);
+
+    c.strokeStyle = 'rgba(255, 75, 75, 0.35)';
+    c.lineWidth = 1;
+    c.setLineDash([3, 3]);
+    c.beginPath();
+    c.moveTo(0, ceilYTop);
+    c.lineTo(w, ceilYTop);
+    c.moveTo(0, ceilYBot);
+    c.lineTo(w, ceilYBot);
+    c.stroke();
+    c.setLineDash([]);
+
+    // Transfer curve
+    const steps = 120;
+    const curvePoints: [number, number][] = [];
+    const G = Math.pow(10, clipperSettings.gainDb / 20);
+
+    for (let i = 0; i <= steps; i++) {
+      const xNorm = (i / steps) * 2 - 1; // -1 to +1
+      const u = xNorm * G;
+      let yNorm = 0;
+
+      switch (clipperSettings.curve) {
+        case 'hard':
+          yNorm = Math.max(-1, Math.min(1, u));
+          break;
+        case 'tanh':
+          yNorm = G > 0.001 ? Math.tanh(u) / Math.tanh(G) : Math.tanh(u);
+          break;
+        case 'cubic': {
+          const uc = Math.max(-1.5, Math.min(1.5, u));
+          yNorm = Math.max(-1, Math.min(1, uc - (uc * uc * uc) / 6.75));
+          break;
+        }
+        case 'atan':
+          yNorm = G > 0.001 ? Math.atan(u) / Math.atan(G) : Math.atan(u);
+          break;
+        case 'quintic': {
+          const norm = G / Math.pow(1 + Math.pow(G, 4), 0.25);
+          const out = u / Math.pow(1 + Math.pow(Math.abs(u), 4), 0.25);
+          yNorm = norm > 0.0001 ? out / norm : out;
+          yNorm = Math.max(-1, Math.min(1, yNorm));
+          break;
+        }
+        default:
+          yNorm = Math.max(-1, Math.min(1, u));
+          break;
+      }
+
+      yNorm *= C;
+      const px = midX + xNorm * (midX - 8);
+      const py = midY - yNorm * (midY - 8);
+      curvePoints.push([px, py]);
+    }
+
+    // Glow fill under positive curve
+    const amberHex = getAmberColor();
+    const grad = c.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, 'rgba(0, 240, 255, 0.25)');
+    grad.addColorStop(1, 'rgba(0, 240, 255, 0.0)');
+
+    c.beginPath();
+    c.moveTo(curvePoints[0][0], curvePoints[0][1]);
+    for (let i = 1; i < curvePoints.length; i++) {
+      c.lineTo(curvePoints[i][0], curvePoints[i][1]);
+    }
+    c.lineTo(w - 8, midY);
+    c.lineTo(8, midY);
+    c.closePath();
+    c.fillStyle = grad;
+    c.fill();
+
+    // Curve stroke
+    c.strokeStyle = amberHex || '#00f0ff';
+    c.lineWidth = 2.5;
+    c.beginPath();
+    c.moveTo(curvePoints[0][0], curvePoints[0][1]);
+    for (let i = 1; i < curvePoints.length; i++) {
+      c.lineTo(curvePoints[i][0], curvePoints[i][1]);
+    }
+    c.stroke();
+
+    // Live peak dot & drop line
+    if (peakIn > 0.01) {
+      const pClamped = Math.min(1, peakIn);
+      const px = midX + pClamped * (midX - 8);
+      const u = pClamped * G;
+      let yPeak = 0;
+      if (clipperSettings.curve === 'hard') yPeak = Math.max(-1, Math.min(1, u));
+      else if (clipperSettings.curve === 'tanh') yPeak = G > 0.001 ? Math.tanh(u) / Math.tanh(G) : Math.tanh(u);
+      else if (clipperSettings.curve === 'cubic') yPeak = Math.max(-1, Math.min(1, Math.max(-1.5, Math.min(1.5, u)) - Math.pow(Math.max(-1.5, Math.min(1.5, u)), 3) / 6.75));
+      else if (clipperSettings.curve === 'atan') yPeak = G > 0.001 ? Math.atan(u) / Math.atan(G) : Math.atan(u);
+      else yPeak = Math.max(-1, Math.min(1, (u / Math.pow(1 + Math.pow(Math.abs(u), 4), 0.25)) / (G / Math.pow(1 + Math.pow(G, 4), 0.25))));
+      yPeak *= C;
+      const py = midY - yPeak * (midY - 8);
+
+      c.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+      c.lineWidth = 1;
+      c.setLineDash([2, 2]);
+      c.beginPath();
+      c.moveTo(px, midY);
+      c.lineTo(px, py);
+      c.stroke();
+      c.setLineDash([]);
+
+      c.fillStyle = '#ffffff';
+      c.shadowColor = amberHex || '#00f0ff';
+      c.shadowBlur = 8;
+      c.beginPath();
+      c.arc(px, py, 4, 0, Math.PI * 2);
+      c.fill();
+      c.shadowBlur = 0;
+    }
+  }
+
+  function closeClipperPanel() {
+    if (clipPanel) clipPanel.hidden = true;
+    if (clipBtn) clipBtn.setAttribute('aria-expanded', 'false');
+  }
+
+  function openClipperPanel() {
+    syncClipperControls();
+    if (clipPanel) {
+      clipPanel.hidden = false;
+      if (clipBtn) {
+        clipBtn.setAttribute('aria-expanded', 'true');
+        const buttonRect = clipBtn.getBoundingClientRect();
+        const panelRect = clipPanel.getBoundingClientRect();
+        const left = Math.min(
+          window.innerWidth - panelRect.width - 12,
+          Math.max(12, buttonRect.right - panelRect.width)
+        );
+        clipPanel.style.left = `${left}px`;
+        clipPanel.style.bottom = `${window.innerHeight - buttonRect.top + 8}px`;
+      }
+      drawClipVisualizer();
+    }
   }
 
   function loadReverbSettings() {
@@ -556,9 +788,107 @@ const Player = (() => {
 
   syncReverbControls();
 
-  function setSoftClip(amount) {
+  if (clipBtn) {
+    clipBtn.addEventListener('click', (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (target && target.closest('.chip-gear-hint')) {
+        event.stopPropagation();
+        event.preventDefault();
+        if (clipPanel && clipPanel.hidden) openClipperPanel();
+        else closeClipperPanel();
+      }
+    }, { capture: true });
+
+    clipBtn.addEventListener('contextmenu', (event) => {
+      event.preventDefault();
+      if (clipPanel && clipPanel.hidden) openClipperPanel();
+      else closeClipperPanel();
+    });
+  }
+
+  if (clipGainInput) {
+    clipGainInput.addEventListener('input', () => {
+      clipperSettings.gainDb = Number(clipGainInput.value);
+      if (clipGainValue) clipGainValue.textContent = (clipperSettings.gainDb > 0 ? '+' : '') + clipperSettings.gainDb.toFixed(1) + ' dB';
+      saveClipperSettings();
+      if (clipperEnabled) applyClipperSettings();
+      else drawClipVisualizer();
+    });
+  }
+
+  if (clipCeilingInput) {
+    clipCeilingInput.addEventListener('input', () => {
+      clipperSettings.ceilingDb = Number(clipCeilingInput.value);
+      if (clipCeilingValue) clipCeilingValue.textContent = clipperSettings.ceilingDb.toFixed(1) + ' dB';
+      saveClipperSettings();
+      if (clipperEnabled) applyClipperSettings();
+      else drawClipVisualizer();
+    });
+  }
+
+  if (clipCurveOptions) {
+    clipCurveOptions.addEventListener('click', (e: MouseEvent) => {
+      const btn = (e.target as HTMLElement).closest('.clip-pill') as HTMLElement;
+      if (btn) {
+        const curve = btn.getAttribute('data-curve') as ClipperCurve;
+        if (curve) {
+          clipperSettings.curve = curve;
+          clipCurveOptions.querySelectorAll('.clip-pill').forEach((p: any) => {
+            p.classList.toggle('is-active', p === btn);
+          });
+          saveClipperSettings();
+          if (clipperEnabled) applyClipperSettings();
+          else drawClipVisualizer();
+        }
+      }
+    });
+  }
+
+  if (clipReset) {
+    clipReset.addEventListener('click', () => {
+      clipperSettings = { ...DEFAULT_CLIPPER_SETTINGS };
+      syncClipperControls();
+      saveClipperSettings();
+      if (clipperEnabled) applyClipperSettings();
+      else drawClipVisualizer();
+    });
+  }
+
+  document.addEventListener('pointerdown', (event) => {
+    if (
+      clipPanel &&
+      !clipPanel.hidden &&
+      !clipPanel.contains(event.target as Node) &&
+      clipBtn &&
+      !clipBtn.contains(event.target as Node)
+    ) {
+      closeClipperPanel();
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && clipPanel && !clipPanel.hidden) {
+      closeClipperPanel();
+      if (clipBtn) clipBtn.focus();
+    }
+  });
+
+  syncClipperControls();
+
+  function setSoftClip(enabledOrAmount: boolean | number = true) {
     buildChain();
-    shaper.curve = amount > 0 ? makeClipCurve(amount) : null;
+    if (typeof enabledOrAmount === 'boolean') {
+      clipperEnabled = enabledOrAmount;
+    } else if (typeof enabledOrAmount === 'number') {
+      clipperEnabled = enabledOrAmount > 0;
+      if (enabledOrAmount > 0) {
+        clipperSettings.gainDb = Math.max(0, Math.min(18, enabledOrAmount * 12));
+        syncClipperControls();
+      }
+    }
+    applyClipperSettings();
+    if (clipBtn) clipBtn.classList.toggle('is-on', clipperEnabled);
+    broadcastState();
   }
 
   /**
@@ -1419,6 +1749,10 @@ const Player = (() => {
     isRepeat: () => repeatEnabled,
     setReverb,
     setSoftClip,
+    setClipperEnabled: (on: boolean) => setSoftClip(on),
+    isClipperEnabled: () => clipperEnabled,
+    openClipperPanel,
+    closeClipperPanel,
     startDrone,
     stopDrone,
     broadcastState,
