@@ -75,6 +75,45 @@ const Player = (() => {
   const clipCeilingValue = document.getElementById('clipCeilingValue') as HTMLOutputElement;
   const clipCurveOptions = document.getElementById('clipCurveOptions');
 
+  let cachedAmberHex = '';
+  let cachedAmberTime = 0;
+  let cachedAmberIsLight = false;
+  function getAmberColor(): string {
+    const isLight =
+      typeof document !== 'undefined' &&
+      (document.body.classList.contains('theme-light') ||
+        document.body.getAttribute('data-surface') === 'light' ||
+        document.body.dataset.surface === 'light' ||
+        (typeof localStorage !== 'undefined' && localStorage.getItem('dawBuddySurface') === 'light'));
+    const now = Date.now();
+    if (!cachedAmberHex || now - cachedAmberTime > 500 || cachedAmberIsLight !== isLight) {
+      let val =
+        (typeof window !== 'undefined'
+          ? getComputedStyle(document.body).getPropertyValue('--amber').trim()
+          : '') || (isLight ? '#008fa0' : '#00f0ff');
+
+      // Guard: in light mode, if --amber is white/near-white (e.g. from mono theme or unapplied override), use high-contrast dark charcoal
+      if (isLight) {
+        const lower = val.toLowerCase();
+        if (
+          lower === '#ffffff' ||
+          lower === '#fff' ||
+          lower === 'white' ||
+          lower === 'rgb(255, 255, 255)' ||
+          lower === 'rgba(255, 255, 255, 1)' ||
+          lower === '#f5f9f6' ||
+          lower === '#f4f7f5'
+        ) {
+          val = '#121714';
+        }
+      }
+      cachedAmberHex = val;
+      cachedAmberTime = now;
+      cachedAmberIsLight = isLight;
+    }
+    return cachedAmberHex;
+  }
+
   let audioContext = null;
   let audioContextIdleTimer = null;
 
@@ -354,6 +393,7 @@ const Player = (() => {
     drawClipVisualizer();
   }
 
+
   function drawClipVisualizer(peakIn: number = 0) {
     if (!clipCurveCanvas || !clipCurveCtx) return;
     const w = clipCurveCanvas.width;
@@ -510,7 +550,10 @@ const Player = (() => {
   }
 
   function closeClipperPanel() {
-    if (clipPanel) clipPanel.hidden = true;
+    if (clipPanel) {
+      clipPanel.hidden = true;
+      clipPanel.setAttribute('hidden', '');
+    }
     if (clipBtn) clipBtn.setAttribute('aria-expanded', 'false');
   }
 
@@ -518,6 +561,7 @@ const Player = (() => {
     syncClipperControls();
     if (clipPanel) {
       clipPanel.hidden = false;
+      clipPanel.removeAttribute('hidden');
       if (clipBtn) {
         clipBtn.setAttribute('aria-expanded', 'true');
         const buttonRect = clipBtn.getBoundingClientRect();
@@ -1423,44 +1467,6 @@ const Player = (() => {
     }
   }
 
-  let cachedAmberHex = '';
-  let cachedAmberTime = 0;
-  let cachedAmberIsLight = false;
-  function getAmberColor(): string {
-    const isLight =
-      typeof document !== 'undefined' &&
-      (document.body.classList.contains('theme-light') ||
-        document.body.getAttribute('data-surface') === 'light' ||
-        document.body.dataset.surface === 'light' ||
-        (typeof localStorage !== 'undefined' && localStorage.getItem('dawBuddySurface') === 'light'));
-    const now = Date.now();
-    if (!cachedAmberHex || now - cachedAmberTime > 500 || cachedAmberIsLight !== isLight) {
-      let val =
-        (typeof window !== 'undefined'
-          ? getComputedStyle(document.body).getPropertyValue('--amber').trim()
-          : '') || (isLight ? '#008fa0' : '#00f0ff');
-
-      // Guard: in light mode, if --amber is white/near-white (e.g. from mono theme or unapplied override), use high-contrast dark charcoal
-      if (isLight) {
-        const lower = val.toLowerCase();
-        if (
-          lower === '#ffffff' ||
-          lower === '#fff' ||
-          lower === 'white' ||
-          lower === 'rgb(255, 255, 255)' ||
-          lower === 'rgba(255, 255, 255, 1)' ||
-          lower === '#f5f9f6' ||
-          lower === '#f4f7f5'
-        ) {
-          val = '#121714';
-        }
-      }
-      cachedAmberHex = val;
-      cachedAmberTime = now;
-      cachedAmberIsLight = isLight;
-    }
-    return cachedAmberHex;
-  }
 
   /* -------------------------- transport -------------------------- */
 

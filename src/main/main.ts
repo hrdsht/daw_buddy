@@ -84,6 +84,9 @@ const dataDir = () => app.getPath('userData');
 const undoLog = () => path.join(dataDir(), 'rename-undo.json');
 
 function createSplashWindow() {
+  if (process.env.NODE_ENV === 'test') {
+    return { splash: null, finished: Promise.resolve() };
+  }
   let resolveFinished;
   let settled = false;
   const finished = new Promise((resolve) => {
@@ -200,7 +203,7 @@ function createWindow({ splash = null, revealWhen = Promise.resolve() }: any = {
  * errors, which are the second instance failing to take the lock on the
  * shader cache — harmless in themselves, but a symptom of the real problem.
  */
-const gotTheLock = app.requestSingleInstanceLock();
+const gotTheLock = process.env.NODE_ENV === 'test' || app.requestSingleInstanceLock();
 if (!gotTheLock) {
   console.log('[app] DAW Buddy is already running — focusing that window.');
   app.quit();
@@ -273,11 +276,14 @@ app.whenReady().then(async () => {
   userDictionary = new UserDictionary(path.join(dataDir(), 'userdict.json'));
   await userDictionary.load();
 
+  const isTest = process.env.NODE_ENV === 'test';
   createWindow({
     splash: splashState.splash,
-    revealWhen: indexed
-      ? splashState.finished
-      : Promise.all([splashState.finished, initialScanPromise])
+    revealWhen: isTest
+      ? Promise.resolve()
+      : (indexed
+          ? splashState.finished
+          : Promise.all([splashState.finished, initialScanPromise]))
   });
   createTray();
   restartWatcher();
