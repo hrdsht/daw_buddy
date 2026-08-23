@@ -777,7 +777,7 @@ function applySettings() {
     $('enableCrashLogs').checked = settings.enableCrashLogs !== false;
   }
   if ($('appVersionDisplay')) {
-    $('appVersionDisplay').textContent = `v${(settings && settings.appVersion) || '0.4.9-beta2'}`;
+    $('appVersionDisplay').textContent = `v${(settings && settings.appVersion) || '0.5.3-beta.2'}`;
   }
   $('dataDir').textContent = settings.dataDir;
   document.body.classList.toggle('is-mac', Boolean(settings.isMac));
