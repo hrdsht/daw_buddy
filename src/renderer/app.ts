@@ -3535,6 +3535,15 @@ function renderProjectPage() {
   });
   stickyActions.append(stickyColorBtn);
 
+  const stickyGenreBtn = el('button', 'pill pill--sm', rec.genre ? `🏷 ${rec.genre} ⚙` : '+ Genre');
+  if (rec.genre) stickyGenreBtn.classList.add('is-on');
+  stickyGenreBtn.title = rec.genre ? `Genre: ${rec.genre} — Click to change` : 'Specify project genre';
+  stickyGenreBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openGenrePicker(entry, rec);
+  });
+  stickyActions.append(stickyGenreBtn);
+
   stickyRight.append(stickyActions);
   stickyBar.append(stickyRight);
 
@@ -3604,7 +3613,7 @@ function renderProjectPage() {
     facts.append(kChip);
   }
   if (rec.genre) {
-    const genreChip = fact('Genre', rec.genre);
+    const genreChip = fact('Genre', `${rec.genre} ⚙`);
     genreChip.style.cursor = 'pointer';
     genreChip.title = 'Click to change project genre';
     genreChip.addEventListener('click', () => openGenrePicker(entry, rec));
@@ -3646,9 +3655,9 @@ function renderProjectPage() {
   });
   actions.append(fav);
 
-  const genreBtn = el('button', 'pill', rec.genre ? `🏷 ${rec.genre}` : '+ Genre');
+  const genreBtn = el('button', 'pill', rec.genre ? `🏷 ${rec.genre} ⚙` : '+ Genre');
   if (rec.genre) genreBtn.classList.add('is-on');
-  genreBtn.title = 'Specify / change project genre';
+  genreBtn.title = rec.genre ? `Genre: ${rec.genre} — Click to change` : 'Specify project genre';
   genreBtn.addEventListener('click', () => openGenrePicker(entry, rec));
   actions.append(genreBtn);
 
@@ -8704,6 +8713,23 @@ function openTimeSignaturePicker(entry: any, rec: any) {
   dialog.append(body);
   overlay.append(dialog);
 
+  let isMouseDownOnBackdrop = false;
+  overlay.addEventListener('mousedown', (e: MouseEvent) => {
+    isMouseDownOnBackdrop = e.target === overlay;
+  });
+  overlay.addEventListener('mouseup', (e: MouseEvent) => {
+    if (isMouseDownOnBackdrop && e.target === overlay) {
+      overlay.remove();
+    }
+    isMouseDownOnBackdrop = false;
+  });
+  dialog.addEventListener('mousedown', (e: MouseEvent) => {
+    e.stopPropagation();
+  });
+  dialog.addEventListener('click', (e: MouseEvent) => {
+    e.stopPropagation();
+  });
+
   const onKey = (e: KeyboardEvent) => {
     if (e.key === 'Escape') {
       overlay.remove();
@@ -8781,6 +8807,17 @@ function openGenrePicker(entry: any, rec: any) {
   const body = el('div', 'genre-picker-modal__body');
   dialog.append(body);
 
+  const applyGenre = async (val: string) => {
+    val = val.trim();
+    if (!val) return;
+    rec.genre = val;
+    if (entry) entry.genre = val;
+    await saveRecord(entry.path, { genre: val });
+    overlay.remove();
+    render();
+    toast('Genre Assigned', `${val} assigned to ${entry.name || 'project'}`);
+  };
+
   function renderGenreList() {
     body.innerHTML = '';
     const q = searchQuery.toLowerCase().trim();
@@ -8791,7 +8828,9 @@ function openGenrePicker(entry: any, rec: any) {
     });
 
     if (filtered.length === 0) {
-      body.append(el('div', 'muted', `No predefined genres match "${searchQuery}". You can type any custom genre below.`));
+      const emptyBox = el('div', 'muted', `No predefined genres match "${searchQuery}". Press Enter or use the input below to apply custom genre.`);
+      emptyBox.style.padding = '18px 8px';
+      body.append(emptyBox);
       return;
     }
 
@@ -8803,12 +8842,7 @@ function openGenrePicker(entry: any, rec: any) {
       card.append(el('div', 'genre-card__bpm', `${genre.typicalBpm[0]}–${genre.typicalBpm[1]} BPM · ${genre.category}`));
       card.append(el('div', 'genre-card__desc', genre.description));
 
-      card.addEventListener('click', async () => {
-        await saveRecord(entry.path, { genre: genre.name });
-        overlay.remove();
-        render();
-        toast('Genre Assigned', `${genre.name} assigned to ${entry.name}`);
-      });
+      card.addEventListener('click', () => applyGenre(genre.name));
       grid.append(card);
     });
     body.append(grid);
@@ -8817,6 +8851,28 @@ function openGenrePicker(entry: any, rec: any) {
   searchInput.addEventListener('input', () => {
     searchQuery = searchInput.value;
     renderGenreList();
+  });
+
+  searchInput.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const q = searchInput.value.trim();
+      if (!q) return;
+      const exactMatch = DSP.GENRE_DATABASE.find((g: any) => g.name.toLowerCase() === q.toLowerCase());
+      if (exactMatch) {
+        applyGenre(exactMatch.name);
+      } else {
+        const filtered = DSP.GENRE_DATABASE.filter((g: any) => {
+          const matchCat = activeCategory === 'All' || g.category === activeCategory;
+          return matchCat && (g.name.toLowerCase().includes(q.toLowerCase()) || g.description.toLowerCase().includes(q.toLowerCase()));
+        });
+        if (filtered.length >= 1) {
+          applyGenre(filtered[0].name);
+        } else {
+          applyGenre(q);
+        }
+      }
+    }
   });
 
   renderGenreList();
@@ -8830,26 +8886,27 @@ function openGenrePicker(entry: any, rec: any) {
   if (rec.genre) customInput.value = rec.genre;
   customRow.append(customInput);
 
-  const applyCustomBtn = el('button', 'pill pill--solid', 'Apply');
-  applyCustomBtn.addEventListener('click', async () => {
-    const val = customInput.value.trim();
-    if (val) {
-      await saveRecord(entry.path, { genre: val });
-      overlay.remove();
-      render();
-      toast('Custom Genre Set', `${val} assigned to ${entry.name}`);
+  customInput.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      applyGenre(customInput.value);
     }
   });
+
+  const applyCustomBtn = el('button', 'pill pill--solid', 'Apply');
+  applyCustomBtn.addEventListener('click', () => applyGenre(customInput.value));
   customRow.append(applyCustomBtn);
 
   if (rec.genre) {
     const clearBtn = el('button', 'pill pill--sm', 'Clear');
     clearBtn.title = 'Remove genre tag';
     clearBtn.addEventListener('click', async () => {
+      rec.genre = null;
+      if (entry) entry.genre = null;
       await saveRecord(entry.path, { genre: null });
       overlay.remove();
       render();
-      toast('Genre Cleared', `Genre tag removed from ${entry.name}`);
+      toast('Genre Cleared', `Genre tag removed from ${entry.name || 'project'}`);
     });
     customRow.append(clearBtn);
   }
@@ -8857,8 +8914,22 @@ function openGenrePicker(entry: any, rec: any) {
   dialog.append(customRow);
   overlay.append(dialog);
 
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) overlay.remove();
+  // Prevent drag-selection inside modal from closing when mouseup occurs outside
+  let isMouseDownOnBackdrop = false;
+  overlay.addEventListener('mousedown', (e: MouseEvent) => {
+    isMouseDownOnBackdrop = e.target === overlay;
+  });
+  overlay.addEventListener('mouseup', (e: MouseEvent) => {
+    if (isMouseDownOnBackdrop && e.target === overlay) {
+      overlay.remove();
+    }
+    isMouseDownOnBackdrop = false;
+  });
+  dialog.addEventListener('mousedown', (e: MouseEvent) => {
+    e.stopPropagation();
+  });
+  dialog.addEventListener('click', (e: MouseEvent) => {
+    e.stopPropagation();
   });
 
   const onKey = (e: KeyboardEvent) => {
