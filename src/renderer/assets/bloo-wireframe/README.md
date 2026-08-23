@@ -2,6 +2,10 @@
 
 Extracted from `Bloo.Lo-Fi.Wireframe.Kit.-.v1.0.-.XD.xd` into `src/renderer/assets/bloo-wireframe/`.
 
+**Original Design & Kit Creator**: [Vijay Verma (@realvjy)](https://www.figma.com/@realvjy)  
+**Figma Community Resource**: [Bloo Lo-Fi Wireframe Kit](https://www.figma.com/community/file/960058803048298115/bloo-lo-fi-wireframe-kit)  
+**Website**: [bloouikit.com](https://bloouikit.com)
+
 ---
 
 ## 🎨 Design Tokens & Palette

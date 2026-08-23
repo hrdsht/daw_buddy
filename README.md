@@ -378,6 +378,7 @@ and design decisions.
 - **Vision, Direction & Artist:** [BA55ICK](https://github.com/ba55ick) — Conceived, designed, and envisioned DAW Buddy from firsthand studio production workflows.
 - **Software Engineering & Collaboration:** [Shreyas Bhat](https://github.com/shreyasbhat0) — Enabled that dream by taking time off from his office work and providing deep software engineering insights, desktop architecture, and development time.
 - **Inspiration & Special Thanks:** [KSHMR](https://www.youtube.com/channel/UCFMjkrMT7Gvg84v0av-DIwA) & [XLNT Sound](https://www.youtube.com/@XLNTSOUND) — The idea for DAW Buddy germinated from their insightful podcast discussing in-house producer workflow tools and project cataloging.
+- **UI Design & Theme Assets Credit:** [Vijay Verma (@realvjy)](https://www.figma.com/@realvjy) — Huge thanks for creating the beautiful open-source [Bloo Lo-Fi Wireframe Kit](https://www.figma.com/community/file/960058803048298115/bloo-lo-fi-wireframe-kit) ([bloouikit.com](https://bloouikit.com)), which powers DAW Buddy's **Bloo Wireframe** theme.
 
 ---
 
