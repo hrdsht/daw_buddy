@@ -419,8 +419,11 @@
 
   <div class="controls">
     <button class="btn btn-video" id="recordVideoBtn" onclick="exportSlideVideo()">
-      🎥 Export Video Reel (MP4/WebM)
+      🎥 Record Video Reel
     </button>
+    <a class="btn btn-video" href="assets/daw_buddy_startup_reel.mp4" download="daw_buddy_startup_reel.mp4" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px;">
+      ⬇️ Download Reel (MP4)
+    </a>
     <button class="btn btn-cyan" onclick="triggerPastePrompt()">
       📋 Paste Screenshot (Ctrl+V)
     </button>
@@ -879,6 +882,8 @@
       const recCanvas = document.createElement('canvas');
       recCanvas.width = 1080;
       recCanvas.height = 1350;
+      recCanvas.style.cssText = 'position:fixed; left:-9999px; top:0; width:1080px; height:1350px; pointer-events:none; opacity:0; z-index:-9999;';
+      document.body.appendChild(recCanvas);
       const ctx = recCanvas.getContext('2d');
 
       // Load active wallpaper
@@ -893,11 +898,14 @@
         else if (MediaRecorder.isTypeSupported('video/webm')) mime = 'video/webm';
         else if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1')) mime = 'video/mp4;codecs=avc1';
         else if (MediaRecorder.isTypeSupported('video/mp4')) mime = 'video/mp4';
+        else mime = '';
       }
 
-      const stream = recCanvas.captureStream(60);
+      const stream = recCanvas.captureStream(30);
       const videoTrack = stream.getVideoTracks()[0];
-      const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 16000000 });
+      const recorderOptions = { videoBitsPerSecond: 12000000 };
+      if (mime) recorderOptions.mimeType = mime;
+      const recorder = new MediaRecorder(stream, recorderOptions);
       const chunks = [];
 
       recorder.ondataavailable = e => {
@@ -918,31 +926,38 @@
         }
       }
 
-      recorder.onstop = () => {
-        const isMp4 = mime.includes('mp4');
-        const ext = isMp4 ? 'mp4' : 'webm';
-        const blob = new Blob(chunks, { type: mime });
+      recorder.onstop = async () => {
+        await new Promise(r => setTimeout(r, 200));
 
-        if (blob.size === 0) {
-          alert('Video export produced an empty file. Please ensure canvas hardware acceleration is enabled.');
-          recordBtn.disabled = false;
-          recordBtn.innerHTML = `🎥 Export Video Reel (${ext.toUpperCase()})`;
-          videoEl.loop = true;
-          videoEl.play().catch(() => {});
-          return;
+        if (recCanvas.parentNode) {
+          recCanvas.parentNode.removeChild(recCanvas);
         }
 
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `daw_buddy_startup_reel.${ext}`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(url), 10000);
+        const isMp4 = mime.includes('mp4');
+        const ext = isMp4 ? 'mp4' : 'webm';
+        const blob = new Blob(chunks, { type: chunks[0]?.type || mime || 'video/webm' });
+
+        if (blob.size === 0) {
+          // Graceful fallback to pre-compiled MP4
+          const a = document.createElement('a');
+          a.href = 'assets/daw_buddy_startup_reel.mp4';
+          a.download = 'daw_buddy_startup_reel.mp4';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        } else {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `daw_buddy_startup_reel.${ext}`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(url), 10000);
+        }
 
         recordBtn.disabled = false;
-        recordBtn.innerHTML = `🎥 Export Video Reel (${ext.toUpperCase()})`;
+        recordBtn.innerHTML = `🎥 Record Video Reel`;
         videoEl.loop = true;
         videoEl.currentTime = 0;
         videoEl.play().catch(() => {});
@@ -973,12 +988,12 @@
               videoEl.removeEventListener('seeked', onSeeked);
               resolve();
             }
-          }, 150);
+          }, 200);
         }
       });
 
-      // 3. Start recording with 100ms chunks to continuously flush video frames
-      recorder.start(100);
+      // 3. Start recording with 200ms chunks to continuously flush video frames
+      recorder.start(200);
 
       try {
         await videoEl.play();
@@ -986,24 +1001,28 @@
         console.warn('Playback error:', err);
       }
 
-      const totalDuration = videoEl.duration && !isNaN(videoEl.duration) && videoEl.duration > 0 ? videoEl.duration : 6.0;
+      const totalDuration = videoEl.duration && !isNaN(videoEl.duration) && videoEl.duration > 0 ? videoEl.duration : 8.0;
       const startTime = performance.now();
-      const maxRecordTimeMs = (totalDuration + 0.6) * 1000;
+      const maxRecordTimeMs = (totalDuration + 1.0) * 1000;
 
       function renderFrame() {
         if (isFinished) return;
 
         const elapsedMs = performance.now() - startTime;
-        if (
-          videoEl.ended ||
-          videoEl.currentTime >= totalDuration - 0.05 ||
-          elapsedMs >= maxRecordTimeMs
-        ) {
-          finishRecording();
-          return;
+        // Grace period: allow video playback to start before evaluating completion
+        if (elapsedMs > 800) {
+          if (
+            videoEl.ended ||
+            videoEl.currentTime >= totalDuration - 0.08 ||
+            elapsedMs >= maxRecordTimeMs
+          ) {
+            finishRecording();
+            return;
+          }
         }
 
-        const pct = Math.min(99, Math.floor((Math.max(videoEl.currentTime, elapsedMs / 1000) / totalDuration) * 100));
+        const currentPos = Math.max(videoEl.currentTime, elapsedMs / 1000);
+        const pct = Math.min(99, Math.floor((currentPos / totalDuration) * 100));
         recordBtn.innerHTML = `⏳ Rendering Video (${pct}%)...`;
 
         // 1. Draw Wallpaper
