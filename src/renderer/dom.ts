@@ -302,8 +302,19 @@ export function applyAppearance(accent?: string, surface?: string, themeStyle?: 
   if (blooSwatches) blooSwatches.hidden = themeStyle !== 'bloo';
 
   // Highlight active swatches and surface buttons
+  const isAccentMatch = (btnAccent: string | null) => {
+    if (!btnAccent || !accent) return false;
+    if (btnAccent === accent) return true;
+    if ((btnAccent === 'pink' && accent === 'magenta') || (btnAccent === 'magenta' && accent === 'pink')) return true;
+    if ((btnAccent === 'mint' && accent === 'green') || (btnAccent === 'green' && accent === 'mint')) return true;
+    if ((btnAccent === 'sky' && accent === 'blue') || (btnAccent === 'blue' && accent === 'sky')) return true;
+    if ((btnAccent === 'coral' && accent === 'red') || (btnAccent === 'red' && accent === 'coral')) return true;
+    if ((btnAccent === 'lavender' && accent === 'indigo') || (btnAccent === 'indigo' && accent === 'lavender')) return true;
+    return false;
+  };
+
   document.querySelectorAll('.swatch').forEach((node: any) =>
-    node.classList.toggle('is-on', node.getAttribute('data-accent') === accent)
+    node.classList.toggle('is-on', isAccentMatch(node.getAttribute('data-accent')))
   );
   document.querySelectorAll('#surfaceModes .surface-btn').forEach((node: any) =>
     node.classList.toggle('is-on', node.getAttribute('data-surface') === surface)

@@ -40,7 +40,7 @@ html {
   filter: brightness(var(--theme-brightness, 1)) contrast(var(--theme-contrast, 1));
 }
 
-/* ---- Minimalist Accents (Dark) --------------------------------------- */
+/* ---- Minimalist Accents (Dark & AMOLED) ------------------------------- */
 body[data-theme-style="minimalist"][data-accent="cyan"],
 body:not([data-theme-style])[data-accent="cyan"] { --amber: #00f0ff; --amber-ink: #041014; --sage: #00f0ff; --accent-glow: 0 0 14px rgba(0, 240, 255, 0.35); }
 body[data-theme-style="minimalist"][data-accent="mint"],
@@ -48,7 +48,29 @@ body:not([data-theme-style])[data-accent="mint"] { --amber: #00ff95; --amber-ink
 body[data-theme-style="minimalist"][data-accent="lime"],
 body:not([data-theme-style])[data-accent="lime"] { --amber: #9dde64; --amber-ink: #0e170a; --sage: #74d7ae; --accent-glow: 0 0 14px rgba(157, 222, 100, 0.35); }
 body[data-theme-style="minimalist"][data-accent="pink"],
-body:not([data-theme-style])[data-accent="pink"] { --amber: #ff2d78; --amber-ink: #ffffff; --sage: #ff659c; --accent-glow: 0 0 14px rgba(255, 45, 120, 0.35); }
+body[data-theme-style="minimalist"][data-accent="magenta"],
+body:not([data-theme-style])[data-accent="pink"],
+body:not([data-theme-style])[data-accent="magenta"] { --amber: #ff2d78; --amber-ink: #ffffff; --sage: #ff659c; --accent-glow: 0 0 14px rgba(255, 45, 120, 0.35); }
+body[data-theme-style="minimalist"][data-accent="yellow"],
+body:not([data-theme-style])[data-accent="yellow"] { --amber: #ffea00; --amber-ink: #1f1a00; --sage: #ffdf33; --accent-glow: 0 0 14px rgba(255, 234, 0, 0.35); }
+body[data-theme-style="minimalist"][data-accent="sky"],
+body[data-theme-style="minimalist"][data-accent="blue"],
+body:not([data-theme-style])[data-accent="sky"],
+body:not([data-theme-style])[data-accent="blue"] { --amber: #29a9ff; --amber-ink: #001529; --sage: #38bdf8; --accent-glow: 0 0 14px rgba(41, 169, 255, 0.35); }
+body[data-theme-style="minimalist"][data-accent="lavender"],
+body[data-theme-style="minimalist"][data-accent="indigo"],
+body:not([data-theme-style])[data-accent="lavender"],
+body:not([data-theme-style])[data-accent="indigo"] { --amber: #9d7aff; --amber-ink: #110526; --sage: #b392f0; --accent-glow: 0 0 14px rgba(157, 122, 255, 0.35); }
+body[data-theme-style="minimalist"][data-accent="amber"],
+body:not([data-theme-style])[data-accent="amber"] { --amber: #ff9f1c; --amber-ink: #1a0a00; --sage: #ffbf69; --accent-glow: 0 0 14px rgba(255, 159, 28, 0.35); }
+body[data-theme-style="minimalist"][data-accent="coral"],
+body[data-theme-style="minimalist"][data-accent="red"],
+body:not([data-theme-style])[data-accent="coral"],
+body:not([data-theme-style])[data-accent="red"] { --amber: #f78c80; --amber-ink: #240a07; --sage: #f56f5e; --accent-glow: 0 0 14px rgba(247, 140, 128, 0.35); }
+body[data-theme-style="minimalist"][data-accent="green"],
+body:not([data-theme-style])[data-accent="green"] { --amber: #22c55e; --amber-ink: #052e16; --sage: #4ade80; --accent-glow: 0 0 14px rgba(34, 197, 94, 0.35); }
+body[data-theme-style="minimalist"][data-accent="bloo"],
+body:not([data-theme-style])[data-accent="bloo"] { --amber: #0093ed; --amber-ink: #ffffff; --sage: #7dd8ff; --accent-glow: 0 0 14px rgba(0, 147, 237, 0.35); }
 body[data-theme-style="minimalist"]:not(.theme-light)[data-accent="mono"],
 body:not([data-theme-style]):not(.theme-light)[data-accent="mono"] { --amber: #ffffff; --amber-ink: #000000; --sage: #cbd5e1; --accent-glow: 0 0 14px rgba(255, 255, 255, 0.3); }
 
@@ -79,7 +101,29 @@ body.theme-light[data-accent="mint"] { --amber: #059669; --amber-ink: #ffffff; -
 body[data-theme-style="minimalist"].theme-light[data-accent="lime"],
 body.theme-light[data-accent="lime"] { --amber: #559124; --amber-ink: #ffffff; --sage: #15803d; }
 body[data-theme-style="minimalist"].theme-light[data-accent="pink"],
-body.theme-light[data-accent="pink"] { --amber: #e11d48; --amber-ink: #ffffff; --sage: #db2777; }
+body[data-theme-style="minimalist"].theme-light[data-accent="magenta"],
+body.theme-light[data-accent="pink"],
+body.theme-light[data-accent="magenta"] { --amber: #e11d48; --amber-ink: #ffffff; --sage: #db2777; }
+body[data-theme-style="minimalist"].theme-light[data-accent="yellow"],
+body.theme-light[data-accent="yellow"] { --amber: #b89807; --amber-ink: #ffffff; --sage: #ca8a04; }
+body[data-theme-style="minimalist"].theme-light[data-accent="sky"],
+body[data-theme-style="minimalist"].theme-light[data-accent="blue"],
+body.theme-light[data-accent="sky"],
+body.theme-light[data-accent="blue"] { --amber: #0284c7; --amber-ink: #ffffff; --sage: #0369a1; }
+body[data-theme-style="minimalist"].theme-light[data-accent="lavender"],
+body[data-theme-style="minimalist"].theme-light[data-accent="indigo"],
+body.theme-light[data-accent="lavender"],
+body.theme-light[data-accent="indigo"] { --amber: #7c3aed; --amber-ink: #ffffff; --sage: #6d28d9; }
+body[data-theme-style="minimalist"].theme-light[data-accent="amber"],
+body.theme-light[data-accent="amber"] { --amber: #d97706; --amber-ink: #ffffff; --sage: #b45309; }
+body[data-theme-style="minimalist"].theme-light[data-accent="coral"],
+body[data-theme-style="minimalist"].theme-light[data-accent="red"],
+body.theme-light[data-accent="coral"],
+body.theme-light[data-accent="red"] { --amber: #ea580c; --amber-ink: #ffffff; --sage: #c2410c; }
+body[data-theme-style="minimalist"].theme-light[data-accent="green"],
+body.theme-light[data-accent="green"] { --amber: #16a34a; --amber-ink: #ffffff; --sage: #15803d; }
+body[data-theme-style="minimalist"].theme-light[data-accent="bloo"],
+body.theme-light[data-accent="bloo"] { --amber: #0077c8; --amber-ink: #ffffff; --sage: #0284c7; }
 body[data-theme-style="minimalist"].theme-light[data-accent="mono"],
 body.theme-light[data-accent="mono"] { --amber: #18181b; --amber-ink: #ffffff; --sage: #475569; }
 
@@ -120,14 +164,23 @@ body[data-theme-style="ableton"] {
   --accent-glow: 0 0 10px rgba(0, 214, 153, 0.35);
 }
 
-/* Ableton Accents (Dark) */
-body[data-theme-style="ableton"][data-accent="mint"] { --amber: #00d699; --amber-ink: #001f14; --sage: #2ee6a8; --accent-glow: 0 0 12px rgba(0, 214, 153, 0.4); }
-body[data-theme-style="ableton"][data-accent="magenta"] { --amber: #ff2e93; --amber-ink: #ffffff; --sage: #f03888; --accent-glow: 0 0 12px rgba(255, 46, 147, 0.4); }
+/* Ableton Accents (Dark & AMOLED) */
+body[data-theme-style="ableton"][data-accent="mint"],
+body[data-theme-style="ableton"][data-accent="green"] { --amber: #00d699; --amber-ink: #001f14; --sage: #2ee6a8; --accent-glow: 0 0 12px rgba(0, 214, 153, 0.4); }
+body[data-theme-style="ableton"][data-accent="magenta"],
+body[data-theme-style="ableton"][data-accent="pink"] { --amber: #ff2e93; --amber-ink: #ffffff; --sage: #f03888; --accent-glow: 0 0 12px rgba(255, 46, 147, 0.4); }
 body[data-theme-style="ableton"][data-accent="yellow"] { --amber: #fadb38; --amber-ink: #1f1a00; --sage: #ffdf33; --accent-glow: 0 0 12px rgba(250, 219, 56, 0.4); }
-body[data-theme-style="ableton"][data-accent="sky"] { --amber: #29a9ff; --amber-ink: #001529; --sage: #3690ea; --accent-glow: 0 0 12px rgba(41, 169, 255, 0.4); }
-body[data-theme-style="ableton"][data-accent="lavender"] { --amber: #9d7aff; --amber-ink: #110526; --sage: #b392f0; --accent-glow: 0 0 12px rgba(157, 122, 255, 0.4); }
+body[data-theme-style="ableton"][data-accent="sky"],
+body[data-theme-style="ableton"][data-accent="blue"],
+body[data-theme-style="ableton"][data-accent="cyan"],
+body[data-theme-style="ableton"][data-accent="bloo"] { --amber: #29a9ff; --amber-ink: #001529; --sage: #3690ea; --accent-glow: 0 0 12px rgba(41, 169, 255, 0.4); }
+body[data-theme-style="ableton"][data-accent="lavender"],
+body[data-theme-style="ableton"][data-accent="indigo"] { --amber: #9d7aff; --amber-ink: #110526; --sage: #b392f0; --accent-glow: 0 0 12px rgba(157, 122, 255, 0.4); }
 body[data-theme-style="ableton"][data-accent="amber"] { --amber: #e06c1b; --amber-ink: #ffffff; --sage: #d9822b; --accent-glow: 0 0 12px rgba(224, 108, 27, 0.4); }
-body[data-theme-style="ableton"][data-accent="coral"] { --amber: #f78c80; --amber-ink: #240a07; --sage: #f56f5e; --accent-glow: 0 0 12px rgba(247, 140, 128, 0.4); }
+body[data-theme-style="ableton"][data-accent="coral"],
+body[data-theme-style="ableton"][data-accent="red"] { --amber: #f78c80; --amber-ink: #240a07; --sage: #f56f5e; --accent-glow: 0 0 12px rgba(247, 140, 128, 0.4); }
+body[data-theme-style="ableton"][data-accent="lime"] { --amber: #9be62a; --amber-ink: #142103; --sage: #b8f048; --accent-glow: 0 0 12px rgba(155, 230, 42, 0.4); }
+body[data-theme-style="ableton"][data-accent="mono"] { --amber: #e2e2ee; --amber-ink: #121318; --sage: #9595a8; --accent-glow: 0 0 12px rgba(226, 226, 238, 0.3); }
 
 /* Ableton Light */
 body[data-theme-style="ableton"].theme-light {
@@ -150,13 +203,22 @@ body[data-theme-style="ableton"].theme-light {
   --accent-glow: none;
 }
 
-body[data-theme-style="ableton"].theme-light[data-accent="mint"] { --amber: #009968; --amber-ink: #ffffff; }
-body[data-theme-style="ableton"].theme-light[data-accent="magenta"] { --amber: #d91b75; --amber-ink: #ffffff; }
+body[data-theme-style="ableton"].theme-light[data-accent="mint"],
+body[data-theme-style="ableton"].theme-light[data-accent="green"] { --amber: #009968; --amber-ink: #ffffff; }
+body[data-theme-style="ableton"].theme-light[data-accent="magenta"],
+body[data-theme-style="ableton"].theme-light[data-accent="pink"] { --amber: #d91b75; --amber-ink: #ffffff; }
 body[data-theme-style="ableton"].theme-light[data-accent="yellow"] { --amber: #b89807; --amber-ink: #ffffff; }
-body[data-theme-style="ableton"].theme-light[data-accent="sky"] { --amber: #1677c9; --amber-ink: #ffffff; }
-body[data-theme-style="ableton"].theme-light[data-accent="lavender"] { --amber: #754fdf; --amber-ink: #ffffff; }
+body[data-theme-style="ableton"].theme-light[data-accent="sky"],
+body[data-theme-style="ableton"].theme-light[data-accent="blue"],
+body[data-theme-style="ableton"].theme-light[data-accent="cyan"],
+body[data-theme-style="ableton"].theme-light[data-accent="bloo"] { --amber: #1677c9; --amber-ink: #ffffff; }
+body[data-theme-style="ableton"].theme-light[data-accent="lavender"],
+body[data-theme-style="ableton"].theme-light[data-accent="indigo"] { --amber: #754fdf; --amber-ink: #ffffff; }
 body[data-theme-style="ableton"].theme-light[data-accent="amber"] { --amber: #be5307; --amber-ink: #ffffff; }
-body[data-theme-style="ableton"].theme-light[data-accent="coral"] { --amber: #d15647; --amber-ink: #ffffff; }
+body[data-theme-style="ableton"].theme-light[data-accent="coral"],
+body[data-theme-style="ableton"].theme-light[data-accent="red"] { --amber: #d15647; --amber-ink: #ffffff; }
+body[data-theme-style="ableton"].theme-light[data-accent="lime"] { --amber: #559124; --amber-ink: #ffffff; }
+body[data-theme-style="ableton"].theme-light[data-accent="mono"] { --amber: #18181f; --amber-ink: #ffffff; }
 
 /* Ableton AMOLED (True Pure Black Base with Neon Grid Lines) */
 body[data-theme-style="ableton"].theme-amoled {
@@ -233,11 +295,23 @@ body[data-theme-style="classic"] {
   --accent-glow: none;
 }
 
-body[data-theme-style="classic"][data-accent="green"] { --amber: #9dde64; --amber-ink: #10170b; }
-body[data-theme-style="classic"][data-accent="blue"] { --amber: #6db6ff; --amber-ink: #081628; }
+/* Classic Accents (Dark & AMOLED) */
+body[data-theme-style="classic"][data-accent="green"],
+body[data-theme-style="classic"][data-accent="mint"],
+body[data-theme-style="classic"][data-accent="lime"] { --amber: #9dde64; --amber-ink: #10170b; }
+body[data-theme-style="classic"][data-accent="blue"],
+body[data-theme-style="classic"][data-accent="sky"],
+body[data-theme-style="classic"][data-accent="cyan"],
+body[data-theme-style="classic"][data-accent="bloo"] { --amber: #6db6ff; --amber-ink: #081628; }
 body[data-theme-style="classic"][data-accent="yellow"] { --amber: #e8d15a; --amber-ink: #1e1a05; }
 body[data-theme-style="classic"][data-accent="amber"] { --amber: #f0a63a; --amber-ink: #1a0f02; }
-body[data-theme-style="classic"][data-accent="red"] { --amber: #ef6f63; --amber-ink: #200806; }
+body[data-theme-style="classic"][data-accent="red"],
+body[data-theme-style="classic"][data-accent="coral"],
+body[data-theme-style="classic"][data-accent="pink"],
+body[data-theme-style="classic"][data-accent="magenta"] { --amber: #ef6f63; --amber-ink: #200806; }
+body[data-theme-style="classic"][data-accent="lavender"],
+body[data-theme-style="classic"][data-accent="indigo"] { --amber: #b392f0; --amber-ink: #110526; }
+body[data-theme-style="classic"][data-accent="mono"] { --amber: #f2f6f1; --amber-ink: #181d19; }
 
 body[data-theme-style="classic"].theme-light {
   --bg: #e9eee8;
@@ -256,11 +330,22 @@ body[data-theme-style="classic"].theme-light {
   --line-crisp: #b0beb0;
 }
 
-body[data-theme-style="classic"].theme-light[data-accent="green"] { --amber: #65a832; }
-body[data-theme-style="classic"].theme-light[data-accent="blue"] { --amber: #2f74c8; }
+body[data-theme-style="classic"].theme-light[data-accent="green"],
+body[data-theme-style="classic"].theme-light[data-accent="mint"],
+body[data-theme-style="classic"].theme-light[data-accent="lime"] { --amber: #65a832; }
+body[data-theme-style="classic"].theme-light[data-accent="blue"],
+body[data-theme-style="classic"].theme-light[data-accent="sky"],
+body[data-theme-style="classic"].theme-light[data-accent="cyan"],
+body[data-theme-style="classic"].theme-light[data-accent="bloo"] { --amber: #2f74c8; }
 body[data-theme-style="classic"].theme-light[data-accent="yellow"] { --amber: #a8901f; }
 body[data-theme-style="classic"].theme-light[data-accent="amber"] { --amber: #b9701a; }
-body[data-theme-style="classic"].theme-light[data-accent="red"] { --amber: #c83f35; }
+body[data-theme-style="classic"].theme-light[data-accent="red"],
+body[data-theme-style="classic"].theme-light[data-accent="coral"],
+body[data-theme-style="classic"].theme-light[data-accent="pink"],
+body[data-theme-style="classic"].theme-light[data-accent="magenta"] { --amber: #c83f35; }
+body[data-theme-style="classic"].theme-light[data-accent="lavender"],
+body[data-theme-style="classic"].theme-light[data-accent="indigo"] { --amber: #7c3aed; }
+body[data-theme-style="classic"].theme-light[data-accent="mono"] { --amber: #182017; }
 
 body[data-theme-style="classic"].theme-amoled {
   --bg: #000000;
@@ -297,12 +382,23 @@ body[data-theme-style="bloo"] {
   --accent-glow: 0 0 16px rgba(0, 147, 237, 0.45);
 }
 
-/* Bloo Accents (Dark) */
+/* Bloo Accents (Dark & AMOLED) */
 body[data-theme-style="bloo"][data-accent="bloo"] { --amber: #0093ed; --amber-ink: #ffffff; --sage: #7dd8ff; --accent-glow: 0 0 16px rgba(0, 147, 237, 0.45); }
 body[data-theme-style="bloo"][data-accent="cyan"] { --amber: #7dd8ff; --amber-ink: #00253a; --sage: #0093ed; --accent-glow: 0 0 16px rgba(125, 216, 255, 0.45); }
-body[data-theme-style="bloo"][data-accent="sky"] { --amber: #38bdf8; --amber-ink: #001f33; --sage: #0284c7; --accent-glow: 0 0 16px rgba(56, 189, 248, 0.45); }
-body[data-theme-style="bloo"][data-accent="indigo"] { --amber: #6366f1; --amber-ink: #ffffff; --sage: #818cf8; --accent-glow: 0 0 16px rgba(99, 102, 241, 0.45); }
-body[data-theme-style="bloo"][data-accent="amber"] { --amber: #ff9f1c; --amber-ink: #1a0a00; --sage: #ffbf69; --accent-glow: 0 0 16px rgba(255, 159, 28, 0.45); }
+body[data-theme-style="bloo"][data-accent="sky"],
+body[data-theme-style="bloo"][data-accent="blue"] { --amber: #38bdf8; --amber-ink: #001f33; --sage: #0284c7; --accent-glow: 0 0 16px rgba(56, 189, 248, 0.45); }
+body[data-theme-style="bloo"][data-accent="indigo"],
+body[data-theme-style="bloo"][data-accent="lavender"] { --amber: #6366f1; --amber-ink: #ffffff; --sage: #818cf8; --accent-glow: 0 0 16px rgba(99, 102, 241, 0.45); }
+body[data-theme-style="bloo"][data-accent="amber"],
+body[data-theme-style="bloo"][data-accent="yellow"] { --amber: #ff9f1c; --amber-ink: #1a0a00; --sage: #ffbf69; --accent-glow: 0 0 16px rgba(255, 159, 28, 0.45); }
+body[data-theme-style="bloo"][data-accent="mint"],
+body[data-theme-style="bloo"][data-accent="green"],
+body[data-theme-style="bloo"][data-accent="lime"] { --amber: #00e699; --amber-ink: #002919; --sage: #38f8b8; --accent-glow: 0 0 16px rgba(0, 230, 153, 0.45); }
+body[data-theme-style="bloo"][data-accent="pink"],
+body[data-theme-style="bloo"][data-accent="magenta"],
+body[data-theme-style="bloo"][data-accent="coral"],
+body[data-theme-style="bloo"][data-accent="red"] { --amber: #ff3377; --amber-ink: #ffffff; --sage: #ff6699; --accent-glow: 0 0 16px rgba(255, 51, 119, 0.45); }
+body[data-theme-style="bloo"][data-accent="mono"] { --amber: #ffffff; --amber-ink: #00253a; --sage: #7dd8ff; --accent-glow: 0 0 16px rgba(255, 255, 255, 0.45); }
 
 /* Bloo Light Mode (Clean Blueprint Paper) */
 body[data-theme-style="bloo"].theme-light {
@@ -327,9 +423,20 @@ body[data-theme-style="bloo"].theme-light {
 
 body[data-theme-style="bloo"].theme-light[data-accent="bloo"] { --amber: #0077c8; --amber-ink: #ffffff; --sage: #0284c7; }
 body[data-theme-style="bloo"].theme-light[data-accent="cyan"] { --amber: #0093ed; --amber-ink: #ffffff; --sage: #0369a1; }
-body[data-theme-style="bloo"].theme-light[data-accent="sky"] { --amber: #0284c7; --amber-ink: #ffffff; --sage: #0369a1; }
-body[data-theme-style="bloo"].theme-light[data-accent="indigo"] { --amber: #4f46e5; --amber-ink: #ffffff; --sage: #4338ca; }
-body[data-theme-style="bloo"].theme-light[data-accent="amber"] { --amber: #d97706; --amber-ink: #ffffff; --sage: #b45309; }
+body[data-theme-style="bloo"].theme-light[data-accent="sky"],
+body[data-theme-style="bloo"].theme-light[data-accent="blue"] { --amber: #0284c7; --amber-ink: #ffffff; --sage: #0369a1; }
+body[data-theme-style="bloo"].theme-light[data-accent="indigo"],
+body[data-theme-style="bloo"].theme-light[data-accent="lavender"] { --amber: #4f46e5; --amber-ink: #ffffff; --sage: #4338ca; }
+body[data-theme-style="bloo"].theme-light[data-accent="amber"],
+body[data-theme-style="bloo"].theme-light[data-accent="yellow"] { --amber: #d97706; --amber-ink: #ffffff; --sage: #b45309; }
+body[data-theme-style="bloo"].theme-light[data-accent="mint"],
+body[data-theme-style="bloo"].theme-light[data-accent="green"],
+body[data-theme-style="bloo"].theme-light[data-accent="lime"] { --amber: #059669; --amber-ink: #ffffff; --sage: #047857; }
+body[data-theme-style="bloo"].theme-light[data-accent="pink"],
+body[data-theme-style="bloo"].theme-light[data-accent="magenta"],
+body[data-theme-style="bloo"].theme-light[data-accent="coral"],
+body[data-theme-style="bloo"].theme-light[data-accent="red"] { --amber: #e11d48; --amber-ink: #ffffff; --sage: #be123c; }
+body[data-theme-style="bloo"].theme-light[data-accent="mono"] { --amber: #00253a; --amber-ink: #ffffff; --sage: #3d637b; }
 
 /* Bloo AMOLED (Pitch Black with Blueprint Neon Borders) */
 body[data-theme-style="bloo"].theme-amoled {
@@ -390,6 +497,9 @@ body[data-theme-style="bloo"] .pill--solid {
   flex-wrap: wrap;
   align-items: center;
   margin-top: 8px;
+}
+.appearance-row[hidden] {
+  display: none !important;
 }
 .style-btn.is-on {
   background: var(--amber);
