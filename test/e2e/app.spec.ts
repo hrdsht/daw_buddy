@@ -88,4 +88,37 @@ test.describe('DAW Buddy Desktop App (Electron E2E)', () => {
     await window.keyboard.press('Escape');
     await expect(reverbPanel).toBeHidden();
   });
+
+  test('navigates to Tools view and opens Format Converter & Splitter UI', async () => {
+    // Switch to Tools tab
+    const toolsTab = window.locator('.tab[data-tab="tools"]');
+    if (await toolsTab.isVisible()) {
+      await toolsTab.click();
+      
+      // Verify Converter tool card exists
+      const converterCard = window.locator('.tool-card[data-tool="convert"]');
+      await expect(converterCard).toBeVisible();
+
+      // Click card to open Standalone Converter tool
+      await converterCard.click();
+
+      // Verify converter container and dropzone are rendered
+      const converterContainer = window.locator('.standalone-converter');
+      await expect(converterContainer).toBeVisible();
+
+      const dropzone = window.locator('#converterDropzone');
+      await expect(dropzone).toBeVisible();
+
+      // Verify format pills (MP3 and WAV)
+      const mp3Pill = window.locator('.converter-fmt-pill[data-format="mp3"]');
+      const wavPill = window.locator('.converter-fmt-pill[data-format="wav"]');
+      await expect(mp3Pill).toBeVisible();
+      await expect(wavPill).toBeVisible();
+
+      // Switch to WAV format
+      await wavPill.click();
+      await expect(wavPill).toHaveClass(/is-active/);
+    }
+  });
 });
+

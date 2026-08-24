@@ -180,6 +180,27 @@ function runFfmpeg(ffmpegPath, args, timeoutMs = 600000) {
   });
 }
 
+let CachedLameMp3Encoder: any = null;
+
+function getLameMp3Encoder() {
+  if (CachedLameMp3Encoder) return CachedLameMp3Encoder;
+  try {
+    const minPath = require.resolve('lamejs/lame.min.js');
+    const src = fs.readFileSync(minPath, 'utf8');
+    const fn = new Function(src + '; return lamejs.Mp3Encoder;');
+    CachedLameMp3Encoder = fn();
+    if (CachedLameMp3Encoder) return CachedLameMp3Encoder;
+  } catch {}
+  try {
+    const l = require('lamejs');
+    if (l && l.Mp3Encoder) {
+      CachedLameMp3Encoder = l.Mp3Encoder;
+      return CachedLameMp3Encoder;
+    }
+  } catch {}
+  return null;
+}
+
 /**
  * MP3 via lamejs, from interleaved 16-bit samples.
  *
@@ -187,8 +208,9 @@ function runFfmpeg(ffmpegPath, args, timeoutMs = 600000) {
  * de-interleave happens here rather than in the caller.
  */
 function encodeMp3WithLame(samples, { sampleRate, channels, bitrate }) {
-  const lamejs = require('lamejs');
-  const encoder = new lamejs.Mp3Encoder(channels, sampleRate, bitrate);
+  const Mp3Encoder = getLameMp3Encoder();
+  if (!Mp3Encoder) throw new Error('lamejs Mp3Encoder not available');
+  const encoder = new Mp3Encoder(channels, sampleRate, bitrate);
   const blockSize = 1152; // one MP3 frame
   const chunks = [];
 
