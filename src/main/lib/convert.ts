@@ -40,6 +40,7 @@ const DEFAULTS = {
   bitDepth: 24, // WAV only
   channels: null, // null = keep the source channel count
 
+  enableSplit: true,
   maxSeconds: 300, // 5 minutes
   maxBytes: 50 * 1024 * 1024, // 50 MB
 
@@ -78,6 +79,14 @@ function bytesPerSecond(options) {
  */
 function maxPartSeconds(options) {
   const perSecond = bytesPerSecond(options);
+  if (options.enableSplit === false) {
+    return {
+      seconds: Infinity,
+      boundBy: 'none',
+      byteLimitSeconds: Infinity,
+      perSecond
+    };
+  }
   // 2% headroom for the WAV header, MP3 frame overhead and rounding.
   const byteLimitSeconds = (options.maxBytes * 0.98) / perSecond;
   const padTotal = options.padSeconds * (options.padBothEnds ? 2 : 1);
@@ -267,6 +276,9 @@ async function planJob(files, requested: Record<string, any> = {}) {
 function findCuts(sources, sampleRate, maxSeconds, options) {
   const mono = concatMono(sources);
   const total = mono.length;
+  if (options.enableSplit === false || !Number.isFinite(maxSeconds)) {
+    return [{ start: 0, end: total, duration: total / sampleRate, atSilence: null }];
+  }
   const maxFrames = Math.floor(maxSeconds * sampleRate);
 
   if (total <= maxFrames) {

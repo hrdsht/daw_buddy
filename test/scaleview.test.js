@@ -73,9 +73,45 @@ function testFretboardLayoutAndHighlight() {
   assert.ok(outNotes.length > 0);
 }
 
+function testGuitarTabAndVoicings() {
+  // 1. Test Guitar Scale Tab for A Minor (Tonic A = 9, degrees = [0, 2, 3, 5, 7, 8, 10])
+  const aMinorDegrees = [0, 2, 3, 5, 7, 8, 10];
+  const scaleTab = scaleview.generateGuitarScaleTab(9, aMinorDegrees);
+  assert.ok(scaleTab.lines.length === 6, 'Guitar tab should have 6 string lines');
+  assert.ok(scaleTab.notes.length > 0, 'Guitar tab should contain scale notes');
+  assert.ok(scaleTab.rawText.includes('e|--'), 'Guitar tab should contain standard high e string');
+  assert.ok(scaleTab.rawText.includes('E|--'), 'Guitar tab should contain standard low E string');
+
+  // 2. Test Guitar Chord Voicings
+  const cMajVoicing = scaleview.generateGuitarChordVoicing(0, 'maj');
+  assert.equal(cMajVoicing.chordName, 'C');
+  assert.ok(cMajVoicing.tabStr.length > 0);
+
+  const aMinVoicing = scaleview.generateGuitarChordVoicing(9, 'min');
+  assert.equal(aMinVoicing.chordName, 'Am');
+
+  // 3. Test Progression Tab
+  const progTab = scaleview.generateProgressionGuitarTab([
+    { rootPc: 0, quality: 'maj', chordName: 'C', roman: 'I' },
+    { rootPc: 7, quality: 'maj', chordName: 'G', roman: 'V' },
+    { rootPc: 9, quality: 'min', chordName: 'Am', roman: 'vi' },
+    { rootPc: 5, quality: 'maj', chordName: 'F', roman: 'IV' }
+  ]);
+  assert.equal(progTab.lines.length, 6);
+  assert.ok(progTab.rawText.includes('C'));
+
+  // 4. Test Melodic Lick Tab
+  const lickTab = scaleview.generateGuitarLickTab(9, aMinorDegrees);
+  assert.equal(lickTab.lines.length, 6);
+  assert.ok(lickTab.notes.length > 0);
+}
+
 testKeyboardLayoutAndHighlight();
 console.log('ok - testKeyboardLayoutAndHighlight');
 testCamelotWheelLayoutAndCompatibility();
 console.log('ok - testCamelotWheelLayoutAndCompatibility');
 testFretboardLayoutAndHighlight();
 console.log('ok - testFretboardLayoutAndHighlight');
+testGuitarTabAndVoicings();
+console.log('ok - testGuitarTabAndVoicings');
+

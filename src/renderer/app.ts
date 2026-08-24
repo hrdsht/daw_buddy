@@ -23,7 +23,14 @@ import {
   codeFor,
   CAMELOT_KEYS,
   DEGREE_NAMES,
-  SARGAM_NAMES
+  SARGAM_NAMES,
+  generateGuitarScaleTab,
+  generateGuitarChordVoicing,
+  generateProgressionGuitarTab,
+  generateGuitarLickTab,
+  GuitarTabResult,
+  GuitarTabNote,
+  GUITAR_STRING_LABELS
 } from './scaleview';
 import { scaleMidi, progressionMidi, notesFor, ragaMidi, rhythmGuideMidi } from './midiwrite';
 import {
@@ -1983,6 +1990,106 @@ function playRagaSequence(tonicPc: number, aarohanaDegrees: number[], avarohanaD
       stopScalePlayback();
     }
   }, fullSeq.length * 360 + 700);
+  session.timers.push(finishT);
+  return true;
+}
+
+function playChordProgressionSequence(
+  chords: Array<{ chordName: string; midiNotes: number[] }>,
+  bpm = 120,
+  a4 = 440,
+  id = 'chord-prog-seq',
+  onStep?: (index: number) => void,
+  onDone?: () => void
+): boolean {
+  if (isScalePlaying(id)) {
+    stopScalePlayback();
+    return false;
+  }
+  stopScalePlayback();
+  const ctx = getAudioContext();
+  if (ctx && ctx.state === 'suspended') {
+    ctx.resume().catch(() => {});
+  }
+  const session: ScalePlaybackSession = {
+    id,
+    timers: [],
+    nodes: [],
+    onStop: onDone || null
+  };
+  currentScaleSession = session;
+
+  const msPerBeat = (60 / Math.max(30, Math.min(300, bpm))) * 1000;
+  const chordDurationSec = Math.max(0.75, (msPerBeat * 2) / 1000);
+  const stepMs = Math.round(chordDurationSec * 1000);
+
+  chords.forEach((chord, idx) => {
+    const t = setTimeout(() => {
+      if (currentScaleSession !== session) return;
+      if (onStep) onStep(idx);
+      // Gentle polyphonic strum with slight note offset
+      chord.midiNotes.forEach((midi, noteIdx) => {
+        const pc = midi % 12;
+        const oct = Math.floor(midi / 12) - 1;
+        const noteResult = playSynthNote(pc, oct, a4, chordDurationSec * 1.15);
+        if (noteResult) session.nodes.push(noteResult);
+      });
+    }, idx * stepMs);
+    session.timers.push(t);
+  });
+
+  const finishT = setTimeout(() => {
+    if (currentScaleSession === session) {
+      stopScalePlayback();
+    }
+  }, chords.length * stepMs + 500);
+  session.timers.push(finishT);
+  return true;
+}
+
+function playGuitarTabSequence(
+  notes: GuitarTabNote[],
+  bpm = 120,
+  a4 = 440,
+  id = 'guitar-tab-seq',
+  onStep?: (note: GuitarTabNote, index: number) => void,
+  onDone?: () => void
+): boolean {
+  if (isScalePlaying(id)) {
+    stopScalePlayback();
+    return false;
+  }
+  stopScalePlayback();
+  const ctx = getAudioContext();
+  if (ctx && ctx.state === 'suspended') {
+    ctx.resume().catch(() => {});
+  }
+  const session: ScalePlaybackSession = {
+    id,
+    timers: [],
+    nodes: [],
+    onStop: onDone || null
+  };
+  currentScaleSession = session;
+
+  const msPerBeat = (60 / Math.max(30, Math.min(300, bpm))) * 1000;
+  const noteStepMs = Math.max(140, Math.min(420, Math.round(msPerBeat * 0.45)));
+
+  notes.forEach((note, idx) => {
+    const t = setTimeout(() => {
+      if (currentScaleSession !== session) return;
+      if (onStep) onStep(note, idx);
+      const noteResult = playSynthNote(note.pc, note.octave, a4, 0.65);
+      if (noteResult) session.nodes.push(noteResult);
+    }, idx * noteStepMs);
+    session.timers.push(t);
+  });
+
+  const finishT = setTimeout(() => {
+    if (currentScaleSession === session) {
+      stopScalePlayback();
+    }
+  }, notes.length * noteStepMs + 400);
   session.timers.push(finishT);
   return true;
 }
@@ -11389,9 +11496,17 @@ function renderRandomizerTool(entry: any = null) {
 
   resultBox.append(metricsGrid);
 
-  // Interactive 2-octave Scale Keyboard & Audition Section
-  const kbSection = el('div', 'scale-kb-section');
-  kbSection.append(el('h4', 'scale-notes__title', `Interactive Scale Keyboard: ${state.tonic} ${state.scaleName}`));
+  // =================== Studio Performance & Tablature Console ===================
+  const consoleGrid = el('div', 'randomizer-console-grid');
+
+  // LEFT COLUMN: Instruments Console (Keyboard + Guitar Fretboard & Guitar Tabs)
+  const instrumentsCol = el('div', 'randomizer-instruments-col');
+
+  // 1. Piano Keyboard Card
+  const kbCard = el('div', 'randomizer-panel-card randomizer-kb-card');
+  const kbCardHead = el('div', 'randomizer-panel-card__header');
+  kbCardHead.append(el('h4', 'randomizer-panel-card__title', `🎹 Scale Keyboard: ${state.tonic} ${state.scaleName}`));
+  kbCard.append(kbCardHead);
 
   const kb = kbLayoutFn(2, 19, 70);
   const highlightedKeys = kbHighlightFn(kb.keys, state.tonicPc, state.degrees);
@@ -11436,7 +11551,7 @@ function renderRandomizerTool(entry: any = null) {
     svgKb.appendChild(rect);
   });
 
-  kbSection.append(svgKb);
+  kbCard.append(svgKb);
 
   // Scale Action buttons
   const scaleActions = el('div', 'scale-modal-actions');
@@ -11475,44 +11590,156 @@ function renderRandomizerTool(entry: any = null) {
     }
   });
   scaleActions.append(scaleMidiBtn);
-  kbSection.append(scaleActions);
+  kbCard.append(scaleActions);
+  instrumentsCol.append(kbCard);
 
-  // ---- Chord Progression Panel ----
-  // Helper: build diatonic chords from scale degrees
-  const CHORD_QUALITY_FOR_DEGREE: Record<number, { quality: string; suffix: string }> = {
-    0: { quality: 'maj', suffix: '' },
-    2: { quality: 'min', suffix: 'm' },
-    4: { quality: 'min', suffix: 'm' },
-    5: { quality: 'maj', suffix: '' },
-    7: { quality: 'maj', suffix: '' },
-    9: { quality: 'min', suffix: 'm' },
-    11: { quality: 'dim', suffix: '°' }
+  // 2. Interactive 6-String Guitar Fretboard & Live Guitar Tabs Card
+  const guitarCard = el('div', 'randomizer-panel-card randomizer-guitar-card');
+  const guitarHead = el('div', 'randomizer-panel-card__header');
+  guitarHead.append(el('h4', 'randomizer-panel-card__title', `🎸 6-String Guitar Tabs & Interactive Fretboard`));
+  guitarCard.append(guitarHead);
+
+  const fretboardSvg = renderFretboardSvg(state.tonicPc, state.degrees, state.tuningA4);
+
+  // Tab mode state: 'scale' | 'progression' | 'lick'
+  let currentTabMode: 'scale' | 'progression' | 'lick' = 'scale';
+
+  const tabActionsBar = el('div', 'guitar-tab-actions-bar');
+  const tabModeTabs = el('div', 'guitar-tab-mode-tabs');
+
+  const scaleTabBtn = el('button', 'guitar-tab-mode-tab is-active', '🎸 Scale Run Tab');
+  const progTabBtn = el('button', 'guitar-tab-mode-tab', '🎼 Chords Tab');
+  const lickTabBtn = el('button', 'guitar-tab-mode-tab', '⚡ Melodic Lick Tab');
+  tabModeTabs.append(scaleTabBtn, progTabBtn, lickTabBtn);
+
+  const tabToolsGroup = el('div', 'guitar-tab-tools');
+  const playTabBtn = el('button', 'pill pill--sm scale-action-btn', '▶ Play Tab Run');
+  const copyTabBtn = el('button', 'pill pill--sm', '📋 Copy ASCII Tab');
+  const dragTabMidiBtn = el('button', 'pill pill--sm scale-midi-btn', '⤓ Drag Tab MIDI');
+  tabToolsGroup.append(playTabBtn, copyTabBtn, dragTabMidiBtn);
+  tabActionsBar.append(tabModeTabs, tabToolsGroup);
+
+  guitarCard.append(tabActionsBar);
+
+  const tabContainer = el('div', 'guitar-tab-container');
+
+  let activeTabResult: GuitarTabResult = generateGuitarScaleTab(state.tonicPc, state.degrees);
+
+  const updateTabDisplay = () => {
+    tabContainer.innerHTML = '';
+    const titleEl = el('div', 'guitar-tab-title', activeTabResult.title);
+    tabContainer.append(titleEl);
+
+    activeTabResult.lines.forEach((line) => {
+      const lineEl = el('div', 'guitar-tab-line');
+      const strLabel = el('span', 'guitar-tab-line--string-label', line.label);
+      const textSpan = el('span', 'guitar-tab-line--content', line.text.slice(line.label.length));
+      lineEl.append(strLabel, textSpan);
+      tabContainer.append(lineEl);
+    });
   };
 
+  scaleTabBtn.addEventListener('click', () => {
+    currentTabMode = 'scale';
+    scaleTabBtn.classList.add('is-active');
+    progTabBtn.classList.remove('is-active');
+    lickTabBtn.classList.remove('is-active');
+    activeTabResult = generateGuitarScaleTab(state.tonicPc, state.degrees);
+    updateTabDisplay();
+  });
+
+  lickTabBtn.addEventListener('click', () => {
+    currentTabMode = 'lick';
+    lickTabBtn.classList.add('is-active');
+    scaleTabBtn.classList.remove('is-active');
+    progTabBtn.classList.remove('is-active');
+    activeTabResult = generateGuitarLickTab(state.tonicPc, state.degrees);
+    updateTabDisplay();
+  });
+
+  copyTabBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(activeTabResult.rawText);
+      toast('Copied to Clipboard', '6-String Guitar Tablature copied!');
+    } catch {
+      toast('Tab Text', activeTabResult.rawText.slice(0, 40) + '...');
+    }
+  });
+
+  playTabBtn.addEventListener('click', () => {
+    if (isScalePlaying('guitar-tab-seq')) {
+      stopScalePlayback();
+      playTabBtn.textContent = '▶ Play Tab Run';
+      return;
+    }
+    playTabBtn.textContent = '⏸ Pause Tab';
+    const notesToPlay = activeTabResult.notes.length > 0 ? activeTabResult.notes : generateGuitarScaleTab(state.tonicPc, state.degrees).notes;
+    playGuitarTabSequence(
+      notesToPlay,
+      state.bpm,
+      state.tuningA4,
+      'guitar-tab-seq',
+      (note) => {
+        fretboardSvg.vibrateString(note.stringIndex);
+        fretboardSvg.vibrateNote(note.pc);
+      },
+      () => {
+        playTabBtn.textContent = '▶ Play Tab Run';
+      }
+    );
+  });
+
+  const dragOrExportMidi = async (bytes: Uint8Array, fileName: string) => {
+    if (window.api.dragMidi) {
+      await window.api.dragMidi(fileName, Array.from(bytes));
+    } else if (window.api.saveMidi) {
+      const saved = await window.api.saveMidi(fileName, Array.from(bytes));
+      if (saved) toast('MIDI exported', saved);
+    }
+  };
+
+  // Tab MIDI drag
+  dragTabMidiBtn.draggable = true;
+  dragTabMidiBtn.addEventListener('dragstart', async (e: DragEvent) => {
+    e.preventDefault();
+    const tabNotes = activeTabResult.notes.length > 0 ? activeTabResult.notes : generateGuitarScaleTab(state.tonicPc, state.degrees).notes;
+    const midiNotesList = tabNotes.map((n) => 12 * (n.octave + 1) + n.pc);
+    const tabMidiBytes = scaleMidi(midiNotesList, { bpm: state.bpm, bars: 4 });
+    const tabFileName = `GuitarTab_${state.tonic}_${state.scaleName.replace(/[^a-zA-Z0-9_-]/g, '_')}_${state.bpm}BPM.mid`;
+    if (window.api.dragMidi) await window.api.dragMidi(tabFileName, Array.from(tabMidiBytes));
+  });
+
+  dragTabMidiBtn.addEventListener('click', async () => {
+    const tabNotes = activeTabResult.notes.length > 0 ? activeTabResult.notes : generateGuitarScaleTab(state.tonicPc, state.degrees).notes;
+    const midiNotesList = tabNotes.map((n) => 12 * (n.octave + 1) + n.pc);
+    const tabMidiBytes = scaleMidi(midiNotesList, { bpm: state.bpm, bars: 4 });
+    const tabFileName = `GuitarTab_${state.tonic}_${state.scaleName.replace(/[^a-zA-Z0-9_-]/g, '_')}_${state.bpm}BPM.mid`;
+    await dragOrExportMidi(tabMidiBytes, tabFileName);
+  });
+
+  updateTabDisplay();
+  guitarCard.append(tabContainer, fretboardSvg);
+  instrumentsCol.append(guitarCard);
+
+  // RIGHT COLUMN: Harmonic & Chord Engine Panel
   const buildDiatonicChords = () => {
     const NOTES_ARR = DSP.NOTES;
     const isMinorish = state.degrees.includes(3) && !state.degrees.includes(4);
     return state.degrees.map((deg) => {
       const rootPc = (state.tonicPc + deg) % 12;
       const rootName = NOTES_ARR[rootPc];
-      // determine triad quality based on scale degree interval
-      const intervals = isMinorish
-        ? [0, 3, 7] // fallback triad
-        : [0, 4, 7];
-      // Use third note to determine quality: check if (deg+3) or (deg+4) is in scale
       const hasMinorThird = state.degrees.includes(deg + 3) || state.degrees.includes((deg + 3) % 12);
-      const hasMajorThird = state.degrees.includes(deg + 4) || state.degrees.includes((deg + 4) % 12);
       const hasDimFifth = state.degrees.includes(deg + 6) || state.degrees.includes((deg + 6) % 12);
       const quality = (hasDimFifth && hasMinorThird) ? 'dim' : (hasMinorThird ? 'min' : 'maj');
       const suffix = quality === 'dim' ? '°' : (quality === 'min' ? 'm' : '');
       const tmpl = DSP.CHORD_TEMPLATES[quality] || DSP.CHORD_TEMPLATES.maj;
       const midiNotes = tmpl.intervals.map((iv: number) => 60 + rootPc + iv);
       const roman = DSP.getRomanNumeral(rootPc, quality, state.tonicPc, isMinorish);
-      return { rootPc, rootName, quality, suffix, chordName: `${rootName}${suffix}`, midiNotes, roman, deg };
+      const guitarVoicing = generateGuitarChordVoicing(rootPc, quality);
+      return { rootPc, rootName, quality, suffix, chordName: `${rootName}${suffix}`, midiNotes, roman, deg, guitarVoicing };
     });
   };
 
-  // Most-used progressions (roman numerals relative to tonic)
   const MOST_USED_PROGRESSIONS = [
     { name: 'Pop Anthem', roman: ['I', 'V', 'vi', 'IV'], degreeIndices: [0, 4, 9, 5] },
     { name: 'Minor Epic', roman: ['i', 'VII', 'VI', 'VII'], degreeIndices: [0, 10, 9, 10] },
@@ -11529,32 +11756,37 @@ function renderRandomizerTool(entry: any = null) {
     return degreeIndices.map((semitone) => {
       const rootPc = (state.tonicPc + semitone) % 12;
       const rootName = NOTES_ARR[rootPc];
-      // detect quality by checking scale membership
       const relDeg = semitone;
-      const hasMinor = state.degrees.some(d => (d - relDeg + 12) % 12 === 3);
-      const hasDim = state.degrees.some(d => (d - relDeg + 12) % 12 === 6);
+      const hasMinor = state.degrees.some((d) => (d - relDeg + 12) % 12 === 3);
+      const hasDim = state.degrees.some((d) => (d - relDeg + 12) % 12 === 6);
       const quality = hasDim ? 'dim' : (hasMinor ? 'min' : 'maj');
       const suffix = quality === 'dim' ? '°' : (quality === 'min' ? 'm' : '');
       const tmpl = DSP.CHORD_TEMPLATES[quality] || DSP.CHORD_TEMPLATES.maj;
       const midiNotes = tmpl.intervals.map((iv: number) => 60 + rootPc + iv);
-      return { chordName: `${rootName}${suffix}`, midiNotes };
+      const guitarVoicing = generateGuitarChordVoicing(rootPc, quality);
+      return { rootPc, quality, chordName: `${rootName}${suffix}`, midiNotes, guitarVoicing };
     });
   };
 
-  const dragOrExportMidi = async (bytes: Uint8Array, fileName: string) => {
-    if (window.api.dragMidi) {
-      await window.api.dragMidi(fileName, Array.from(bytes));
-    } else if (window.api.saveMidi) {
-      const saved = await window.api.saveMidi(fileName, Array.from(bytes));
-      if (saved) toast('Chord MIDI exported', saved);
-    }
-  };
+  progTabBtn.addEventListener('click', () => {
+    currentTabMode = 'progression';
+    progTabBtn.classList.add('is-active');
+    scaleTabBtn.classList.remove('is-active');
+    lickTabBtn.classList.remove('is-active');
+    const resolvedProg = resolveProgression(MOST_USED_PROGRESSIONS[0].degreeIndices);
+    activeTabResult = generateProgressionGuitarTab(
+      resolvedProg.map((p, idx) => ({ rootPc: p.rootPc, quality: p.quality, chordName: p.chordName, roman: MOST_USED_PROGRESSIONS[0].roman[idx] }))
+    );
+    updateTabDisplay();
+  });
 
-  const chordPanel = el('div', 'chord-panel');
-  chordPanel.append(el('p', 'chord-panel__title', '🎹 Chord Ideas'));
+  const chordPanel = el('div', 'randomizer-panel-card chord-panel');
+  const chordPanelHead = el('div', 'randomizer-panel-card__header');
+  chordPanelHead.append(el('h4', 'randomizer-panel-card__title', '🎹 Chord Ideas & Voicings'));
+  chordPanel.append(chordPanelHead);
 
   const chordPanelBtns = el('div', 'chord-panel-btns');
-  const mostUsedBtn = el('button', 'chord-panel-tab-btn', '🎵 Most Used Progressions');
+  const mostUsedBtn = el('button', 'chord-panel-tab-btn is-active', '🎵 Most Used Progressions');
   const allChordsBtn = el('button', 'chord-panel-tab-btn', '🎼 All Chords in Scale');
   chordPanelBtns.append(mostUsedBtn, allChordsBtn);
   chordPanel.append(chordPanelBtns);
@@ -11568,21 +11800,72 @@ function renderRandomizerTool(entry: any = null) {
     chordPanelContent.innerHTML = '';
     const list = el('div', 'chord-prog-list');
 
-    MOST_USED_PROGRESSIONS.forEach((prog) => {
+    MOST_USED_PROGRESSIONS.forEach((prog, progIdx) => {
       const resolved = resolveProgression(prog.degreeIndices);
       const item = el('div', 'chord-prog-item');
-      item.append(el('div', 'chord-prog-item__roman', prog.roman.join(' – ')));
-      item.append(el('div', 'chord-prog-item__chords', resolved.map(r => r.chordName).join(' → ')));
-      item.append(el('div', 'chord-prog-item__name', prog.name));
+      item.setAttribute('data-prog-idx', String(progIdx));
+
+      const progHeader = el('div', 'chord-prog-item__header');
+      progHeader.append(el('div', 'chord-prog-item__roman', prog.roman.join(' – ')));
+      progHeader.append(el('div', 'chord-prog-item__name', prog.name));
+      item.append(progHeader);
+
+      item.append(el('div', 'chord-prog-item__chords', resolved.map((r) => r.chordName).join(' → ')));
+
+      // Guitar Tab Voicings badge
+      const tabVoicings = resolved.map((r) => r.guitarVoicing.tabStr).join(' → ');
+      item.append(el('div', 'chord-prog-item__voicing', `🎸 ${tabVoicings}`));
 
       const itemActions = el('div', 'chord-prog-item__actions');
+
+      // Play Progression button
+      const playProgBtn = el('button', 'pill pill--sm scale-action-btn chord-play-btn');
+      playProgBtn.innerHTML = '▶ Play';
+      playProgBtn.title = `Audition "${prog.name}" chord progression at ${state.bpm} BPM`;
+
+      playProgBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const progSessionId = `prog-${progIdx}`;
+        if (isScalePlaying(progSessionId)) {
+          stopScalePlayback();
+          playProgBtn.innerHTML = '▶ Play';
+          item.classList.remove('is-playing');
+          return;
+        }
+
+        // Reset any other playing progression buttons
+        list.querySelectorAll('.chord-play-btn').forEach((b) => (b.innerHTML = '▶ Play'));
+        list.querySelectorAll('.chord-prog-item').forEach((it) => it.classList.remove('is-playing'));
+
+        playProgBtn.innerHTML = '⏸ Pause';
+        item.classList.add('is-playing');
+
+        playChordProgressionSequence(
+          resolved,
+          state.bpm,
+          state.tuningA4,
+          progSessionId,
+          (stepIdx) => {
+            const rootPc = resolved[stepIdx].rootPc;
+            fretboardSvg.vibrateNote(rootPc);
+          },
+          () => {
+            playProgBtn.innerHTML = '▶ Play';
+            item.classList.remove('is-playing');
+          }
+        );
+      });
+      itemActions.append(playProgBtn);
+
+      // Drag MIDI button
       const dragBtn = el('button', 'pill pill--sm scale-midi-btn');
       dragBtn.innerHTML = '⤓ Drag MIDI';
       dragBtn.title = `Drag "${prog.name}" progression MIDI into your DAW`;
       dragBtn.draggable = true;
-      const progMidiItems = resolved.map(r => ({ midiNotes: r.midiNotes, durationBeats: 4 }));
+      const progMidiItems = resolved.map((r) => ({ midiNotes: r.midiNotes, durationBeats: 4 }));
       const progBytes = progressionMidi(progMidiItems, { bpm: state.bpm });
       const progFileName = `Chord_${prog.name.replace(/\s+/g, '_')}_${state.tonic}_${state.bpm}BPM.mid`;
+
       dragBtn.addEventListener('dragstart', async (e: DragEvent) => {
         e.preventDefault();
         e.stopPropagation();
@@ -11608,42 +11891,73 @@ function renderRandomizerTool(entry: any = null) {
 
     const grid = el('div', 'chord-diatonic-grid');
     diatonic.forEach((chord) => {
-      const pill = el('button', 'chord-pill');
+      const card = el('div', 'chord-pill');
       const nameSpan = document.createElement('span');
+      nameSpan.className = 'chord-pill__name';
       nameSpan.textContent = chord.chordName;
       const romanSpan = el('span', 'chord-pill__roman', chord.roman);
-      pill.append(nameSpan, romanSpan);
-      pill.title = `Click to audition ${chord.chordName}  |  Drag for 1-bar MIDI`;
-      pill.draggable = true;
+      const tabSpan = el('span', 'chord-pill__tab', `🎸 ${chord.guitarVoicing.tabStr}`);
+      card.append(nameSpan, romanSpan, tabSpan);
+      card.title = `Click to play ${chord.chordName}  |  Drag for 1-bar MIDI`;
+      card.draggable = true;
 
       const chordBytes = progressionMidi([{ midiNotes: chord.midiNotes, durationBeats: 4 }], { bpm: state.bpm });
       const chordFileName = `Chord_${chord.chordName.replace(/[^a-zA-Z0-9]/g, '')}_${state.tonic}_${state.bpm}BPM.mid`;
 
-      pill.addEventListener('click', (e) => {
+      card.addEventListener('click', (e) => {
         e.stopPropagation();
-        // Audition: play all notes of the chord
-        chord.midiNotes.forEach((mNote: number, i: number) => {
-          const pc = mNote % 12;
-          const oct = Math.floor(mNote / 12) - 1;
-          setTimeout(() => playSynthNote(pc, oct, state.tuningA4, 1.2), i * 20);
-        });
+        card.classList.add('is-playing');
+        playSynthChord(chord.midiNotes, state.tuningA4, 1.4);
+        fretboardSvg.vibrateNote(chord.rootPc);
+        setTimeout(() => card.classList.remove('is-playing'), 500);
       });
 
-      pill.addEventListener('dragstart', async (e: DragEvent) => {
+      card.addEventListener('dragstart', async (e: DragEvent) => {
         e.preventDefault();
         e.stopPropagation();
         if (window.api.dragMidi) await window.api.dragMidi(chordFileName, Array.from(chordBytes));
       });
 
-      grid.append(pill);
+      grid.append(card);
+    });
+
+    const footerActions = el('div', 'chord-diatonic-actions');
+
+    // Play all chords button
+    const playAllBtn = el('button', 'pill pill--sm scale-action-btn', '▶ Play All Chords');
+    playAllBtn.title = 'Play all diatonic chords in scale order at current BPM';
+    playAllBtn.addEventListener('click', () => {
+      if (isScalePlaying('all-diatonic-seq')) {
+        stopScalePlayback();
+        playAllBtn.textContent = '▶ Play All Chords';
+        return;
+      }
+      playAllBtn.textContent = '⏸ Pause';
+      playChordProgressionSequence(
+        diatonic,
+        state.bpm,
+        state.tuningA4,
+        'all-diatonic-seq',
+        (stepIdx) => {
+          grid.querySelectorAll('.chord-pill').forEach((p, idx) => {
+            if (idx === stepIdx) p.classList.add('is-playing');
+            else p.classList.remove('is-playing');
+          });
+          fretboardSvg.vibrateNote(diatonic[stepIdx].rootPc);
+        },
+        () => {
+          playAllBtn.textContent = '▶ Play All Chords';
+          grid.querySelectorAll('.chord-pill').forEach((p) => p.classList.remove('is-playing'));
+        }
+      );
     });
 
     // Drag all diatonic chords in sequence
-    const allDiatonicItems = diatonic.map(c => ({ midiNotes: c.midiNotes, durationBeats: 4 }));
+    const allDiatonicItems = diatonic.map((c) => ({ midiNotes: c.midiNotes, durationBeats: 4 }));
     const allBytes = progressionMidi(allDiatonicItems, { bpm: state.bpm });
     const allFileName = `Diatonic_${state.tonic}_${state.scaleName.replace(/[^a-zA-Z0-9_]/g, '_')}_${state.bpm}BPM.mid`;
 
-    const dragAllBtn = el('button', 'chord-panel-drag-all-btn', '⤓ Drag All Chords');
+    const dragAllBtn = el('button', 'pill pill--sm scale-midi-btn', '⤓ Drag All Chords MIDI');
     dragAllBtn.title = `Drag all ${diatonic.length} diatonic chords as a MIDI progression`;
     dragAllBtn.draggable = true;
     dragAllBtn.addEventListener('dragstart', async (e: DragEvent) => {
@@ -11656,7 +11970,8 @@ function renderRandomizerTool(entry: any = null) {
       await dragOrExportMidi(allBytes, allFileName);
     });
 
-    chordPanelContent.append(grid, dragAllBtn);
+    footerActions.append(playAllBtn, dragAllBtn);
+    chordPanelContent.append(grid, footerActions);
   };
 
   mostUsedBtn.addEventListener('click', () => showMostUsed());
@@ -11665,16 +11980,10 @@ function renderRandomizerTool(entry: any = null) {
   // Default view: Most Used
   showMostUsed();
 
-  // Flex wrapper: keyboard left, chord panel right
-  const kbChordWrapper = el('div', 'scale-kb-chord-wrapper');
-  const kbLeft = el('div', 'scale-kb-left');
-  kbLeft.append(svgKb, scaleActions);
-  kbChordWrapper.append(kbLeft, chordPanel);
-  kbSection.innerHTML = '';
-  kbSection.append(el('h4', 'scale-notes__title', `Interactive Scale Keyboard: ${state.tonic} ${state.scaleName}`));
-  kbSection.append(kbChordWrapper);
+  // Assemble 2-column studio console grid
+  consoleGrid.append(instrumentsCol, chordPanel);
+  resultBox.append(consoleGrid);
 
-  resultBox.append(kbSection);
 
 
 
@@ -13602,6 +13911,7 @@ const converterState = {
     bitrate: 192,
     sampleRate: null as number | null,
     bitDepth: 24,
+    enableSplit: true,
     maxSeconds: 300, // 5 minutes
     maxBytes: 50 * 1024 * 1024, // 50 MB
     trimSilence: true,
@@ -13833,36 +14143,55 @@ function renderStandaloneConverter() {
 
   // Split Limits & Padding Card
   const limitCard = el('div', 'converter-card');
-  limitCard.append(el('h4', 'converter-card__title', '2. Service Split Limits'));
+  const limitHead = el('div', 'converter-card__head-row');
+  limitHead.append(el('h4', 'converter-card__title', '2. Service Split Limits'));
 
-  const limitRow = el('div', 'converter-limit-row');
-  limitRow.innerHTML = `
-    <div class="converter-limit-item">
-      <span class="converter-label">Max Duration (minutes)</span>
-      <input type="number" min="1" max="60" value="${converterState.options.maxSeconds / 60}" class="converter-number-input" id="convMaxMin" />
-    </div>
-    <div class="converter-limit-item">
-      <span class="converter-label">Max File Size (MB)</span>
-      <input type="number" min="5" max="500" value="${Math.round(converterState.options.maxBytes / (1024 * 1024))}" class="converter-number-input" id="convMaxMb" />
-    </div>
-  `;
-  limitCard.append(limitRow);
-
-  const silenceOption = el('label', 'converter-checkbox-label');
-  const silenceCheck = document.createElement('input');
-  silenceCheck.type = 'checkbox';
-  silenceCheck.checked = converterState.options.trimSilence;
-  silenceCheck.addEventListener('change', () => {
-    converterState.options.trimSilence = silenceCheck.checked;
+  const splitToggleLabel = el('label', 'converter-toggle-label');
+  const splitToggleCheck = document.createElement('input');
+  splitToggleCheck.type = 'checkbox';
+  splitToggleCheck.checked = converterState.options.enableSplit !== false;
+  splitToggleCheck.addEventListener('change', () => {
+    converterState.options.enableSplit = splitToggleCheck.checked;
     updatePlanAndRender();
   });
-  silenceOption.append(silenceCheck, document.createTextNode(' Cut in natural silence gaps (search up to 45s back)'));
-  limitCard.append(silenceOption);
+  splitToggleLabel.append(splitToggleCheck, document.createTextNode(' Enable split limits'));
+  limitHead.append(splitToggleLabel);
+  limitCard.append(limitHead);
+
+  if (converterState.options.enableSplit !== false) {
+    const limitRow = el('div', 'converter-limit-row');
+    limitRow.innerHTML = `
+      <div class="converter-limit-item">
+        <span class="converter-label">Max Duration (minutes)</span>
+        <input type="number" min="1" max="60" value="${converterState.options.maxSeconds / 60}" class="converter-number-input" id="convMaxMin" />
+      </div>
+      <div class="converter-limit-item">
+        <span class="converter-label">Max File Size (MB)</span>
+        <input type="number" min="5" max="500" value="${Math.round(converterState.options.maxBytes / (1024 * 1024))}" class="converter-number-input" id="convMaxMb" />
+      </div>
+    `;
+    limitCard.append(limitRow);
+
+    const silenceOption = el('label', 'converter-checkbox-label');
+    const silenceCheck = document.createElement('input');
+    silenceCheck.type = 'checkbox';
+    silenceCheck.checked = converterState.options.trimSilence;
+    silenceCheck.addEventListener('change', () => {
+      converterState.options.trimSilence = silenceCheck.checked;
+      updatePlanAndRender();
+    });
+    silenceOption.append(silenceCheck, document.createTextNode(' Cut in natural silence gaps (search up to 45s back)'));
+    limitCard.append(silenceOption);
+  } else {
+    const disabledNote = el('div', 'converter-limit-disabled-note');
+    disabledNote.innerHTML = '<span>⚡ <strong>Split limits disabled</strong> — output will be converted as a single continuous file without splitting into parts.</span>';
+    limitCard.append(disabledNote);
+  }
 
   controlsGrid.append(limitCard);
   container.append(controlsGrid);
 
-  // Hook inputs
+  // Hook inputs if active
   setTimeout(() => {
     const minInput = document.getElementById('convMaxMin') as HTMLInputElement | null;
     const mbInput = document.getElementById('convMaxMb') as HTMLInputElement | null;
@@ -13892,11 +14221,22 @@ function renderStandaloneConverter() {
     `;
   } else if (converterState.plan) {
     const plan = converterState.plan;
-    const boundText = plan.limit.boundBy === 'size'
-      ? `⚠️ Size Limit Binds First (${(converterState.options.maxBytes / (1024 * 1024)).toFixed(0)} MB reached before duration)`
-      : `⏱ Duration Limit Binds First (${(converterState.options.maxSeconds / 60).toFixed(0)} min)`;
+    let boundText = '';
+    let limitClass = 'converter-badge--info';
+    if (converterState.options.enableSplit === false || plan.limit.boundBy === 'none') {
+      boundText = '✨ Single File Mode (No Splitting)';
+      limitClass = 'converter-badge--active';
+    } else if (plan.limit.boundBy === 'size') {
+      boundText = `⚠️ Size Limit Binds First (${(converterState.options.maxBytes / (1024 * 1024)).toFixed(0)} MB reached before duration)`;
+      limitClass = 'converter-badge--warn';
+    } else {
+      boundText = `⏱ Duration Limit Binds First (${(converterState.options.maxSeconds / 60).toFixed(0)} min)`;
+      limitClass = 'converter-badge--info';
+    }
 
-    const limitClass = plan.limit.boundBy === 'size' ? 'converter-badge--warn' : 'converter-badge--info';
+    const maxPartLen = (converterState.options.enableSplit === false || !Number.isFinite(plan.limit.seconds))
+      ? formatTimeSeconds(plan.totalDuration)
+      : formatTimeSeconds(plan.limit.seconds);
 
     estimateBox.innerHTML = `
       <div class="converter-estimate-head">
@@ -13905,14 +14245,14 @@ function renderStandaloneConverter() {
           <span class="converter-badge converter-badge--active">Output: ${converterState.options.format.toUpperCase()}</span>
         </div>
         <div class="converter-estimate-stat">
-          Max Part Length: <strong>${formatTimeSeconds(plan.limit.seconds)}</strong>
+          ${converterState.options.enableSplit === false ? 'Total Output Duration' : 'Max Part Length'}: <strong>${maxPartLen}</strong>
         </div>
       </div>
       <div class="converter-parts-list">
         ${plan.parts.map((p: any, pIdx: number) => `
           <div class="converter-part-item">
-            <span class="converter-part-name">Part ${pIdx + 1}: ${p.targetName || `Part_${pIdx + 1}.${converterState.options.format}`}</span>
-            <span class="converter-part-metrics">${formatTimeSeconds(p.durationSeconds)} · ~${(p.estimatedBytes / (1024 * 1024)).toFixed(1)} MB</span>
+            <span class="converter-part-name">${plan.parts.length === 1 ? 'Output File' : `Part ${pIdx + 1}`}: ${p.targetName || (plan.parts.length === 1 ? `Full_Track.${converterState.options.format}` : `Part_${pIdx + 1}.${converterState.options.format}`)}</span>
+            <span class="converter-part-metrics">${formatTimeSeconds(p.durationSeconds || p.duration)} · ~${((p.estimatedBytes || p.bytes) / (1024 * 1024)).toFixed(1)} MB</span>
           </div>
         `).join('')}
       </div>

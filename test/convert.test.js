@@ -197,3 +197,17 @@ test('an encoder fallback is reported, never silent', async () => {
     assert.equal(resolved.active, 'lame');
   }
 });
+
+test('enableSplit false keeps entire audio as a single undivided part', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dawbuddy-'));
+  const file = writeWav(path.join(dir, 'long.wav'), { seconds: 15, sampleRate: 44100 });
+
+  const planSplit = await convert.planJob([file], { maxSeconds: 5, enableSplit: true });
+  assert.ok(planSplit.parts.length > 1, 'should split when enableSplit is true');
+
+  const planNoSplit = await convert.planJob([file], { maxSeconds: 5, enableSplit: false });
+  assert.equal(planNoSplit.parts.length, 1, 'should not split when enableSplit is false');
+  assert.equal(planNoSplit.limit.boundBy, 'none');
+  assert.equal(planNoSplit.parts[0].label, null);
+});
+

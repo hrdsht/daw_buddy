@@ -356,3 +356,272 @@ export function codeFor(tonic: string, mode: string): string | null {
   );
   return found ? found[0] : null;
 }
+
+/* ================================================================== */
+/* Guitar Tablature Generation                                        */
+/* ================================================================== */
+
+export interface GuitarTabNote {
+  stringIndex: number; // 0 = High E (e), 1 = B, 2 = G, 3 = D, 4 = A, 5 = Low E (E)
+  stringName: string;
+  fret: number;
+  pc: number;
+  octave: number;
+  name: string;
+  degree?: number | null;
+}
+
+export interface GuitarTabResult {
+  title: string;
+  lines: { label: string; text: string }[];
+  rawText: string;
+  notes: GuitarTabNote[];
+}
+
+export const GUITAR_STRING_LABELS = ['e', 'B', 'G', 'D', 'A', 'E'];
+
+/**
+ * Generates an ascending & descending guitar scale run tab in root position / Box 1.
+ */
+export function generateGuitarScaleTab(tonicPc: number, degrees: number[]): GuitarTabResult {
+  const inScale = new Set(degrees.map((d) => (tonicPc + d) % 12));
+
+  // Find standard box starting fret from the root on Low E or A string
+  const rootOnLowE = ((tonicPc - 4) % 12 + 12) % 12; // E string open is E (4)
+  const rootOnA = ((tonicPc - 9) % 12 + 12) % 12;    // A string open is A (9)
+
+  let boxStart = 0;
+  if (rootOnLowE <= 8) {
+    boxStart = Math.max(0, rootOnLowE <= 2 ? 0 : rootOnLowE - 1);
+  } else if (rootOnA <= 7) {
+    boxStart = Math.max(0, rootOnA - 1);
+  } else {
+    boxStart = Math.max(0, rootOnLowE - 1);
+  }
+  const boxEnd = Math.min(12, boxStart + 4);
+
+  // Collect playable notes string by string from Low E (5) to High E (0)
+  const ascendingNotes: GuitarTabNote[] = [];
+  const stringOrder = [5, 4, 3, 2, 1, 0];
+
+  stringOrder.forEach((strIdx) => {
+    const strDef = GUITAR_STRINGS[strIdx];
+    for (let f = boxStart; f <= boxEnd; f++) {
+      const pc = (strDef.openPc + f) % 12;
+      if (inScale.has(pc)) {
+        const octave = strDef.openOctave + Math.floor((strDef.openPc + f) / 12);
+        ascendingNotes.push({
+          stringIndex: strIdx,
+          stringName: strDef.name,
+          fret: f,
+          pc,
+          octave,
+          name: NOTE_NAMES[pc],
+          degree: degreeOf(pc, tonicPc, degrees)
+        });
+      }
+    }
+  });
+
+  // Descending notes (reverse of ascending excluding the peak note)
+  const descendingNotes = [...ascendingNotes].reverse().slice(1);
+  const allNotes = [...ascendingNotes, ...descendingNotes];
+
+  // Format into 6 TAB lines
+  const stringBuffers: string[][] = [[], [], [], [], [], []];
+  allNotes.forEach((n) => {
+    const fretStr = String(n.fret);
+    const padLen = Math.max(2, fretStr.length + 1);
+    for (let s = 0; s < 6; s++) {
+      if (s === n.stringIndex) {
+        stringBuffers[s].push(fretStr.padEnd(padLen, '-'));
+      } else {
+        stringBuffers[s].push('-'.repeat(padLen));
+      }
+    }
+  });
+
+  const lines = [0, 1, 2, 3, 4, 5].map((strIdx) => {
+    const label = GUITAR_STRING_LABELS[strIdx];
+    const text = `${label}|--${stringBuffers[strIdx].join('-')}--|`;
+    return { label, text };
+  });
+
+  const rawText = lines.map((l) => l.text).join('\n');
+  return {
+    title: `${NOTE_NAMES[tonicPc]} Scale Box Run (Frets ${boxStart}–${boxEnd})`,
+    lines,
+    rawText,
+    notes: allNotes
+  };
+}
+
+/**
+ * Computes a standard 6-string guitar chord voicing for any root and quality.
+ */
+export function generateGuitarChordVoicing(rootPc: number, quality: string): { frets: number[]; tabStr: string; chordName: string } {
+  const rootName = NOTE_NAMES[rootPc];
+  const isMinor = quality.includes('min') || (quality.includes('m') && !quality.includes('maj'));
+  const isDim = quality.includes('dim') || quality.includes('°');
+
+  // Find root on 6th string (Low E) and 5th string (A)
+  const r6 = ((rootPc - 4) % 12 + 12) % 12; // Low E
+  const r5 = ((rootPc - 9) % 12 + 12) % 12; // A string
+
+  let frets: number[] = [-1, -1, -1, -1, -1, -1]; // [High E (0), B (1), G (2), D (3), A (4), Low E (5)]
+
+  if (r5 <= 7) {
+    // 5th string A-shape barre/open chord
+    if (isMinor) {
+      frets = [r5, r5 + 1, r5 + 2, r5 + 2, r5, -1];
+    } else if (isDim) {
+      frets = [-1, r5 + 1, r5 + 2, r5 + 1, r5, -1];
+    } else {
+      frets = [r5, r5 + 2, r5 + 2, r5 + 2, r5, -1];
+    }
+  } else {
+    // 6th string E-shape barre/open chord
+    if (isMinor) {
+      frets = [r6, r6, r6, r6 + 2, r6 + 2, r6];
+    } else if (isDim) {
+      frets = [-1, r6 - 1, r6 - 1, r6, -1, r6];
+    } else {
+      frets = [r6, r6, r6 + 1, r6 + 2, r6 + 2, r6];
+    }
+  }
+
+  // Adjust standard open chord shapes if root is E, A, C, D, G
+  if (rootPc === 4 && !isMinor) frets = [0, 0, 1, 2, 2, 0]; // E maj
+  if (rootPc === 4 && isMinor) frets = [0, 0, 0, 2, 2, 0]; // E min
+  if (rootPc === 9 && !isMinor) frets = [0, 2, 2, 2, 0, -1]; // A maj
+  if (rootPc === 9 && isMinor) frets = [0, 1, 2, 2, 0, -1]; // A min
+  if (rootPc === 0 && !isMinor) frets = [0, 1, 0, 2, 3, -1]; // C maj
+  if (rootPc === 2 && !isMinor) frets = [2, 3, 2, 0, -1, -1]; // D maj
+  if (rootPc === 2 && isMinor) frets = [1, 3, 2, 0, -1, -1]; // D min
+  if (rootPc === 7 && !isMinor) frets = [3, 0, 0, 0, 2, 3]; // G maj
+
+  const suffix = isDim ? '°' : isMinor ? 'm' : '';
+  const chordName = `${rootName}${suffix}`;
+  const tabStr = [5, 4, 3, 2, 1, 0].map((s) => (frets[s] === -1 ? 'x' : String(frets[s]))).join('-');
+
+  return { frets, tabStr, chordName };
+}
+
+/**
+ * Generates 6-line Guitar Tablature for a chord progression.
+ */
+export function generateProgressionGuitarTab(
+  chords: Array<{ rootPc: number; quality: string; chordName: string; roman?: string }>
+): GuitarTabResult {
+  const voicings = chords.map((c) => generateGuitarChordVoicing(c.rootPc, c.quality));
+  const lines: { label: string; text: string }[] = [];
+  const stringOrder = [0, 1, 2, 3, 4, 5]; // High E (0) to Low E (5)
+
+  stringOrder.forEach((strIdx) => {
+    const label = GUITAR_STRING_LABELS[strIdx];
+    const segs = voicings.map((v) => {
+      const f = v.frets[strIdx];
+      const str = f === -1 ? 'x' : String(f);
+      return str.padEnd(4, '-');
+    });
+    lines.push({
+      label,
+      text: `${label}|--${segs.join('---')}---|`
+    });
+  });
+
+  const chordLabelsRow = '   ' + voicings.map((v, i) => {
+    const label = (chords[i].roman ? `${chords[i].roman} (${v.chordName})` : v.chordName);
+    return label.padEnd(7, ' ');
+  }).join(' ');
+
+  const rawText = lines.map((l) => l.text).join('\n') + '\n' + chordLabelsRow;
+  return {
+    title: 'Guitar Progression Tablature',
+    lines,
+    rawText,
+    notes: []
+  };
+}
+
+/**
+ * Generates a melodic lead guitar riff/lick in the given scale.
+ */
+export function generateGuitarLickTab(tonicPc: number, degrees: number[]): GuitarTabResult {
+  const inScale = new Set(degrees.map((d) => (tonicPc + d) % 12));
+  const rootOnLowE = ((tonicPc - 4) % 12 + 12) % 12;
+  const boxStart = Math.max(0, rootOnLowE <= 2 ? 0 : rootOnLowE - 1);
+
+  // Create an 8-note melodic riff pattern (Root -> 3rd/4th -> 5th -> 7th -> Octave -> 5th -> 2nd -> Root)
+  const lickDegrees = [
+    0,
+    degrees[Math.min(2, degrees.length - 1)] || 4,
+    degrees[Math.min(3, degrees.length - 1)] || 5,
+    degrees[Math.min(4, degrees.length - 1)] || 7,
+    12,
+    degrees[Math.min(4, degrees.length - 1)] || 7,
+    degrees[1] || 2,
+    0
+  ];
+  const lickNotes: GuitarTabNote[] = [];
+
+  lickDegrees.forEach((deg) => {
+    const notePc = (tonicPc + deg) % 12;
+    let bestStr = 2; // G string default
+    let bestFret = 0;
+    let found = false;
+
+    for (const strIdx of [3, 2, 1, 0, 4, 5]) {
+      const strDef = GUITAR_STRINGS[strIdx];
+      for (let f = boxStart; f <= boxStart + 5; f++) {
+        if ((strDef.openPc + f) % 12 === notePc) {
+          bestStr = strIdx;
+          bestFret = f;
+          found = true;
+          break;
+        }
+      }
+      if (found) break;
+    }
+
+    const strDef = GUITAR_STRINGS[bestStr];
+    lickNotes.push({
+      stringIndex: bestStr,
+      stringName: strDef.name,
+      fret: bestFret,
+      pc: notePc,
+      octave: strDef.openOctave + Math.floor((strDef.openPc + bestFret) / 12),
+      name: NOTE_NAMES[notePc],
+      degree: degreeOf(notePc, tonicPc, degrees)
+    });
+  });
+
+  const stringBuffers: string[][] = [[], [], [], [], [], []];
+  lickNotes.forEach((n) => {
+    const fretStr = String(n.fret);
+    const padLen = Math.max(3, fretStr.length + 2);
+    for (let s = 0; s < 6; s++) {
+      if (s === n.stringIndex) {
+        stringBuffers[s].push(fretStr.padEnd(padLen, '-'));
+      } else {
+        stringBuffers[s].push('-'.repeat(padLen));
+      }
+    }
+  });
+
+  const lines = [0, 1, 2, 3, 4, 5].map((strIdx) => {
+    const label = GUITAR_STRING_LABELS[strIdx];
+    return {
+      label,
+      text: `${label}|--${stringBuffers[strIdx].join('-')}--|`
+    };
+  });
+
+  return {
+    title: `${NOTE_NAMES[tonicPc]} Lead Riff & Motif Tab`,
+    lines,
+    rawText: lines.map((l) => l.text).join('\n'),
+    notes: lickNotes
+  };
+}
+

@@ -7069,38 +7069,48 @@ button.is-loading {
 }
 
 .randomizer-hero {
-  background: linear-gradient(135deg, color-mix(in srgb, var(--raised) 90%, var(--amber) 10%), var(--raised));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--raised) 92%, var(--amber) 8%), var(--raised));
   border: 1px solid color-mix(in srgb, var(--line) 80%, var(--amber) 20%);
   border-radius: var(--r);
-  padding: 24px;
-  margin-bottom: 20px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 16px;
+  gap: 12px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
 }
 
+.randomizer-hero .section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 0;
+}
+
 .randomizer-hero__title {
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 700;
   color: var(--text);
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .randomizer-hero__desc {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--dim);
-  max-width: 540px;
+  max-width: 680px;
   margin: 0;
-  line-height: 1.5;
+  line-height: 1.4;
 }
 
 .randomizer-roll-btn {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 700;
-  padding: 12px 28px;
+  padding: 10px 22px;
   border-radius: 999px;
   background: linear-gradient(135deg, var(--amber), #ff9900);
   color: #000;
@@ -7108,13 +7118,14 @@ button.is-loading {
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   box-shadow: 0 4px 18px color-mix(in srgb, var(--amber) 50%, transparent);
   transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  align-self: flex-start;
 }
 
 .randomizer-roll-btn:hover {
-  transform: translateY(-2px) scale(1.03);
+  transform: translateY(-2px) scale(1.02);
   box-shadow: 0 6px 24px color-mix(in srgb, var(--amber) 75%, transparent);
 }
 
@@ -7126,9 +7137,9 @@ button.is-loading {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
   gap: 8px;
-  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
 }
 
 .randomizer-raga-sugg-pill {
@@ -9216,67 +9227,181 @@ button.is-loading {
   gap: 6px;
 }
 
-/* =================== Randomizer: Chord Progression Panel =================== */
-.scale-kb-chord-wrapper {
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
-  flex-wrap: wrap;
+/* =================== Randomizer: 2-Column Studio Performance & Tab Console =================== */
+.randomizer-console-grid {
+  display: grid;
+  grid-template-columns: minmax(520px, 1.6fr) minmax(320px, 1.1fr);
+  gap: 16px;
+  margin-top: 16px;
+  align-items: stretch;
 }
 
-.scale-kb-left {
-  flex: 1 1 300px;
+@media (max-width: 1100px) {
+  .randomizer-console-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.randomizer-instruments-col {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
   min-width: 0;
 }
 
-.chord-panel {
-  flex: 0 0 220px;
-  min-width: 200px;
+.randomizer-panel-card {
   background: var(--raised);
   border: 1px solid var(--line);
   border-radius: var(--r);
-  padding: 10px;
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
 }
 
-.chord-panel__title {
-  font-size: 11px;
+.randomizer-panel-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.randomizer-panel-card__title {
+  font-size: 13px;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--dim);
+  color: var(--text);
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Guitar Tablature Box */
+.guitar-tab-actions-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.guitar-tab-mode-tabs {
+  display: flex;
+  gap: 5px;
+}
+
+.guitar-tab-mode-tab {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--dim);
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.guitar-tab-mode-tab:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.guitar-tab-mode-tab.is-active {
+  background: color-mix(in srgb, var(--accent) 20%, var(--surface));
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.guitar-tab-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.guitar-tab-container {
+  background: #090b0d;
+  border: 1px solid color-mix(in srgb, var(--line) 80%, var(--amber) 20%);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text);
+  overflow-x: auto;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.guitar-tab-title {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--amber);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.guitar-tab-line {
+  display: flex;
+  align-items: center;
+  white-space: pre;
+  color: color-mix(in srgb, var(--text) 85%, transparent);
+  letter-spacing: 0.03em;
+  font-size: 12px;
+}
+
+.guitar-tab-line--string-label {
+  color: var(--amber);
+  font-weight: 700;
+  width: 14px;
+  display: inline-block;
+}
+
+.guitar-tab-line--content {
+  color: var(--text);
+}
+
+/* Chord Engine Panel */
+.chord-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
 }
 
 .chord-panel-btns {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 6px;
 }
 
 .chord-panel-tab-btn {
-  width: 100%;
-  text-align: left;
-  font-size: 12px;
+  text-align: center;
+  font-size: 11.5px;
   font-weight: 600;
   padding: 7px 10px;
   border-radius: 7px;
   background: var(--surface);
   border: 1px solid var(--line);
-  color: var(--text);
+  color: var(--dim);
   cursor: pointer;
   transition: all 0.12s ease;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
 }
 
 .chord-panel-tab-btn:hover {
   border-color: var(--accent);
   background: var(--hover);
-  color: var(--accent);
+  color: var(--text);
 }
 
 .chord-panel-tab-btn.is-active {
@@ -9288,64 +9413,97 @@ button.is-loading {
 .chord-panel-content {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  flex: 1;
 }
 
 /* Most Used Progressions list */
 .chord-prog-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  max-height: 260px;
+  gap: 6px;
+  max-height: 480px;
   overflow-y: auto;
 }
 
 .chord-prog-item {
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 7px;
-  padding: 6px 8px;
+  border-radius: 8px;
+  padding: 8px 10px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.chord-prog-item.is-playing {
+  border-color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 12%, var(--surface));
+  box-shadow: 0 0 14px color-mix(in srgb, var(--amber) 30%, transparent);
+}
+
+.chord-prog-item__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .chord-prog-item__roman {
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
   font-family: var(--mono);
   color: var(--accent);
 }
 
+.chord-prog-item__name {
+  font-size: 10px;
+  color: var(--dim);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
 .chord-prog-item__chords {
-  font-size: 11px;
+  font-size: 11.5px;
+  font-weight: 600;
   color: var(--text);
 }
 
-.chord-prog-item__name {
+.chord-prog-item__voicing {
   font-size: 10px;
-  color: var(--muted);
+  font-family: var(--mono);
+  color: var(--dim);
+  background: rgba(0, 0, 0, 0.25);
+  padding: 2px 6px;
+  border-radius: 4px;
+  align-self: flex-start;
 }
 
 .chord-prog-item__actions {
   display: flex;
-  gap: 4px;
-  margin-top: 3px;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.chord-play-btn {
+  font-weight: 700;
 }
 
 /* All Chords in Scale grid */
 .chord-diatonic-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 4px;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 6px;
 }
 
 .chord-pill {
   font-size: 11.5px;
   font-weight: 600;
   font-family: var(--mono);
-  padding: 6px 4px;
-  border-radius: 6px;
+  padding: 8px 6px;
+  border-radius: 8px;
   background: var(--surface);
   border: 1px solid var(--line);
   color: var(--text);
@@ -9354,14 +9512,25 @@ button.is-loading {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
+  gap: 2px;
   text-align: center;
 }
 
-.chord-pill span.chord-pill__roman {
+.chord-pill__name {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.chord-pill__roman {
   font-size: 9.5px;
   color: var(--dim);
   font-weight: 400;
+}
+
+.chord-pill__tab {
+  font-size: 9px;
+  color: color-mix(in srgb, var(--dim) 90%, transparent);
+  margin-top: 1px;
 }
 
 .chord-pill:hover {
@@ -9371,38 +9540,19 @@ button.is-loading {
   transform: translateY(-1px);
 }
 
-.chord-pill:active {
-  transform: translateY(0px);
+.chord-pill.is-playing {
+  background: color-mix(in srgb, var(--amber) 25%, var(--surface));
+  border-color: var(--amber);
+  color: var(--amber);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--amber) 45%, transparent);
+  transform: translateY(-1px) scale(1.03);
 }
 
-.chord-panel-drag-all-btn {
-  width: 100%;
-  font-size: 11px;
-  padding: 6px 8px;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--accent) 12%, var(--raised));
-  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line));
-  color: var(--accent);
-  cursor: pointer;
-  transition: all 0.12s ease;
-  font-weight: 600;
+.chord-diatonic-actions {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-}
-
-.chord-panel-drag-all-btn:hover {
-  background: color-mix(in srgb, var(--accent) 22%, var(--raised));
-  border-color: var(--accent);
-}
-
-.chord-panel-drag-all-btn[draggable="true"] {
-  cursor: grab;
-}
-
-.chord-panel-drag-all-btn[draggable="true"]:active {
-  cursor: grabbing;
+  gap: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
 }
 
 /* =================== Time Sig Custom Picker toggle btn in meter card =================== */
@@ -9674,6 +9824,14 @@ button.is-loading {
   gap: 10px;
 }
 
+.converter-card__head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .converter-card__title {
   font-size: 12.5px;
   font-weight: 700;
@@ -9681,6 +9839,40 @@ button.is-loading {
   letter-spacing: 0.04em;
   color: var(--dim);
   margin: 0;
+}
+
+.converter-toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  padding: 3px 8px;
+  border-radius: 6px;
+  transition: all 0.12s ease;
+}
+
+.converter-toggle-label:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.converter-limit-disabled-note {
+  font-size: 11.5px;
+  color: var(--dim);
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px dashed var(--line);
+  padding: 10px 12px;
+  border-radius: 6px;
+  line-height: 1.45;
+}
+
+.converter-limit-disabled-note strong {
+  color: var(--text);
 }
 
 .converter-btn-row {
