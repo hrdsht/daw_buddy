@@ -925,6 +925,20 @@ function applyProjectResult(result, { background = false } = {}) {
   }
 
   renderCollections();
+
+  // If this is a background update, NEVER disrupt the user's active view,
+  // selections, open tools, or input fields that are being typed into.
+  if (background) {
+    const isUserTyping = document.activeElement && (
+      document.activeElement.tagName === 'INPUT' ||
+      document.activeElement.tagName === 'TEXTAREA' ||
+      (document.activeElement as HTMLElement).isContentEditable
+    );
+    if (view !== 'list' || isUserTyping) {
+      return;
+    }
+  }
+
   render();
 
   if (!Player.getCurrent()) {
@@ -4808,9 +4822,8 @@ function renderStemsTab(entry) {
 
   /* Stems Search & Quick Filter Controls */
   const searchWrap = el('div', 'stems-search-bar');
-  const searchInput = document.createElement('input');
+  const searchInput = el('input', 'stems-search-input') as HTMLInputElement;
   searchInput.type = 'text';
-  searchInput.className = 'stems-search-input';
   searchInput.placeholder = '🔍 Search stems (e.g. Battery, Keyscape, Omnisphere, GTR, Vox)…';
 
   const clearSearchBtn = el('button', 'pill pill--sm', 'Clear');
@@ -5486,8 +5499,13 @@ function renderNotesTab(entry) {
 /* ------------------------------ rename ---------------------------- */
 
 let renameFolder: string | null = null;
-let renameMode = 'simple';
-let renamerSubMode: 'smart' | 'bulk' = 'smart';
+const bulkRenameState = {
+  mode: 'simple' as 'simple' | 'template',
+  remove: '',
+  add: '',
+  template: '{project}_{name}_{n:02}',
+  position: 'prefix' as 'prefix' | 'suffix'
+};
 
 function renderRenamerSwitcher(entry: any = null, activeMode: 'smart' | 'bulk' = 'smart') {
   const switcher = el('div', 'renamer-mode-switcher');
@@ -5581,34 +5599,35 @@ function renderRenameTab(entry = null) {
   modeRow.style.marginBottom = '12px';
   const simpleBtn = el(
     'button',
-    `pill${renameMode === 'simple' ? ' is-on' : ''}`,
+    `pill${bulkRenameState.mode === 'simple' ? ' is-on' : ''}`,
     'Remove & add'
   );
   const templateBtn = el(
     'button',
-    `pill${renameMode === 'template' ? ' is-on' : ''}`,
+    `pill${bulkRenameState.mode === 'template' ? ' is-on' : ''}`,
     'Template'
   );
   modeRow.append(simpleBtn, templateBtn);
   section.append(modeRow);
 
-  simpleBtn.addEventListener('click', () => {
-    renameMode = 'simple';
-    render();
-  });
-  templateBtn.addEventListener('click', () => {
-    renameMode = 'template';
-    render();
-  });
-
   const controls = el('div', 'grid2');
 
   const removeField = fieldInput('Remove this text');
   removeField.input.placeholder = 'e.g. Demo_';
+  removeField.input.value = bulkRenameState.remove;
+  removeField.input.addEventListener('input', () => {
+    bulkRenameState.remove = removeField.input.value;
+    build();
+  });
   controls.append(removeField.wrap);
 
   const addField = fieldInput('Add this text');
   addField.input.placeholder = 'e.g. MIX_';
+  addField.input.value = bulkRenameState.add;
+  addField.input.addEventListener('input', () => {
+    bulkRenameState.add = addField.input.value;
+    build();
+  });
   controls.append(addField.wrap);
   section.append(controls);
 
@@ -5616,13 +5635,14 @@ function renderRenameTab(entry = null) {
   const where = el('div', 'fieldrow');
   where.append(el('label', null, 'Add it to the'));
   const choice = el('div', 'tabs');
-  let position = 'prefix';
+  let position = bulkRenameState.position;
 
-  const prefixBtn = el('button', 'pill is-on', 'Beginning');
-  const suffixBtn = el('button', 'pill', 'End');
+  const prefixBtn = el('button', `pill ${position === 'prefix' ? 'is-on' : ''}`, 'Beginning');
+  const suffixBtn = el('button', `pill ${position === 'suffix' ? 'is-on' : ''}`, 'End');
 
-  function setPosition(next) {
+  function setPosition(next: 'prefix' | 'suffix') {
     position = next;
+    bulkRenameState.position = next;
     prefixBtn.classList.toggle('is-on', next === 'prefix');
     suffixBtn.classList.toggle('is-on', next === 'suffix');
     build();
@@ -5638,7 +5658,11 @@ function renderRenameTab(entry = null) {
   const templateWrap = el('div');
   const templateField = fieldInput('Template');
   templateField.input.placeholder = '{project}_{name}_{n:02}';
-  templateField.input.value = '{project}_{name}_{n:02}';
+  templateField.input.value = bulkRenameState.template;
+  templateField.input.addEventListener('input', () => {
+    bulkRenameState.template = templateField.input.value;
+    build();
+  });
   templateWrap.append(templateField.wrap);
 
   const tokens = el('div', 'callout');
@@ -5661,8 +5685,29 @@ function renderRenameTab(entry = null) {
   });
   tokens.append(tokenList);
   templateWrap.append(tokens);
+  section.append(templateWrap);
 
-  if (renameMode === 'template') section.append(templateWrap);
+  // Toggle modes without tearing down the DOM
+  function updateModeVisibility() {
+    const isTemplate = bulkRenameState.mode === 'template';
+    simpleBtn.classList.toggle('is-on', !isTemplate);
+    templateBtn.classList.toggle('is-on', isTemplate);
+    controls.hidden = isTemplate;
+    where.hidden = isTemplate;
+    templateWrap.hidden = !isTemplate;
+  }
+  updateModeVisibility();
+
+  simpleBtn.addEventListener('click', () => {
+    bulkRenameState.mode = 'simple';
+    updateModeVisibility();
+    build();
+  });
+  templateBtn.addEventListener('click', () => {
+    bulkRenameState.mode = 'template';
+    updateModeVisibility();
+    build();
+  });
 
   const summary = el('p', 'muted');
   const preview = el('div', 'preview');
@@ -5695,7 +5740,7 @@ function renderRenameTab(entry = null) {
 
     plan = await window.api.renamePlan(
       files,
-      renameMode === 'template'
+      bulkRenameState.mode === 'template'
         ? {
             operation: 'applyTemplate',
             template: templateField.input.value,
@@ -5770,6 +5815,10 @@ function fieldInput(label) {
   wrap.append(el('label', null, label));
   const input = el('input', 'input');
   input.type = 'text';
+  input.autocomplete = 'off';
+  input.spellcheck = false;
+  input.setAttribute('autocorrect', 'off');
+  input.setAttribute('autocapitalize', 'off');
   wrap.append(input);
   return { wrap, input };
 }
@@ -5827,6 +5876,10 @@ function createSmartCombobox(options: {
   const input = document.createElement('input');
   input.type = 'text';
   input.className = 'smart-combobox__input';
+  input.autocomplete = 'off';
+  input.spellcheck = false;
+  input.setAttribute('autocorrect', 'off');
+  input.setAttribute('autocapitalize', 'off');
   input.placeholder = options.placeholder || 'Type category or custom…';
 
   let initialDisplay = '';
@@ -9100,9 +9153,8 @@ function openGenrePicker(entry: any, rec: any) {
 
   // Search input
   const searchBar = el('div', 'genre-picker-search-bar');
-  const searchInput = document.createElement('input');
+  const searchInput = el('input', 'genre-search-input') as HTMLInputElement;
   searchInput.type = 'text';
-  searchInput.className = 'genre-search-input';
   searchInput.placeholder = 'Search genres (e.g. Afro, Dubstep, Riddim, Colour Bass, House, DnB)...';
   searchBar.append(searchInput);
   dialog.append(searchBar);
@@ -9212,9 +9264,8 @@ function openGenrePicker(entry: any, rec: any) {
 
   // Custom genre row & Clear action
   const customRow = el('div', 'genre-custom-row');
-  const customInput = document.createElement('input');
+  const customInput = el('input', 'genre-custom-input') as HTMLInputElement;
   customInput.type = 'text';
-  customInput.className = 'genre-custom-input';
   customInput.placeholder = 'Or enter a custom genre (e.g. Cyber-Phonk, Melodic Riddim)...';
   if (rec.genre) customInput.value = rec.genre;
   customRow.append(customInput);
@@ -13420,6 +13471,12 @@ function el(tag: string, className?: string | null, text?: any): any {
   const node = document.createElement(tag);
   if (className) node.className = className;
   if (text !== undefined && text !== null) node.textContent = text;
+  if (tag === 'input' || tag === 'textarea') {
+    (node as HTMLInputElement).autocomplete = 'off';
+    (node as HTMLInputElement).spellcheck = false;
+    node.setAttribute('autocorrect', 'off');
+    node.setAttribute('autocapitalize', 'off');
+  }
   return node;
 }
 
