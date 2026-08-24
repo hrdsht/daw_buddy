@@ -25,6 +25,8 @@ const vocalSplit = require('./lib/vocalSplit');
 const vocalRebuild = require('./lib/vocalRebuild');
 const finisher = require('./lib/finisher');
 const audioqc = require('./lib/audioqc');
+const convert = require('./lib/convert');
+const encoders = require('./lib/encoders');
 const { groupVersions } = require('./lib/versions');
 const dedupe = require('./lib/dedupe');
 const disk = require('./lib/disk');
@@ -464,16 +466,35 @@ app.on('before-quit', (event) => {
 });
 
 /**
- * Created on first run inside the first project root, and added to the skip
- * list straight away — otherwise the app scans its own output and processed
- * files start appearing as renders belonging to projects.
+ * Returns the default OS Music folder base for DAW Buddy: e.g. C:\Users\<user>\Music\DAW Buddy
+ */
+function getDefaultMusicFolder() {
+  try {
+    const musicBase = app.getPath('music');
+    if (musicBase) return path.join(musicBase, 'DAW Buddy');
+  } catch (err) {
+    console.error('[output] Could not get OS music path:', err);
+  }
+  return null;
+}
+
+/**
+ * Created on first run. Defaults to the user's OS Music directory (e.g. C:\Users\<user>\Music\DAW Buddy),
+ * or the first project root, and added to the skip list so the app never scans its own output as project files.
  */
 async function ensureOutputFolder() {
   const current = settings.get();
-  if (current.roots.length === 0) return null;
 
   let target = current.outputFolder;
-  if (!target) target = path.join(current.roots[0], 'DAW Buddy Output');
+  if (!target) {
+    target = getDefaultMusicFolder();
+  }
+  if (!target && current.roots.length > 0) {
+    target = path.join(current.roots[0], 'DAW Buddy Output');
+  }
+  if (!target) {
+    target = path.join(app.getPath('userData'), 'DAW Buddy Output');
+  }
 
   try {
     await fsp.mkdir(target, { recursive: true });
@@ -493,6 +514,24 @@ async function ensureOutputFolder() {
 
   return target;
 }
+
+/**
+ * Ensures a specific subfolder for a tool (e.g. "Format Converter", "Slowed + Reverb", "Audio Finishing")
+ * exists under the central output directory and returns its absolute path.
+ */
+async function ensureToolOutputFolder(subfolderName: string) {
+  const root = await ensureOutputFolder();
+  if (!root) return null;
+  const toolTarget = path.join(root, subfolderName);
+  try {
+    await fsp.mkdir(toolTarget, { recursive: true });
+    return toolTarget;
+  } catch (err) {
+    console.error(`[output] Could not create tool output folder '${subfolderName}':`, err.message);
+    return root;
+  }
+}
+
 
 let rescanDebounceTimer: NodeJS.Timeout | null = null;
 
@@ -1201,18 +1240,30 @@ ipcMain.handle('tools:saveMidi', async (event, { defaultName, data }: any) => {
   return result.filePath;
 });
 
-ipcMain.handle('tools:saveAudio', async (event, { defaultName, data, format }: any) => {
+ipcMain.handle('tools:saveAudio', async (event, { defaultName, data, format, subfolder = 'Slowed + Reverb' }: any) => {
   const ext = format === 'mp3' ? 'mp3' : 'wav';
   const filterName = format === 'mp3' ? 'MP3 Audio (*.mp3)' : 'WAV Audio (*.wav)';
+  const toolFolder = await ensureToolOutputFolder(subfolder);
+  const initialPath = toolFolder && defaultName ? path.join(toolFolder, defaultName) : (defaultName || `Output.${ext}`);
+
   const result = await dialog.showSaveDialog(mainWindow, {
     title: `Save ${ext.toUpperCase()} Audio`,
-    defaultPath: defaultName || `SlowedReverb_Output.${ext}`,
+    defaultPath: initialPath,
     filters: [{ name: filterName, extensions: [ext] }]
   });
   if (result.canceled || !result.filePath) return null;
   await fsp.writeFile(result.filePath, Buffer.from(data));
   return result.filePath;
 });
+
+ipcMain.handle('tools:quickSaveAudio', async (event, { fileName, data, subfolder = 'Slowed + Reverb' }: any) => {
+  const toolFolder = await ensureToolOutputFolder(subfolder);
+  if (!toolFolder) throw new Error('No output folder configured');
+  const targetPath = path.join(toolFolder, fileName);
+  await fsp.writeFile(targetPath, Buffer.from(data));
+  return targetPath;
+});
+
 
 /* ------------------------- smart renamer -------------------------- */
 
@@ -1392,6 +1443,48 @@ ipcMain.handle('tools:renameManifestRevert', async (event, folder, manifestFile,
 ipcMain.handle('output:get', () => settings.get().outputFolder);
 
 ipcMain.handle('output:ensure', () => ensureOutputFolder());
+
+ipcMain.handle('output:getDefaultMusicPath', () => getDefaultMusicFolder());
+
+ipcMain.handle('output:getToolFolder', async (event, subfolderName: string) => {
+  return ensureToolOutputFolder(subfolderName);
+});
+
+ipcMain.handle('output:openFolder', async (event, subfolderName?: string) => {
+  const root = await ensureOutputFolder();
+  if (!root) return false;
+  const target = subfolderName ? path.join(root, subfolderName) : root;
+  if (fs.existsSync(target)) {
+    await shell.openPath(target);
+    return true;
+  }
+  return false;
+});
+
+/* --------------------------- convert ------------------------------ */
+
+ipcMain.handle('convert:plan', async (event, files: string[], options: any) => {
+  files.forEach((file) => guardApproved(file));
+  return convert.planJob(files, options);
+});
+
+ipcMain.handle('convert:render', async (event, files: string[], options: any) => {
+  const outputRoot = await ensureToolOutputFolder('Format Converter');
+  if (!outputRoot) throw new Error('No output folder — please set an output directory in Settings.');
+  files.forEach((file) => guardApproved(file));
+
+  return convert.renderJob(files, outputRoot, options, (done: number, total: number) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('convert:progress', { done, total });
+    }
+  });
+});
+
+ipcMain.handle('convert:encoders', async () => {
+  const resolved = await encoders.resolve(settings.get());
+  return { ...resolved, capabilities: encoders.capabilities(resolved) };
+});
+
 
 /* --------------------------- silence ------------------------------ */
 

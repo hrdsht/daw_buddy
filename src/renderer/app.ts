@@ -728,42 +728,43 @@ async function boot() {
     console.warn('[CrashRecovery] Check error:', err);
   }
 
-  // If user hasn't configured region & world scales yet, display the interactive 3D Globe wizard on first run or after update!
-  const APP_VERSION = (settings && settings.appVersion) || '0.4.9-beta2';
+  // Display the setup wizard on first run or on update so users configure their region & output location!
+  const APP_VERSION = (settings && settings.appVersion) || '0.5.1';
   const seenSetupVersion = localStorage.getItem('dawBuddyRegionSetupVersion');
-  const isSetupDone = Boolean(settings.regionSetupComplete) || localStorage.getItem('dawBuddyRegionSetupComplete') === 'true';
+  const isSetupDone = Boolean(settings.regionSetupComplete) && localStorage.getItem('dawBuddyRegionSetupComplete') === 'true';
 
   if (!isSetupDone || seenSetupVersion !== APP_VERSION) {
-    if (isSetupDone && seenSetupVersion !== APP_VERSION) {
-      localStorage.setItem('dawBuddyRegionSetupVersion', APP_VERSION);
-    } else {
-      localStorage.setItem('dawBuddyRegionSetupVersion', APP_VERSION);
-      setTimeout(() => {
-        showRegionOnboardingModal({
-          currentRegion: settings.region || 'indian',
-          currentTraditions: settings.scaleTraditions || ['all'],
-          isUpdateOrSettings: false,
-          onSave: async (result) => {
-            localStorage.setItem('dawBuddyRegionSetupComplete', 'true');
-            localStorage.setItem('dawBuddyRegionSetupVersion', APP_VERSION);
-            settings = await window.api.updateSettings({
-              region: result.region,
-              scaleTraditions: result.scaleTraditions,
-              regionSetupComplete: true
-            });
-            applySettings();
-            render();
-          },
-          playSynthNote: (pc, oct, a4) => playSynthNote(pc, oct, a4 || 440)
-        });
-      }, 450);
-    }
+    setTimeout(() => {
+      showRegionOnboardingModal({
+        currentRegion: settings.region || 'indian',
+        currentTraditions: settings.scaleTraditions || ['all'],
+        initialOutputFolder: settings.outputFolder || null,
+        isUpdateOrSettings: false,
+        onSave: async (result) => {
+          localStorage.setItem('dawBuddyRegionSetupComplete', 'true');
+          localStorage.setItem('dawBuddyRegionSetupVersion', APP_VERSION);
+          const patch: Record<string, any> = {
+            region: result.region,
+            scaleTraditions: result.scaleTraditions,
+            regionSetupComplete: true
+          };
+          if (result.outputFolder) {
+            patch.outputFolder = result.outputFolder;
+          }
+          settings = await window.api.updateSettings(patch);
+          applySettings();
+          render();
+        },
+        playSynthNote: (pc, oct, a4) => playSynthNote(pc, oct, a4 || 440)
+      });
+    }, 450);
   } else {
     // Auto-launch walkthrough on first start or after version updates
     setTimeout(() => {
       startFeatureWalkthrough(false);
     }, 750);
   }
+
 }
 
 function applySettings() {
@@ -937,6 +938,7 @@ function render() {
   if (view === 'thisweek') return renderThisWeek();
   if (view === 'tools') return renderStandaloneTools();
   if (view === 'slowed-reverb') return renderSlowedReverbTool();
+  if (view === 'convert') return renderStandaloneConverter();
   if (view === 'randomizer') return renderRandomizerTool();
   if (view === 'scale-tool') return renderScaleMidiTool();
   if (view === 'dedupe') return renderDedupe();
@@ -955,6 +957,7 @@ function render() {
 const TOOL_TITLES: Record<string, string> = {
   tools: 'Tools',
   'slowed-reverb': 'Slowed + Reverb Studio',
+  convert: 'Format Converter & Splitter',
   randomizer: 'Music Randomizer',
   'scale-tool': 'Scale & Raaga Detector',
   dedupe: 'Sample cleanup',
@@ -967,6 +970,7 @@ const TOOL_TITLES: Record<string, string> = {
   silence: 'Strip silence',
   vocal: 'Vocal reconstruction',
   thisweek: 'This week'
+
 };
 
 function setPageTitle() {
@@ -12537,8 +12541,22 @@ function buildSlowedReverbInterface(container: HTMLElement, isModal = false, onC
       const baseName = (slowedReverbState.file?.name || 'track').replace(/\.[^/.]+$/, '');
       const defaultName = `${baseName}_slowed_reverb_${bitDepth}bit.wav`;
 
-      if (window.api && window.api.saveAudio) {
-        const savedPath = await window.api.saveAudio(defaultName, wavBytes, 'wav');
+      if (window.api && window.api.quickSaveAudio) {
+        try {
+          const savedPath = await window.api.quickSaveAudio(defaultName, wavBytes, 'Slowed + Reverb');
+          if (savedPath) {
+            toast('WAV Saved to Slowed + Reverb', basename(savedPath));
+            updateStatus(`✅ Saved WAV to: ${savedPath}`, 'success');
+          }
+        } catch (err: any) {
+          const savedPath = await window.api.saveAudio(defaultName, wavBytes, 'wav', 'Slowed + Reverb');
+          if (savedPath) {
+            toast('WAV Exported', `Saved to ${basename(savedPath)}`);
+            updateStatus(`✅ Saved WAV to: ${savedPath}`, 'success');
+          }
+        }
+      } else if (window.api && window.api.saveAudio) {
+        const savedPath = await window.api.saveAudio(defaultName, wavBytes, 'wav', 'Slowed + Reverb');
         if (savedPath) {
           toast('WAV Exported', `Saved to ${basename(savedPath)}`);
           updateStatus(`✅ Saved WAV to: ${savedPath}`, 'success');
@@ -12584,8 +12602,22 @@ function buildSlowedReverbInterface(container: HTMLElement, isModal = false, onC
       const baseName = (slowedReverbState.file?.name || 'track').replace(/\.[^/.]+$/, '');
       const defaultName = `${baseName}_slowed_reverb_${bitrate}k.mp3`;
 
-      if (window.api && window.api.saveAudio) {
-        const savedPath = await window.api.saveAudio(defaultName, mp3Bytes, 'mp3');
+      if (window.api && window.api.quickSaveAudio) {
+        try {
+          const savedPath = await window.api.quickSaveAudio(defaultName, mp3Bytes, 'Slowed + Reverb');
+          if (savedPath) {
+            toast('MP3 Saved to Slowed + Reverb', basename(savedPath));
+            updateStatus(`✅ Saved MP3 to: ${savedPath}`, 'success');
+          }
+        } catch (err: any) {
+          const savedPath = await window.api.saveAudio(defaultName, mp3Bytes, 'mp3', 'Slowed + Reverb');
+          if (savedPath) {
+            toast('MP3 Exported', `Saved to ${basename(savedPath)}`);
+            updateStatus(`✅ Saved MP3 to: ${savedPath}`, 'success');
+          }
+        }
+      } else if (window.api && window.api.saveAudio) {
+        const savedPath = await window.api.saveAudio(defaultName, mp3Bytes, 'mp3', 'Slowed + Reverb');
         if (savedPath) {
           toast('MP3 Exported', `Saved to ${basename(savedPath)}`);
           updateStatus(`✅ Saved MP3 to: ${savedPath}`, 'success');
@@ -12609,6 +12641,7 @@ function buildSlowedReverbInterface(container: HTMLElement, isModal = false, onC
       saveMp3Btn.disabled = false;
     }
   });
+
 
   // Restore if buffer already present
   if (slowedReverbState.file && slowedReverbState.sourceBuffer) {
@@ -12705,11 +12738,18 @@ function renderStandaloneTools() {
       text: 'Slow down tracks by speed or pitch and immerse them in lush algorithmic stereo reverb.'
     },
     {
+      view: 'convert',
+      icon: 'scissors',
+      title: 'Format Converter & Splitter',
+      text: 'Convert WAV/MP3 formats and split audio into parts that fit upload size or time limits (e.g. 50 MB / 5 min).'
+    },
+    {
       view: 'randomizer',
       icon: 'dice',
       title: 'Producer Randomizer & Genre Challenge',
       text: 'Generate random musical ideas: key, scale, matching Indian Raagas, BPM, Tala meter, and 48+ genre challenges.'
     },
+
     {
       view: 'scale-tool',
       icon: 'music',
@@ -13532,7 +13572,417 @@ function attachDraggableAndSelectable(rowElement: HTMLElement, item: SelectedIte
   });
 }
 
-// Low CPU idle mode: throttle when window is hidden/minimized
+
+/* ================================================================== */
+/* 🎚️ Format Converter & Audio Splitter Tool                          */
+/* ================================================================== */
+
+interface ConverterFileItem {
+  path: string;
+  name: string;
+  size: number;
+}
+
+const converterState = {
+  files: [] as ConverterFileItem[],
+  options: {
+    format: 'mp3' as 'mp3' | 'wav',
+    bitrate: 192,
+    sampleRate: null as number | null,
+    bitDepth: 24,
+    maxSeconds: 300, // 5 minutes
+    maxBytes: 50 * 1024 * 1024, // 50 MB
+    trimSilence: true,
+    padSeconds: 1.5
+  },
+  encodersInfo: null as any,
+  plan: null as any,
+  isProcessing: false,
+  progress: null as { done: number; total: number } | null
+};
+
+// Listen to convert progress from main process
+if (window.api && window.api.onConvertProgress) {
+  window.api.onConvertProgress((data: { done: number; total: number }) => {
+    converterState.progress = data;
+    const progressFill = document.getElementById('converterProgressFill') as HTMLElement | null;
+    const progressText = document.getElementById('converterProgressText') as HTMLElement | null;
+    if (progressFill && progressText) {
+      const pct = Math.round((data.done / Math.max(1, data.total)) * 100);
+      progressFill.style.width = `${pct}%`;
+      progressText.textContent = `Rendering part ${data.done} of ${data.total} (${pct}%)...`;
+    }
+  });
+}
+
+function renderStandaloneConverter() {
+  viewEl.innerHTML = '';
+
+  const section = el('div', 'section converter-page');
+  section.append(headRow(
+    'Format Converter & Splitter',
+    'Convert WAV/MP3 audio and automatically split long recordings into clean parts that fit service limits (e.g. 50 MB or 5 minutes for ElevenLabs voice cloning, Discord, or cloud uploads).',
+    'tools'
+  ));
+
+  const container = el('div', 'converter-container');
+
+  // --- 1. Destination Folder Banner ---
+  const destCard = el('div', 'converter-dest-card');
+  const destLeft = el('div', 'converter-dest-left');
+  destLeft.innerHTML = `
+    <span class="converter-dest-icon">📁</span>
+    <div>
+      <div class="converter-dest-title">Output Location: <strong>Format Converter/</strong></div>
+      <div class="converter-dest-path">${settings.outputFolder ? `${settings.outputFolder}\\Format Converter` : 'Default Music Folder\\DAW Buddy\\Format Converter'}</div>
+    </div>
+  `;
+  const destRight = el('div', 'converter-dest-actions');
+  const openFolderBtn = el('button', 'pill pill--sm', '📂 Open Folder');
+  openFolderBtn.addEventListener('click', async () => {
+    if (window.api && window.api.outputOpenFolder) {
+      const opened = await window.api.outputOpenFolder('Format Converter');
+      if (!opened) toast('Folder not created yet', 'It will be created automatically on your first conversion.');
+    }
+  });
+  destRight.append(openFolderBtn);
+  destCard.append(destLeft, destRight);
+  container.append(destCard);
+
+  // --- 2. Drop Zone & File Selector ---
+  const dropzone = el('div', 'converter-dropzone');
+  dropzone.innerHTML = `
+    <div class="converter-drop-icon">🎧</div>
+    <div class="converter-drop-title">Drag & Drop Audio Files Here</div>
+    <div class="converter-drop-sub">Accepts <strong>.WAV</strong> files (or MP3/AIFF if FFmpeg is configured)</div>
+  `;
+
+  const browseBtn = el('button', 'pill pill--solid', '📂 Choose Audio Files');
+  browseBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (window.api && window.api.pickFolder) {
+      // Pick audio files
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.multiple = true;
+      input.accept = '.wav,.mp3,.aif,.aiff,.flac';
+      input.onchange = (ev: any) => {
+        const fileList = ev.target.files;
+        if (fileList && fileList.length > 0) {
+          for (let i = 0; i < fileList.length; i++) {
+            const f = fileList[i];
+            if (!converterState.files.some(existing => existing.path === f.path)) {
+              converterState.files.push({ path: f.path, name: f.name, size: f.size });
+            }
+          }
+          updatePlanAndRender();
+        }
+      };
+      input.click();
+    }
+  });
+  dropzone.append(browseBtn);
+
+  // Drag & drop handlers
+  dropzone.addEventListener('dragover', (e: DragEvent) => {
+    e.preventDefault();
+    dropzone.classList.add('converter-dropzone--active');
+  });
+  dropzone.addEventListener('dragleave', () => {
+    dropzone.classList.remove('converter-dropzone--active');
+  });
+  dropzone.addEventListener('drop', (e: DragEvent) => {
+    e.preventDefault();
+    dropzone.classList.remove('converter-dropzone--active');
+    if (e.dataTransfer && e.dataTransfer.files) {
+      for (let i = 0; i < e.dataTransfer.files.length; i++) {
+        const f = e.dataTransfer.files[i];
+        if (f.name.toLowerCase().endsWith('.wav') || f.name.toLowerCase().endsWith('.mp3')) {
+          if (!converterState.files.some(existing => existing.path === f.path)) {
+            converterState.files.push({ path: f.path, name: f.name, size: f.size });
+          }
+        }
+      }
+      updatePlanAndRender();
+    }
+  });
+
+  container.append(dropzone);
+
+  // --- File List Table ---
+  const fileListBox = el('div', 'converter-filelist-box');
+  if (converterState.files.length > 0) {
+    const listHead = el('div', 'converter-filelist-head');
+    listHead.innerHTML = `<strong>Selected Input Files (${converterState.files.length})</strong>`;
+    const clearAllBtn = el('button', 'pill pill--sm', '✕ Clear All');
+    clearAllBtn.addEventListener('click', () => {
+      converterState.files = [];
+      updatePlanAndRender();
+    });
+    listHead.append(clearAllBtn);
+    fileListBox.append(listHead);
+
+    const fileListEl = el('div', 'converter-filelist');
+    converterState.files.forEach((f, idx) => {
+      const fileRow = el('div', 'converter-file-row');
+      fileRow.innerHTML = `
+        <span class="converter-file-name">🎵 ${f.name}</span>
+        <span class="converter-file-size">${(f.size / (1024 * 1024)).toFixed(1)} MB</span>
+      `;
+      const removeBtn = el('button', 'converter-file-remove-btn', '✕');
+      removeBtn.title = 'Remove file';
+      removeBtn.addEventListener('click', () => {
+        converterState.files.splice(idx, 1);
+        updatePlanAndRender();
+      });
+      fileRow.append(removeBtn);
+      fileListEl.append(fileRow);
+    });
+    fileListBox.append(fileListEl);
+    container.append(fileListBox);
+  }
+
+  // --- 3. Format Controls Grid ---
+  const controlsGrid = el('div', 'converter-controls-grid');
+
+  // Format Card
+  const formatCard = el('div', 'converter-card');
+  formatCard.append(el('h4', 'converter-card__title', '1. Target Format'));
+
+  const formatToggleRow = el('div', 'converter-btn-row');
+  const mp3Btn = el('button', `pill ${converterState.options.format === 'mp3' ? 'pill--solid' : ''}`, '🎵 MP3');
+  const wavBtn = el('button', `pill ${converterState.options.format === 'wav' ? 'pill--solid' : ''}`, '🌊 WAV');
+
+  mp3Btn.addEventListener('click', () => {
+    converterState.options.format = 'mp3';
+    updatePlanAndRender();
+  });
+  wavBtn.addEventListener('click', () => {
+    converterState.options.format = 'wav';
+    updatePlanAndRender();
+  });
+  formatToggleRow.append(mp3Btn, wavBtn);
+  formatCard.append(formatToggleRow);
+
+  if (converterState.options.format === 'mp3') {
+    // Bitrate Slider / Buttons
+    const bitrateSection = el('div', 'converter-sub-section');
+    bitrateSection.append(el('div', 'converter-label', `Bitrate: ${converterState.options.bitrate} kbps`));
+    const bitratePillRow = el('div', 'converter-pill-row');
+    [128, 160, 192, 224, 256, 320].forEach((br) => {
+      const bPill = el('button', `pill pill--sm ${converterState.options.bitrate === br ? 'pill--solid is-on' : ''}`, `${br}k`);
+      bPill.addEventListener('click', () => {
+        converterState.options.bitrate = br;
+        updatePlanAndRender();
+      });
+      bitratePillRow.append(bPill);
+    });
+    bitrateSection.append(bitratePillRow);
+    formatCard.append(bitrateSection);
+  } else {
+    // WAV Bit Depth & Sample Rate
+    const depthSection = el('div', 'converter-sub-section');
+    depthSection.append(el('div', 'converter-label', 'Bit Depth'));
+    const depthRow = el('div', 'converter-pill-row');
+    [16, 24, 32].forEach((depth) => {
+      const dPill = el('button', `pill pill--sm ${converterState.options.bitDepth === depth ? 'pill--solid is-on' : ''}`, depth === 32 ? '32-bit Float' : `${depth}-bit`);
+      dPill.addEventListener('click', () => {
+        converterState.options.bitDepth = depth;
+        updatePlanAndRender();
+      });
+      depthRow.append(dPill);
+    });
+    depthSection.append(depthRow);
+
+    const rateSection = el('div', 'converter-sub-section');
+    rateSection.append(el('div', 'converter-label', 'Sample Rate'));
+    const rateRow = el('div', 'converter-pill-row');
+    const origRateBtn = el('button', `pill pill--sm ${converterState.options.sampleRate === null ? 'pill--solid is-on' : ''}`, 'Keep Original');
+    origRateBtn.addEventListener('click', () => {
+      converterState.options.sampleRate = null;
+      updatePlanAndRender();
+    });
+    rateRow.append(origRateBtn);
+    [44100, 48000].forEach((rate) => {
+      const rPill = el('button', `pill pill--sm ${converterState.options.sampleRate === rate ? 'pill--solid is-on' : ''}`, `${rate / 1000} kHz`);
+      rPill.addEventListener('click', () => {
+        converterState.options.sampleRate = rate;
+        updatePlanAndRender();
+      });
+      rateRow.append(rPill);
+    });
+    rateSection.append(rateRow);
+
+    formatCard.append(depthSection, rateSection);
+  }
+
+  controlsGrid.append(formatCard);
+
+  // Split Limits & Padding Card
+  const limitCard = el('div', 'converter-card');
+  limitCard.append(el('h4', 'converter-card__title', '2. Service Split Limits'));
+
+  const limitRow = el('div', 'converter-limit-row');
+  limitRow.innerHTML = `
+    <div class="converter-limit-item">
+      <span class="converter-label">Max Duration (minutes)</span>
+      <input type="number" min="1" max="60" value="${converterState.options.maxSeconds / 60}" class="converter-number-input" id="convMaxMin" />
+    </div>
+    <div class="converter-limit-item">
+      <span class="converter-label">Max File Size (MB)</span>
+      <input type="number" min="5" max="500" value="${Math.round(converterState.options.maxBytes / (1024 * 1024))}" class="converter-number-input" id="convMaxMb" />
+    </div>
+  `;
+  limitCard.append(limitRow);
+
+  const silenceOption = el('label', 'converter-checkbox-label');
+  const silenceCheck = document.createElement('input');
+  silenceCheck.type = 'checkbox';
+  silenceCheck.checked = converterState.options.trimSilence;
+  silenceCheck.addEventListener('change', () => {
+    converterState.options.trimSilence = silenceCheck.checked;
+    updatePlanAndRender();
+  });
+  silenceOption.append(silenceCheck, document.createTextNode(' Cut in natural silence gaps (search up to 45s back)'));
+  limitCard.append(silenceOption);
+
+  controlsGrid.append(limitCard);
+  container.append(controlsGrid);
+
+  // Hook inputs
+  setTimeout(() => {
+    const minInput = document.getElementById('convMaxMin') as HTMLInputElement | null;
+    const mbInput = document.getElementById('convMaxMb') as HTMLInputElement | null;
+    if (minInput) {
+      minInput.onchange = () => {
+        const val = Math.max(1, parseInt(minInput.value, 10) || 5);
+        converterState.options.maxSeconds = val * 60;
+        updatePlanAndRender();
+      };
+    }
+    if (mbInput) {
+      mbInput.onchange = () => {
+        const val = Math.max(5, parseInt(mbInput.value, 10) || 50);
+        converterState.options.maxBytes = val * 1024 * 1024;
+        updatePlanAndRender();
+      };
+    }
+  }, 20);
+
+  // --- 4. Live Partition & Estimation Summary ---
+  const estimateBox = el('div', 'converter-estimate-box');
+  if (converterState.files.length === 0) {
+    estimateBox.innerHTML = `
+      <div class="converter-estimate-placeholder">
+        <span>💡 Select audio files above to see live split calculations, part durations, and size estimates.</span>
+      </div>
+    `;
+  } else if (converterState.plan) {
+    const plan = converterState.plan;
+    const boundText = plan.limit.boundBy === 'size'
+      ? `⚠️ Size Limit Binds First (${(converterState.options.maxBytes / (1024 * 1024)).toFixed(0)} MB reached before duration)`
+      : `⏱ Duration Limit Binds First (${(converterState.options.maxSeconds / 60).toFixed(0)} min)`;
+
+    const limitClass = plan.limit.boundBy === 'size' ? 'converter-badge--warn' : 'converter-badge--info';
+
+    estimateBox.innerHTML = `
+      <div class="converter-estimate-head">
+        <div>
+          <span class="converter-badge ${limitClass}">${boundText}</span>
+          <span class="converter-badge converter-badge--active">Output: ${converterState.options.format.toUpperCase()}</span>
+        </div>
+        <div class="converter-estimate-stat">
+          Max Part Length: <strong>${formatTimeSeconds(plan.limit.seconds)}</strong>
+        </div>
+      </div>
+      <div class="converter-parts-list">
+        ${plan.parts.map((p: any, pIdx: number) => `
+          <div class="converter-part-item">
+            <span class="converter-part-name">Part ${pIdx + 1}: ${p.targetName || `Part_${pIdx + 1}.${converterState.options.format}`}</span>
+            <span class="converter-part-metrics">${formatTimeSeconds(p.durationSeconds)} · ~${(p.estimatedBytes / (1024 * 1024)).toFixed(1)} MB</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  } else {
+    estimateBox.innerHTML = `<div class="converter-estimate-placeholder">Calculating part estimates...</div>`;
+  }
+  container.append(estimateBox);
+
+  // --- 5. Action Section & Progress Bar ---
+  const actionSection = el('div', 'converter-action-section');
+  const convertBtn = el('button', `pill pill--solid converter-run-btn ${converterState.files.length === 0 || converterState.isProcessing ? 'is-disabled' : ''}`, '⚡ Convert & Split Audio') as HTMLButtonElement;
+  convertBtn.disabled = converterState.files.length === 0 || converterState.isProcessing;
+
+  const progressBox = el('div', 'converter-progress-box');
+  progressBox.id = 'converterProgressBox';
+  progressBox.style.display = converterState.isProcessing ? 'flex' : 'none';
+  progressBox.innerHTML = `
+    <div class="converter-progress-bar"><div class="converter-progress-fill" id="converterProgressFill" style="width: 0%"></div></div>
+    <div class="converter-progress-text" id="converterProgressText">Starting conversion...</div>
+  `;
+
+  convertBtn.addEventListener('click', async () => {
+    if (converterState.files.length === 0 || converterState.isProcessing) return;
+    converterState.isProcessing = true;
+    convertBtn.disabled = true;
+    progressBox.style.display = 'flex';
+
+    try {
+      const filePaths = converterState.files.map(f => f.path);
+      toast('Conversion Started', `Processing ${filePaths.length} file(s)...`);
+
+      if (window.api && window.api.convertRender) {
+        const result = await window.api.convertRender(filePaths, converterState.options);
+        if (result && result.ok) {
+          toast('✅ Conversion Complete!', `Rendered ${result.parts ? result.parts.length : 'all'} parts to Format Converter/`);
+          // Show completion dialog or prompt to open folder
+          if (window.api.outputOpenFolder) {
+            window.api.outputOpenFolder('Format Converter');
+          }
+        } else if (result && result.message) {
+          toast('Conversion Notice', result.message);
+        }
+      }
+    } catch (err: any) {
+      console.error('[convert] Error:', err);
+      toast('❌ Conversion Error', err.message || String(err));
+    } finally {
+      converterState.isProcessing = false;
+      convertBtn.disabled = false;
+      progressBox.style.display = 'none';
+      updatePlanAndRender();
+    }
+  });
+
+  actionSection.append(convertBtn, progressBox);
+  container.append(actionSection);
+
+  section.append(container);
+  viewEl.append(section);
+
+  // Helper function to update plan and re-render
+  async function updatePlanAndRender() {
+    if (converterState.files.length > 0 && window.api && window.api.convertPlan) {
+      try {
+        const filePaths = converterState.files.map(f => f.path);
+        converterState.plan = await window.api.convertPlan(filePaths, converterState.options);
+      } catch (err) {
+        console.warn('[convertPlan] Error:', err);
+      }
+    } else {
+      converterState.plan = null;
+    }
+    renderStandaloneConverter();
+  }
+}
+
+function formatTimeSeconds(sec: number) {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${s < 10 ? '0' : ''}${s}`;
+}
+
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     // When window is minimized, stop scale auditioning loops to free up AudioContext CPU
@@ -13540,5 +13990,5 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-
 boot();
+

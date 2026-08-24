@@ -72,8 +72,27 @@ contextBridge.exposeInMainWorld('api', {
   dragAudio: (filename, data) => ipcRenderer.invoke('tools:dragAudio', { filename, data }),
   dragFiles: (filePaths: string[]) => ipcRenderer.invoke('tools:dragFiles', { filePaths }),
   saveMidi: (defaultName, data) => ipcRenderer.invoke('tools:saveMidi', { defaultName, data }),
-  saveAudio: (defaultName: string, data: number[] | Uint8Array, format: 'wav' | 'mp3') =>
-    ipcRenderer.invoke('tools:saveAudio', { defaultName, data, format }),
+  saveAudio: (defaultName: string, data: number[] | Uint8Array, format: 'wav' | 'mp3', subfolder?: string) =>
+    ipcRenderer.invoke('tools:saveAudio', { defaultName, data, format, subfolder }),
+  quickSaveAudio: (fileName: string, data: number[] | Uint8Array, subfolder?: string) =>
+    ipcRenderer.invoke('tools:quickSaveAudio', { fileName, data, subfolder }),
+
+  outputGet: () => ipcRenderer.invoke('output:get'),
+  outputEnsure: () => ipcRenderer.invoke('output:ensure'),
+  outputGetDefaultMusicPath: () => ipcRenderer.invoke('output:getDefaultMusicPath'),
+  outputGetToolFolder: (subfolderName: string) =>
+    ipcRenderer.invoke('output:getToolFolder', subfolderName),
+  outputOpenFolder: (subfolderName?: string) =>
+    ipcRenderer.invoke('output:openFolder', subfolderName),
+
+  convertPlan: (files: string[], options: any) =>
+    ipcRenderer.invoke('convert:plan', files, options),
+  convertRender: (files: string[], options: any) =>
+    ipcRenderer.invoke('convert:render', files, options),
+  convertEncoders: () => ipcRenderer.invoke('convert:encoders'),
+  onConvertProgress: (callback: (data: any) => void) =>
+    subscribe('convert:progress', callback),
+
 
   smartClassify: (folder, files) =>
     ipcRenderer.invoke('tools:smartClassify', folder, files),

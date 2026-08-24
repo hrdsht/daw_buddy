@@ -19,11 +19,13 @@ import {
 export interface OnboardingResult {
   region: ScaleTraditionId;
   scaleTraditions: ScaleTraditionId[];
+  outputFolder?: string | null;
 }
 
 export function showRegionOnboardingModal(options: {
   currentRegion?: ScaleTraditionId;
   currentTraditions?: ScaleTraditionId[];
+  initialOutputFolder?: string | null;
   isUpdateOrSettings?: boolean;
   onSave: (result: OnboardingResult) => void;
   playSynthNote?: (pc: number, octave: number, a4?: number) => void;
@@ -31,12 +33,14 @@ export function showRegionOnboardingModal(options: {
   const existingOverlay = document.getElementById('regionOnboardingOverlay');
   if (existingOverlay) existingOverlay.remove();
 
-  let selectedRegion: ScaleTraditionId = options.currentRegion || 'indian'; // Default India as requested
+  let currentStep = 1; // 1 = Globe / Scales, 2 = Storage Setup
+  let selectedRegion: ScaleTraditionId = options.currentRegion || 'indian'; // Default India
   let selectedTraditions: Set<ScaleTraditionId> = new Set(
     options.currentTraditions && options.currentTraditions.length > 0
       ? options.currentTraditions
       : ['all']
   );
+  let chosenOutputFolder = options.initialOutputFolder || '';
 
   const overlay = document.createElement('div');
   overlay.id = 'regionOnboardingOverlay';
@@ -65,7 +69,7 @@ export function showRegionOnboardingModal(options: {
   closeBtn.title = 'Close';
   closeBtn.addEventListener('click', () => {
     localStorage.setItem('dawBuddyRegionSetupComplete', 'true');
-    localStorage.setItem('dawBuddyRegionSetupVersion', '0.4.9-beta2');
+    localStorage.setItem('dawBuddyRegionSetupVersion', '0.5.0-beta.3');
     globe.destroy();
     overlay.remove();
   });
@@ -79,9 +83,9 @@ export function showRegionOnboardingModal(options: {
   header.append(titleRow, subtitle);
   modal.append(header);
 
-  // --- Body (Globe + Config Panel) ---
-  const body = document.createElement('div');
-  body.className = 'onboarding-body';
+  // --- Body (Step 1 Container: Globe + Config Panel) ---
+  const step1Body = document.createElement('div');
+  step1Body.className = 'onboarding-body';
 
   // Left Column: 3D Interactive Globe
   const globeCol = document.createElement('div');
@@ -106,7 +110,7 @@ export function showRegionOnboardingModal(options: {
     }
   });
 
-  body.append(globeCol);
+  step1Body.append(globeCol);
 
   // Right Column: Regional Selector & Scale System Preferences
   const configCol = document.createElement('div');
@@ -252,8 +256,78 @@ export function showRegionOnboardingModal(options: {
   previewSection.append(auditionBtn);
 
   configCol.append(previewSection);
-  body.append(configCol);
-  modal.append(body);
+  step1Body.append(configCol);
+  modal.append(step1Body);
+
+  // --- Body (Step 2 Container: Storage & Output Setup) ---
+  const step2Body = document.createElement('div');
+  step2Body.className = 'onboarding-storage-body';
+  step2Body.style.display = 'none';
+
+  const storageHeader = document.createElement('div');
+  storageHeader.className = 'onboarding-storage-header';
+  storageHeader.innerHTML = `
+    <div class="onboarding-storage-icon">💾</div>
+    <div>
+      <h3 class="onboarding-section__title" style="font-size: 16px; margin: 0;">Where should DAW Buddy save your rendered audio?</h3>
+      <p style="font-size: 12.5px; color: var(--dim); margin: 4px 0 0 0;">Choose your central export directory. DAW Buddy will automatically create organized subfolders for each studio tool.</p>
+    </div>
+  `;
+  step2Body.append(storageHeader);
+
+  const pathCard = document.createElement('div');
+  pathCard.className = 'onboarding-path-card';
+
+  const pathDisplay = document.createElement('div');
+  pathDisplay.className = 'onboarding-path-display';
+  pathDisplay.innerHTML = `<span class="onboarding-path-icon">📁</span> <span class="onboarding-path-text">${chosenOutputFolder || 'Fetching default Music folder...'}</span>`;
+
+  const browseBtn = document.createElement('button');
+  browseBtn.className = 'pill pill--sm';
+  browseBtn.innerHTML = '📂 Browse Folder';
+  browseBtn.addEventListener('click', async () => {
+    if (window.api && window.api.pickFolder) {
+      const picked = await window.api.pickFolder();
+      if (picked) {
+        chosenOutputFolder = picked;
+        updatePathDisplay();
+      }
+    }
+  });
+
+  pathCard.append(pathDisplay, browseBtn);
+  step2Body.append(pathCard);
+
+  function updatePathDisplay() {
+    const textSpan = pathDisplay.querySelector('.onboarding-path-text');
+    if (textSpan) textSpan.textContent = chosenOutputFolder;
+  }
+
+  // Subfolders Preview
+  const foldersPreview = document.createElement('div');
+  foldersPreview.className = 'onboarding-folders-preview';
+  foldersPreview.innerHTML = `
+    <div class="onboarding-folders-title">Automatic Subfolders Created in this Location:</div>
+    <div class="onboarding-folders-grid">
+      <div class="onboarding-folder-item"><span class="onboarding-folder-tag">📁 Format Converter/</span> <span class="onboarding-folder-desc">Split parts & audio format conversions</span></div>
+      <div class="onboarding-folder-item"><span class="onboarding-folder-tag">📁 Slowed + Reverb/</span> <span class="onboarding-folder-desc">Rendered slowed & ambient masters</span></div>
+      <div class="onboarding-folder-item"><span class="onboarding-folder-tag">📁 Audio Finishing/</span> <span class="onboarding-folder-desc">Normalised & fit WAV audio</span></div>
+      <div class="onboarding-folder-item"><span class="onboarding-folder-tag">📁 Trimmed/</span> <span class="onboarding-folder-desc">Silence-stripped audio copies</span></div>
+      <div class="onboarding-folder-item"><span class="onboarding-folder-tag">📁 Vocal Stems/</span> <span class="onboarding-folder-desc">Reconstructed vocal blocks</span></div>
+    </div>
+  `;
+  step2Body.append(foldersPreview);
+  modal.append(step2Body);
+
+  // Initialize default music path if none provided
+  if (!chosenOutputFolder && window.api && window.api.outputGetDefaultMusicPath) {
+    window.api.outputGetDefaultMusicPath().then((defaultPath: string) => {
+      if (defaultPath && !chosenOutputFolder) {
+        chosenOutputFolder = defaultPath;
+        updatePathDisplay();
+      }
+    });
+  }
 
   // --- Footer Actions ---
   const footer = document.createElement('div');
@@ -261,20 +335,53 @@ export function showRegionOnboardingModal(options: {
 
   const noteText = document.createElement('span');
   noteText.className = 'onboarding-footer__note';
-  noteText.textContent = '💡 You can change your region and scale preferences anytime from Settings.';
+  noteText.textContent = '💡 You can change your region and storage location anytime from Settings.';
   footer.append(noteText);
 
-  const saveBtn = document.createElement('button');
-  saveBtn.className = 'pill pill--solid onboarding-save-btn';
-  saveBtn.textContent = options.isUpdateOrSettings ? 'Save Preferences' : 'Launch DAW Buddy';
-  saveBtn.addEventListener('click', () => {
+  const footerBtns = document.createElement('div');
+  footerBtns.style.display = 'flex';
+  footerBtns.style.gap = '8px';
+
+  const backBtn = document.createElement('button');
+  backBtn.className = 'pill pill--sm';
+  backBtn.textContent = '← Back';
+  backBtn.style.display = 'none';
+  backBtn.addEventListener('click', () => {
+    currentStep = 1;
+    step1Body.style.display = 'flex';
+    step2Body.style.display = 'none';
+    backBtn.style.display = 'none';
+    title.textContent = 'Welcome to DAW Buddy — Choose Your Tradition';
+    subtitle.textContent = 'Select your home region to customize musical scale recommendations, or explore all rich musical traditions of the world.';
+    nextOrSaveBtn.textContent = options.isUpdateOrSettings ? 'Save Preferences' : 'Next: Output Folder →';
+  });
+
+  const nextOrSaveBtn = document.createElement('button');
+  nextOrSaveBtn.className = 'pill pill--solid onboarding-save-btn';
+  nextOrSaveBtn.textContent = options.isUpdateOrSettings ? 'Save Preferences' : 'Next: Output Folder →';
+
+  nextOrSaveBtn.addEventListener('click', () => {
+    if (currentStep === 1 && !options.isUpdateOrSettings) {
+      // Move to Step 2
+      currentStep = 2;
+      step1Body.style.display = 'none';
+      step2Body.style.display = 'flex';
+      backBtn.style.display = 'inline-flex';
+      title.textContent = 'DAW Buddy Setup — Storage & Output Directory';
+      subtitle.textContent = 'Confirm where rendered audio, conversions, and stems should be saved.';
+      nextOrSaveBtn.textContent = 'Launch DAW Buddy 🚀';
+      return;
+    }
+
+    // Save configuration
     const traditionsArray = selectedTraditions.has('all')
       ? ['all']
       : Array.from(selectedTraditions);
 
     options.onSave({
       region: selectedRegion,
-      scaleTraditions: traditionsArray as ScaleTraditionId[]
+      scaleTraditions: traditionsArray as ScaleTraditionId[],
+      outputFolder: chosenOutputFolder || null
     });
 
     globe.destroy();
@@ -282,7 +389,8 @@ export function showRegionOnboardingModal(options: {
     setTimeout(() => overlay.remove(), 250);
   });
 
-  footer.append(saveBtn);
+  footerBtns.append(backBtn, nextOrSaveBtn);
+  footer.append(footerBtns);
   modal.append(footer);
   overlay.append(modal);
   document.body.append(overlay);
@@ -345,3 +453,4 @@ function playTraditionSample(
     }, idx * 190);
   });
 }
+

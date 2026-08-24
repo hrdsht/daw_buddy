@@ -9,6 +9,29 @@ is auto-generated on each GitHub Release; this file is the curated summary.
 
 - _Nothing yet._
 
+## [0.5.1] — 2026-08-24
+
+### Added
+- **Audio Format Converter & Splitter Tool**:
+  - Full dedicated standalone tool inside the **Tools** section (`view === 'convert'`).
+  - Convert WAV/MP3 files and automatically split long recordings into parts that fit upload limits (e.g. 50 MB / 5 minutes for ElevenLabs, cloud services, and Discord).
+  - Live partition & limit estimator displaying exact duration, number of parts, estimated byte sizes, and limit bound indicators (`Size Limit Binds First` vs `Duration Limit Binds First`).
+  - MP3 constant bitrate selector (128k–320k) and WAV selectors (16-bit, 24-bit, 32-bit Float, 44.1k/48k).
+  - Silence gap trimming and digital silence padding (1.5s).
+  - Real-time rendering progress updates and direct **📂 Open Folder** toast action.
+- **Onboarding Step 2: Storage & Output Setup**:
+  - Step 2 wizard directly following the 3D globe setup prompting for central render & output directory.
+  - Automatically defaults to the OS Music folder (`C:\Users\<user>\Music\DAW Buddy`).
+  - Automatically organizes rendered audio into dedicated per-tool subfolders:
+    - `📁 Format Converter/`
+    - `📁 Slowed + Reverb/`
+    - `📁 Audio Finishing/`
+    - `📁 Trimmed/`
+    - `📁 Vocal Stems/`
+  - Automatic upgrade trigger on update so existing users can confirm and select their storage location.
+- **Slowed + Reverb Automatic Export Target**:
+  - WAV and MP3 exports now automatically save directly into `Slowed + Reverb/` under the central output directory with quick save and folder shortcuts.
+
 ## [0.5.0-beta] — 2026-08-23
 
 ### Added
