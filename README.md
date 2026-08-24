@@ -2,10 +2,10 @@
 
 > **The fast, private desktop workstation companion for music producers, audio engineers, and sound designers.**
 
-[![Tests](https://img.shields.io/badge/tests-26%20passing-brightgreen.svg)](https://github.com/hrdsht/daw_buddy/actions)
+[![Tests](https://img.shields.io/badge/tests-28%20passing-brightgreen.svg)](https://github.com/hrdsht/daw_buddy/actions)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue.svg)](https://github.com/hrdsht/daw_buddy/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/hrdsht/daw_buddy/blob/main/LICENSE)
-[![Version](https://img.shields.io/badge/version-v0.5.3--beta.2-orange.svg)](https://github.com/hrdsht/daw_buddy/releases)
+[![Version](https://img.shields.io/badge/version-v0.5.1--beta.1-orange.svg)](https://github.com/hrdsht/daw_buddy/releases)
 [![Gumroad](https://img.shields.io/badge/Gumroad-Get%20Free%20Download-ff90e8.svg?logo=gumroad&logoColor=white)](https://7675947827359.gumroad.com/l/daw_buddy)
 [![Website](https://img.shields.io/badge/Webpage-dawbuddy.ba55ick.com-2dd4bf.svg)](https://dawbuddy.ba55ick.com)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-ba55ick-FFDD00.svg?style=flat&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/ba55ick)
@@ -39,7 +39,9 @@ Whether you are mixing a multi-platinum album or producing your very first beat,
 
 ### 🏆 For Pro Producers, Mix Engineers & Sound Designers:
 - ⚡ **Instant Session Indexing**: Reads BPM, key, version count, and save timelines across Ableton Live, FL Studio, Logic Pro, Pro Tools, Cubase, Bitwig, Studio One, and REAPER in milliseconds without touching your CPU.
-- ✨ **Slowed + Reverb Studio**: Resample tracks by speed (%) or pitch semitones, convolve with algorithmic stereo Freeverb, normalize loudness, preview on an interactive seekable waveform, and export in 16/24/32-bit WAV or 128–320kbps MP3.
+- 🎚️ **Audio Format Converter & Splitter**: Convert WAV/MP3 audio and automatically partition long recordings into parts that fit upload limits (e.g. 50 MB / 5 minutes for ElevenLabs voice cloning, cloud services, and Discord) with live byte size and duration bound estimation, natural silence gap cutting, and digital silence padding.
+- ✨ **Slowed + Reverb Studio**: Resample tracks by speed (%) or pitch semitones, convolve with algorithmic stereo Freeverb, normalize loudness, preview on an interactive seekable waveform, and export directly to `Slowed + Reverb/` in 16/24/32-bit WAV or 128–320kbps MP3.
+- 📁 **Central Output Storage & Per-Tool Subfolders**: Choose where to store renders on first run or update (defaulting to OS Music folder: `C:\Users\<user>\Music\DAW Buddy`), with automatic organization into `Format Converter/`, `Slowed + Reverb/`, `Audio Finishing/`, `Trimmed/`, and `Vocal Stems/`.
 - ⏱️ **10 Authentic DAW Metronome Soundsets**: Audition downbeat/upbeat clicks from Ableton Live, FL Studio, Logic Pro, Cubase, Pro Tools, MPC, Maschine, Reason, Sonar, and Electronic Synth. Drag rendered audio (.wav) or MIDI (.mid) click tracks directly into your DAW timeline.
 - 🏷️ **Smart Stem Classifier & Bulk Renamer**: AI-assisted heuristic engine that categorizes messy bounce stems into mix-ready instrument groups (*Kicks, Snares, Basses, Leads, Vocals, FX*) with custom dictionary learning and reversible rollback manifests.
 - 🎛️ **Lossless Audio Finisher & Silence Stripper**: Peak/RMS normalization, beat/bar boundary fitting, and threshold-based leading/trailing silence removal with safety transient padding.
@@ -52,7 +54,8 @@ Whether you are mixing a multi-platinum album or producing your very first beat,
 </p>
 
 ### 🎓 For Beginners, Arrangers & Songwriters:
-- 🎲 **Producer Randomizer & Genre Challenge**: Beat creative block instantly with one-click idea generation: random key, scale, tempo, time signatures, and 48+ curated genre challenges across 9 categories (*Afro House, Organic & Botanica, Bollywood Fusion, Dubstep, Drum & Bass, Melodic Techno*, etc.) with YouTube reference search.
+- 🎲 **Producer Randomizer & Genre Challenge**: Beat creative block instantly with one-click idea generation: selectable genre dropdown, scrollable BPM drag-scrubber (click + drag Y or ±1 nudge buttons), inline scale search picker, custom time signature picker, and 48+ curated genre challenges across 9 categories.
+- 🎹 **Chord Progression Panel & Diatonic Chords**: Explore the 8 Most Used Chord Progressions or All Diatonic Chords in scale with live audio preview and direct Drag-to-DAW SMF MIDI files.
 - 🎸 **Interactive 6-String Guitar Fretboard & Piano Keyboard**: Visualize notes, solfege intervals, scale degrees, and Indian Sargam swaras across interactive fretboard and keyboard instruments.
 - 🌍 **Interactive 3D Globe & World Scales**: Spin a 3D globe and explore authentic scale traditions across **Western & Jazz Modes, Indian Classical Raagas & Thaats (with Sargam swaras & Prahar times), Arabic Maqamat, Chinese Pentatonic Modes, Mediterranean & Spanish Flamenco, and Celtic Folk**.
 - 🎹 **Scale & Raaga Detector**: Drop any raw audio sample or MIDI file to instantly detect key, scale, tuning deviation in cents, and discover matching cultural traditions.
@@ -69,9 +72,11 @@ Whether you are mixing a multi-platinum album or producing your very first beat,
 
 ### 🌟 Key Features Summary
 
+- **🎚️ Format Converter & Splitter**: High-performance audio converter and smart 50MB/5-minute partition splitter with silence gap detection.
+- **📁 Structured Tool Output Storage**: Centralized render library in `Music/DAW Buddy/` with automatic subfolders for each tool.
 - **✨ Slowed + Reverb Studio**: High-quality offline DSP resampler, Freeverb algorithmic stereo reverb, loudness normalization, seekable waveform player, and 16/24/32-bit WAV & MP3 export.
 - **⏱️ 10 DAW Metronomes & Drag-to-DAW**: Authentic click soundsets for major DAWs with 1-2-3-4 playback and direct Audio/MIDI timeline drag.
-- **🎲 Producer Randomizer & Genre Challenge**: Full world scale database, BPM, Tala meters, and 48+ curated genre challenges with YouTube inspiration.
+- **🎲 Producer Randomizer & Chord Panel**: Full world scale database, genre picker, interactive BPM scrubber, 8 most used progressions, and all chords in scale with MIDI drag.
 - **🎸 6-String Fretboard & Piano Visualizer**: Interactive acoustic string shimmer, fret position mapping, and scale degree solfege.
 - **🎹 Scale & World Tradition Detector**: Instant Chroma matching, cents tuning, Sargam swaras, and direct Drag-to-DAW MIDI export.
 - **🌐 Interactive 3D World Globe**: Spin and explore global musical traditions with regional onboarding and customizable DAW scale filters.
@@ -81,6 +86,7 @@ Whether you are mixing a multi-platinum album or producing your very first beat,
 - **💾 Duplicate Sample Auditor**: Reclaims drive space via non-destructive hard-linking with collapsible sample missing warnings.
 - **⚡ Zero-Friction Export**: Drag `[ WAV ]`, `[ MP3 ]`, and `[ FLAC ]` pills directly from the session browser straight into Discord, Telegram, or your DAW tracks.
 - **🗕 Floating Mini Player with Loop & DAW Drag**: Compact floating companion with interactive waveform scrubbing, continuous track repeat (`🔁 Repeat`), DAW minimization shortcut, and direct track drag.
+
 
 ## ⬇️ Download & Install (easiest)
 
