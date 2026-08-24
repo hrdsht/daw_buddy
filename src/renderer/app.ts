@@ -729,11 +729,12 @@ async function boot() {
   }
 
   // Display the setup wizard on first run or on update so users configure their region & output location!
-  const APP_VERSION = (settings && settings.appVersion) || '0.5.1-beta.1';
-  const seenSetupVersion = localStorage.getItem('dawBuddyRegionSetupVersion');
-  const isSetupDone = Boolean(settings.regionSetupComplete) && localStorage.getItem('dawBuddyRegionSetupComplete') === 'true';
+  const currentAppVersion = (settings && settings.appVersion) || (await window.api?.getVersion?.()) || '0.5.1-beta.1';
+  const lastSeenVersion = (settings && settings.lastSeenVersion) || localStorage.getItem('dawBuddyRegionSetupVersion');
+  const isSetupDone = Boolean(settings && settings.regionSetupComplete) && localStorage.getItem('dawBuddyRegionSetupComplete') === 'true';
+  const isFreshInstallOrUpdate = !isSetupDone || !lastSeenVersion || lastSeenVersion !== currentAppVersion;
 
-  if (!isSetupDone || seenSetupVersion !== APP_VERSION) {
+  if (isFreshInstallOrUpdate) {
     setTimeout(() => {
       showRegionOnboardingModal({
         currentRegion: settings.region || 'indian',
@@ -742,16 +743,27 @@ async function boot() {
         isUpdateOrSettings: false,
         onSave: async (result) => {
           localStorage.setItem('dawBuddyRegionSetupComplete', 'true');
-          localStorage.setItem('dawBuddyRegionSetupVersion', APP_VERSION);
+          localStorage.setItem('dawBuddyRegionSetupVersion', currentAppVersion);
           const patch: Record<string, any> = {
             region: result.region,
             scaleTraditions: result.scaleTraditions,
-            regionSetupComplete: true
+            regionSetupComplete: true,
+            lastSeenVersion: currentAppVersion
           };
           if (result.outputFolder) {
             patch.outputFolder = result.outputFolder;
           }
           settings = await window.api.updateSettings(patch);
+          applySettings();
+          render();
+        },
+        onClose: async () => {
+          localStorage.setItem('dawBuddyRegionSetupComplete', 'true');
+          localStorage.setItem('dawBuddyRegionSetupVersion', currentAppVersion);
+          settings = await window.api.updateSettings({
+            regionSetupComplete: true,
+            lastSeenVersion: currentAppVersion
+          });
           applySettings();
           render();
         },

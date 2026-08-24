@@ -85,8 +85,8 @@ const isMac = process.platform === 'darwin';
 const dataDir = () => app.getPath('userData');
 const undoLog = () => path.join(dataDir(), 'rename-undo.json');
 
-function createSplashWindow() {
-  if (process.env.NODE_ENV === 'test') {
+function createSplashWindow({ show = true }: { show?: boolean } = {}) {
+  if (process.env.NODE_ENV === 'test' || !show) {
     return { splash: null, finished: Promise.resolve() };
   }
   let resolveFinished;
@@ -221,8 +221,6 @@ if (!gotTheLock) {
 }
 
 app.whenReady().then(async () => {
-  const splashState = createSplashWindow();
-
   // Renaming the app moved the data folder. Bring the old one across before
   // anything reads from it, or it looks like every note vanished.
   await migrate(dataDir());
@@ -230,6 +228,15 @@ app.whenReady().then(async () => {
   settings = new Settings(path.join(dataDir(), 'settings.json'));
   settings.load();
   setCrashLoggingEnabled(settings.get().enableCrashLogs !== false);
+
+  const currentVersion = app.getVersion();
+  const currentSettings = settings.get();
+  const isFreshInstallOrUpdate =
+    !currentSettings.regionSetupComplete ||
+    !currentSettings.lastSeenVersion ||
+    currentSettings.lastSeenVersion !== currentVersion;
+
+  const splashState = createSplashWindow({ show: isFreshInstallOrUpdate });
 
   store = new ProjectStore(path.join(dataDir(), 'notes.json'));
   await store.load();
@@ -657,6 +664,38 @@ ipcMain.handle('settings:update', (event, patch: any) => {
   if (patch.listSort && typeof patch.listSort === 'object') {
     const by = String(patch.listSort.by || 'modified');
     allowed.listSort = { by, dir: patch.listSort.dir === 1 ? 1 : -1 };
+  }
+  if (typeof patch.region === 'string') {
+    allowed.region = patch.region;
+  }
+  if (Array.isArray(patch.scaleTraditions)) {
+    allowed.scaleTraditions = patch.scaleTraditions.filter((t: any) => typeof t === 'string');
+  }
+  if (typeof patch.regionSetupComplete === 'boolean') {
+    allowed.regionSetupComplete = patch.regionSetupComplete;
+  }
+  if (typeof patch.lastSeenVersion === 'string') {
+    allowed.lastSeenVersion = patch.lastSeenVersion;
+  }
+  if (typeof patch.enableCrashLogs === 'boolean') {
+    allowed.enableCrashLogs = patch.enableCrashLogs;
+    setCrashLoggingEnabled(patch.enableCrashLogs);
+  }
+  if (typeof patch.reducedAnimation === 'boolean') {
+    allowed.reducedAnimation = patch.reducedAnimation;
+  }
+  if (typeof patch.animationScale === 'number' && Number.isFinite(patch.animationScale)) {
+    allowed.animationScale = patch.animationScale;
+  }
+  if (typeof patch.outputFolder === 'string' || patch.outputFolder === null) {
+    allowed.outputFolder = patch.outputFolder ? path.resolve(patch.outputFolder) : null;
+    if (allowed.outputFolder) {
+      const folderName = path.basename(allowed.outputFolder);
+      const currentIgnore = settings.get().ignore || [];
+      if (!currentIgnore.some((n: string) => n.toLowerCase() === folderName.toLowerCase())) {
+        allowed.ignore = [...currentIgnore, folderName];
+      }
+    }
   }
 
   const before = settings.get();

@@ -46,6 +46,7 @@ const DEFAULTS = {
   region: 'indian',
   scaleTraditions: ['all'],
   regionSetupComplete: false,
+  lastSeenVersion: null,
   // Folder names that are never a project, and are never descended into.
   ignore: [
     'Backup',

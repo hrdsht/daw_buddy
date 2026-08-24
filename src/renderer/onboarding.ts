@@ -28,6 +28,7 @@ export function showRegionOnboardingModal(options: {
   initialOutputFolder?: string | null;
   isUpdateOrSettings?: boolean;
   onSave: (result: OnboardingResult) => void;
+  onClose?: () => void;
   playSynthNote?: (pc: number, octave: number, a4?: number) => void;
 }) {
   const existingOverlay = document.getElementById('regionOnboardingOverlay');
@@ -69,7 +70,9 @@ export function showRegionOnboardingModal(options: {
   closeBtn.title = 'Close';
   closeBtn.addEventListener('click', () => {
     localStorage.setItem('dawBuddyRegionSetupComplete', 'true');
-    localStorage.setItem('dawBuddyRegionSetupVersion', '0.5.1-beta.1');
+    if (options.onClose) {
+      options.onClose();
+    }
     globe.destroy();
     overlay.remove();
   });
