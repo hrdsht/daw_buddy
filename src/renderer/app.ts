@@ -13696,10 +13696,11 @@ function renderStandaloneConverter() {
     dropzone.classList.remove('converter-dropzone--active');
     if (e.dataTransfer && e.dataTransfer.files) {
       for (let i = 0; i < e.dataTransfer.files.length; i++) {
-        const f = e.dataTransfer.files[i];
+        const f = e.dataTransfer.files[i] as File & { path?: string };
+        const filePath = f.path || '';
         if (f.name.toLowerCase().endsWith('.wav') || f.name.toLowerCase().endsWith('.mp3')) {
-          if (!converterState.files.some(existing => existing.path === f.path)) {
-            converterState.files.push({ path: f.path, name: f.name, size: f.size });
+          if (filePath && !converterState.files.some(existing => existing.path === filePath)) {
+            converterState.files.push({ path: filePath, name: f.name, size: f.size });
           }
         }
       }
