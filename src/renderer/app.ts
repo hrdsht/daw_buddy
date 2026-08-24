@@ -729,7 +729,7 @@ async function boot() {
   }
 
   // Display the setup wizard on first run or on update so users configure their region & output location!
-  const APP_VERSION = (settings && settings.appVersion) || '0.5.1';
+  const APP_VERSION = (settings && settings.appVersion) || '0.5.1-beta.1';
   const seenSetupVersion = localStorage.getItem('dawBuddyRegionSetupVersion');
   const isSetupDone = Boolean(settings.regionSetupComplete) && localStorage.getItem('dawBuddyRegionSetupComplete') === 'true';
 

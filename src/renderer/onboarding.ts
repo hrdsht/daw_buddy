@@ -69,7 +69,7 @@ export function showRegionOnboardingModal(options: {
   closeBtn.title = 'Close';
   closeBtn.addEventListener('click', () => {
     localStorage.setItem('dawBuddyRegionSetupComplete', 'true');
-    localStorage.setItem('dawBuddyRegionSetupVersion', '0.5.0-beta.3');
+    localStorage.setItem('dawBuddyRegionSetupVersion', '0.5.1-beta.1');
     globe.destroy();
     overlay.remove();
   });

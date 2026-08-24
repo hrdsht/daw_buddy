@@ -9,7 +9,8 @@ is auto-generated on each GitHub Release; this file is the curated summary.
 
 - _Nothing yet._
 
-## [0.5.1] — 2026-08-24
+## [0.5.1-beta.1] — 2026-08-24
+
 
 ### Added
 - **Audio Format Converter & Splitter Tool**:
