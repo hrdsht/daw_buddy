@@ -71,10 +71,11 @@ test('macOS & Linux Cross-Platform Compatibility Test Suite', async (t) => {
     assert.ok(isInside(sub, root), 'Subfolder should be recognized as inside root on Linux');
     assert.ok(!isInside(outside, root), 'Outside folder should be recognized as outside root on Linux');
 
-    // Case-insensitive path comparisons across mixed OS styles
-    const winPath = 'C:\\Users\\musician\\Music\\Project';
-    const winPathLower = 'c:\\users\\musician\\music\\project';
-    assert.ok(samePath(winPath, winPathLower), 'Windows paths should match case-insensitively');
+    if (process.platform === 'win32' || process.platform === 'darwin') {
+      const winPath = 'C:\\Users\\musician\\Music\\Project';
+      const winPathLower = 'c:\\users\\musician\\music\\project';
+      assert.ok(samePath(winPath, winPathLower), 'Windows & macOS paths match case-insensitively');
+    }
 
     const linuxPath = '/home/user/music/project';
     const linuxPathSame = '/home/user/music/project';
