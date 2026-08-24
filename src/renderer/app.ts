@@ -5210,12 +5210,14 @@ function analyseAudioFile(file, decoded) {
 }
 
 async function storeAnalysis(entry, file, result) {
-  if (result.timeSignature) {
-    Player.setMetronomeSignature(result.timeSignature);
-  }
+  // NOTE: We do NOT auto-sync the detected time signature to the live metronome here.
+  // Doing so caused the Randomizer's user-selected time signature to be overridden
+  // whenever an audio file was analysed (e.g. dropping a 6/8 file while in 4/4 mode).
+  // BPM is synced only if the project has no explicit BPM set yet.
   if (result.bpm && !bpmFor(entry)) {
     Player.setMetronomeBpm(result.bpm);
   }
+
   await saveRecord(entry.path, {
     key: result.key,
     camelot: result.camelot,
@@ -10866,12 +10868,128 @@ function renderRandomizerTool(entry: any = null) {
   } else {
     genreCard.append(el('div', 'scale-metric__val', 'Open Inspiration'));
   }
+
+  // --- Inline Genre Selector ---
+  const genreSelectRow = el('div', 'randomizer-genre-select-row');
+  genreSelectRow.append(el('span', 'randomizer-genre-select-label', 'or pick:'));
+  const genreSelect = el('select', 'randomizer-genre-select') as HTMLSelectElement;
+  genreSelect.title = 'Pick a specific genre instead of randomizing';
+
+  // Group genres by category
+  const genreCategoriesMap: Record<string, any[]> = {};
+  DSP.GENRE_DATABASE.forEach((g: any) => {
+    if (!genreCategoriesMap[g.category]) genreCategoriesMap[g.category] = [];
+    genreCategoriesMap[g.category].push(g);
+  });
+
+  Object.entries(genreCategoriesMap).forEach(([cat, genres]) => {
+    const optGroup = document.createElement('optgroup');
+    optGroup.label = cat;
+    genres.forEach((g: any) => {
+      const opt = document.createElement('option');
+      opt.value = g.id;
+      opt.textContent = g.name;
+      if (state.genre && g.id === state.genre.id) opt.selected = true;
+      optGroup.appendChild(opt);
+    });
+    genreSelect.appendChild(optGroup);
+  });
+
+  genreSelect.addEventListener('change', () => {
+    const picked = DSP.GENRE_DATABASE.find((g: any) => g.id === genreSelect.value);
+    if (picked) {
+      state.genre = picked;
+      Player.setMetronomeBpm(state.bpm); // keep current bpm
+      renderRandomizerTool(entry);
+    }
+  });
+  genreSelectRow.append(genreSelect);
+  genreCard.append(genreSelectRow);
+
   metricsGrid.append(genreCard);
 
-  // 2. BPM Card
+  // 2. BPM Card — with scroll-drag and ±1 nudge buttons
   const bpmCard = el('div', 'scale-metric-card');
   bpmCard.append(el('div', 'scale-metric__label', 'Tempo (BPM)'));
-  bpmCard.append(el('div', 'scale-metric__val scale-metric__val--bpm', `${state.bpm} BPM`));
+
+  const bpmDragContainer = el('div', 'bpm-drag-container');
+
+  const bpmMinusBtn = el('button', 'bpm-nudge-btn', '−');
+  bpmMinusBtn.title = 'Decrease BPM by 1';
+  bpmMinusBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    state.bpm = Math.max(20, state.bpm - 1);
+    Player.setMetronomeBpm(state.bpm);
+    renderRandomizerTool(entry);
+  });
+
+  const bpmValEl = el('div', 'scale-metric__val scale-metric__val--bpm', `${state.bpm} BPM`);
+  bpmValEl.title = 'Hold left-click and drag ↑↓ to change BPM';
+
+  // Scroll-drag logic
+  let bpmDragActive = false;
+  let bpmDragStartY = 0;
+  let bpmDragStartVal = state.bpm;
+  let bpmHintEl: HTMLElement | null = null;
+
+  const removeBpmHint = () => {
+    if (bpmHintEl) { bpmHintEl.remove(); bpmHintEl = null; }
+  };
+
+  bpmValEl.addEventListener('mousedown', (e: MouseEvent) => {
+    e.preventDefault();
+    bpmDragActive = true;
+    bpmDragStartY = e.clientY;
+    bpmDragStartVal = state.bpm;
+    bpmValEl.classList.add('is-dragging');
+
+    bpmHintEl = el('div', 'bpm-drag-hint', '↑ drag up = faster  ↓ drag down = slower');
+    bpmHintEl.style.left = `${e.clientX + 14}px`;
+    bpmHintEl.style.top = `${e.clientY - 20}px`;
+    document.body.appendChild(bpmHintEl);
+
+    const onMove = (ev: MouseEvent) => {
+      if (!bpmDragActive) return;
+      const delta = Math.round((bpmDragStartY - ev.clientY) / 2);
+      const newBpm = Math.min(300, Math.max(20, bpmDragStartVal + delta));
+      if (newBpm !== state.bpm) {
+        state.bpm = newBpm;
+        bpmValEl.textContent = `${newBpm} BPM`;
+        Player.setMetronomeBpm(newBpm);
+        if (bpmHintEl) {
+          bpmHintEl.textContent = `${newBpm} BPM`;
+          bpmHintEl.style.left = `${ev.clientX + 14}px`;
+          bpmHintEl.style.top = `${ev.clientY - 20}px`;
+        }
+      }
+    };
+
+    const onUp = () => {
+      if (!bpmDragActive) return;
+      bpmDragActive = false;
+      bpmValEl.classList.remove('is-dragging');
+      removeBpmHint();
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      renderRandomizerTool(entry);
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+
+  const bpmPlusBtn = el('button', 'bpm-nudge-btn', '+');
+  bpmPlusBtn.title = 'Increase BPM by 1';
+  bpmPlusBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    state.bpm = Math.min(300, state.bpm + 1);
+    Player.setMetronomeBpm(state.bpm);
+    renderRandomizerTool(entry);
+  });
+
+  bpmDragContainer.append(bpmMinusBtn, bpmValEl, bpmPlusBtn);
+  bpmCard.append(bpmDragContainer);
+
   const isMetroOn = Player.isMetronome();
   const metroToggleBtn = el('button', `pill pill--sm ${isMetroOn ? 'pill--solid pill--metro is-on' : ''}`, isMetroOn ? '⏹ Stop Metronome' : '⏱ Start Metronome');
   metroToggleBtn.style.marginTop = '8px';
@@ -10894,7 +11012,84 @@ function renderRandomizerTool(entry: any = null) {
   keyCard.append(keyHtml);
   keyCard.append(el('div', 'scale-metric__sub', `${subCategoryText}${currentWorldDef?.nativeName ? ` · ${currentWorldDef.nativeName}` : ''}`));
 
-  // Generate MIDI bytes for Key & Scale
+  // --- Scale Search Panel ---
+  let scaleSearchOpen = false;
+  const scaleSearchToggle = el('button', 'pill pill--sm scale-search-toggle-btn', '🔍 Pick Scale');
+  scaleSearchToggle.title = 'Search and select a different scale (keeps the same root note)';
+
+  const scaleSearchPanel = el('div', 'scale-search-panel');
+  scaleSearchPanel.style.display = 'none';
+
+  const scaleSearchInput = el('input', 'scale-search-input') as HTMLInputElement;
+  scaleSearchInput.placeholder = 'Search scales… (e.g. dorian, pentatonic, maqam)';
+  scaleSearchInput.type = 'text';
+
+  const scaleSearchResults = el('div', 'scale-search-results');
+
+  const populateScaleSearch = (query: string) => {
+    scaleSearchResults.innerHTML = '';
+    const q = query.trim().toLowerCase();
+    const matches = WORLD_SCALES_DATABASE.filter((s) =>
+      !q ||
+      s.name.toLowerCase().includes(q) ||
+      (s.nativeName && s.nativeName.toLowerCase().includes(q)) ||
+      (s.subCategory && s.subCategory.toLowerCase().includes(q)) ||
+      s.tradition.toLowerCase().includes(q)
+    ).slice(0, 40);
+
+    if (matches.length === 0) {
+      scaleSearchResults.append(el('div', 'scale-search-empty', 'No scales found — try a different search'));
+      return;
+    }
+
+    const regionMap: Record<string, string> = {};
+    WORLD_REGIONS.forEach((r) => { regionMap[r.id] = r.flag; });
+
+    matches.forEach((s) => {
+      const flag = regionMap[s.tradition] || '🌐';
+      const isCurrent = s.name.toLowerCase() === state.scaleName.toLowerCase();
+      const pill = el('button', `scale-search-pill ${isCurrent ? 'is-active' : ''}`, `${flag} ${s.name}`);
+      pill.title = `${s.subCategory || s.tradition}${s.nativeName ? ` · ${s.nativeName}` : ''}`;
+      pill.addEventListener('click', (e) => {
+        e.stopPropagation();
+        stopScalePlayback();
+        state.scaleName = s.name;
+        state.degrees = s.degrees;
+        state.thaat = s.subCategory || s.tradition;
+        state.raga = s.tradition === 'indian' ? (s as any) : null;
+        if (s.suggestedRhythm) {
+          const matchSig = TIME_SIGNATURE_POOL.find((ts) => s.suggestedRhythm?.includes(ts));
+          if (matchSig) {
+            state.timeSignature = matchSig;
+            state.tala = DSP.TALA_MAP[matchSig] || null;
+            Player.setMetronomeSignature(matchSig);
+          }
+        }
+        renderRandomizerTool(entry);
+        const ascP = s.ascendingPhrase || s.degrees;
+        const descP = s.descendingPhrase || [...ascP].reverse();
+        playRagaSequence(state.tonicPc, ascP, descP, state.tuningA4);
+      });
+      scaleSearchResults.append(pill);
+    });
+  };
+
+  scaleSearchInput.addEventListener('input', () => populateScaleSearch(scaleSearchInput.value));
+  populateScaleSearch('');
+
+  scaleSearchPanel.append(scaleSearchInput, scaleSearchResults);
+
+  scaleSearchToggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    scaleSearchOpen = !scaleSearchOpen;
+    scaleSearchPanel.style.display = scaleSearchOpen ? 'flex' : 'none';
+    scaleSearchToggle.textContent = scaleSearchOpen ? '✕ Close' : '🔍 Pick Scale';
+    if (scaleSearchOpen) setTimeout(() => scaleSearchInput.focus(), 50);
+  });
+
+  keyCard.append(scaleSearchToggle, scaleSearchPanel);
+
+
   const cleanScaleName = state.scaleName.replace(/[^a-zA-Z0-9_-]/g, '_');
   const keyScaleMidiFileName = `Random_${state.tonic}_${cleanScaleName}_${state.bpm}BPM.mid`;
   let keyScaleMidiBytes: Uint8Array;
@@ -11011,7 +11206,76 @@ function renderRandomizerTool(entry: any = null) {
   // 4. Time Signature & Tala Card (with interactive rhythm pulse audition action and Metronome Click MIDI drag)
   const meterCard = el('div', 'scale-metric-card scale-metric-card--actionable');
   meterCard.append(el('div', 'scale-metric__label', 'Time Signature & Rhythm (Drag to DAW)'));
-  meterCard.append(el('div', 'scale-metric__val', state.timeSignature));
+
+  // Time sig display + custom button row
+  const meterValRow = el('div', 'bpm-drag-container');
+  meterValRow.append(el('div', 'scale-metric__val', state.timeSignature));
+
+  let timeSigPickerOpen = false;
+  const customTimeSigBtn = el('button', 'pill pill--sm timesig-custom-btn', '✏️ Custom');
+  customTimeSigBtn.title = 'Set a custom time signature (numerator / denominator)';
+
+  const timeSigPickerPanel = el('div', 'timesig-picker-panel');
+  timeSigPickerPanel.style.display = 'none';
+
+  timeSigPickerPanel.append(el('div', 'timesig-picker-label', 'Custom Time Signature'));
+
+  const pickerRow = el('div', 'timesig-picker-row');
+  const [curNum, curDen] = state.timeSignature.split('/').map(Number);
+
+  const numInput = el('input', 'timesig-num-input') as HTMLInputElement;
+  numInput.type = 'number';
+  numInput.min = '1';
+  numInput.max = '16';
+  numInput.value = String(curNum || 4);
+
+  const dividerSpan = el('span', 'timesig-divider', '/');
+
+  const denSelect = el('select', 'timesig-den-select') as HTMLSelectElement;
+  [2, 4, 8, 16].forEach((d) => {
+    const opt = document.createElement('option');
+    opt.value = String(d);
+    opt.textContent = String(d);
+    if (d === (curDen || 4)) opt.selected = true;
+    denSelect.appendChild(opt);
+  });
+
+  pickerRow.append(numInput, dividerSpan, denSelect);
+  timeSigPickerPanel.append(pickerRow);
+
+  const pickerActions = el('div', 'timesig-picker-actions');
+  const applyTimeSigBtn = el('button', 'pill pill--sm pill--solid', 'Apply');
+  applyTimeSigBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const n = Math.min(16, Math.max(1, parseInt(numInput.value, 10) || 4));
+    const d = parseInt(denSelect.value, 10) || 4;
+    const newSig = `${n}/${d}`;
+    state.timeSignature = newSig;
+    state.tala = DSP.TALA_MAP[newSig] || null;
+    Player.setMetronomeSignature(newSig);
+    toast('Time Signature Set', `${newSig} — metronome synced`);
+    renderRandomizerTool(entry);
+  });
+  const cancelTimeSigBtn = el('button', 'pill pill--sm', 'Cancel');
+  cancelTimeSigBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    timeSigPickerOpen = false;
+    timeSigPickerPanel.style.display = 'none';
+    customTimeSigBtn.textContent = '✏️ Custom';
+  });
+  pickerActions.append(applyTimeSigBtn, cancelTimeSigBtn);
+  timeSigPickerPanel.append(pickerActions);
+
+  customTimeSigBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    timeSigPickerOpen = !timeSigPickerOpen;
+    timeSigPickerPanel.style.display = timeSigPickerOpen ? 'flex' : 'none';
+    customTimeSigBtn.textContent = timeSigPickerOpen ? '✕ Cancel' : '✏️ Custom';
+  });
+
+  meterValRow.append(customTimeSigBtn);
+  meterCard.append(meterValRow, timeSigPickerPanel);
+
   if (state.tala) {
     const talaDiv = el('div', 'randomizer-tala-detail');
     talaDiv.append(el('div', null, `🪘 ${state.tala.name} (${state.tala.matras} Matras · ${state.tala.vibhag})`));
@@ -11195,9 +11459,208 @@ function renderRandomizerTool(entry: any = null) {
     }
   });
   scaleActions.append(scaleMidiBtn);
-
   kbSection.append(scaleActions);
+
+  // ---- Chord Progression Panel ----
+  // Helper: build diatonic chords from scale degrees
+  const CHORD_QUALITY_FOR_DEGREE: Record<number, { quality: string; suffix: string }> = {
+    0: { quality: 'maj', suffix: '' },
+    2: { quality: 'min', suffix: 'm' },
+    4: { quality: 'min', suffix: 'm' },
+    5: { quality: 'maj', suffix: '' },
+    7: { quality: 'maj', suffix: '' },
+    9: { quality: 'min', suffix: 'm' },
+    11: { quality: 'dim', suffix: '°' }
+  };
+
+  const buildDiatonicChords = () => {
+    const NOTES_ARR = DSP.NOTES;
+    const isMinorish = state.degrees.includes(3) && !state.degrees.includes(4);
+    return state.degrees.map((deg) => {
+      const rootPc = (state.tonicPc + deg) % 12;
+      const rootName = NOTES_ARR[rootPc];
+      // determine triad quality based on scale degree interval
+      const intervals = isMinorish
+        ? [0, 3, 7] // fallback triad
+        : [0, 4, 7];
+      // Use third note to determine quality: check if (deg+3) or (deg+4) is in scale
+      const hasMinorThird = state.degrees.includes(deg + 3) || state.degrees.includes((deg + 3) % 12);
+      const hasMajorThird = state.degrees.includes(deg + 4) || state.degrees.includes((deg + 4) % 12);
+      const hasDimFifth = state.degrees.includes(deg + 6) || state.degrees.includes((deg + 6) % 12);
+      const quality = (hasDimFifth && hasMinorThird) ? 'dim' : (hasMinorThird ? 'min' : 'maj');
+      const suffix = quality === 'dim' ? '°' : (quality === 'min' ? 'm' : '');
+      const tmpl = DSP.CHORD_TEMPLATES[quality] || DSP.CHORD_TEMPLATES.maj;
+      const midiNotes = tmpl.intervals.map((iv: number) => 60 + rootPc + iv);
+      const roman = DSP.getRomanNumeral(rootPc, quality, state.tonicPc, isMinorish);
+      return { rootPc, rootName, quality, suffix, chordName: `${rootName}${suffix}`, midiNotes, roman, deg };
+    });
+  };
+
+  // Most-used progressions (roman numerals relative to tonic)
+  const MOST_USED_PROGRESSIONS = [
+    { name: 'Pop Anthem', roman: ['I', 'V', 'vi', 'IV'], degreeIndices: [0, 4, 9, 5] },
+    { name: 'Minor Epic', roman: ['i', 'VII', 'VI', 'VII'], degreeIndices: [0, 10, 9, 10] },
+    { name: 'Blues / Classic', roman: ['I', 'IV', 'V', 'I'], degreeIndices: [0, 5, 7, 0] },
+    { name: 'Jazz ii–V–I', roman: ['ii', 'V', 'I'], degreeIndices: [2, 7, 0] },
+    { name: 'Epic Minor', roman: ['i', 'VI', 'III', 'VII'], degreeIndices: [0, 9, 4, 10] },
+    { name: 'Borrowed (bVII)', roman: ['I', 'bVII', 'IV', 'I'], degreeIndices: [0, 10, 5, 0] },
+    { name: 'Andalusian', roman: ['i', 'VII', 'VI', 'V'], degreeIndices: [0, 10, 9, 7] },
+    { name: 'Pop Ballad', roman: ['vi', 'IV', 'I', 'V'], degreeIndices: [9, 5, 0, 7] }
+  ];
+
+  const resolveProgression = (degreeIndices: number[]) => {
+    const NOTES_ARR = DSP.NOTES;
+    return degreeIndices.map((semitone) => {
+      const rootPc = (state.tonicPc + semitone) % 12;
+      const rootName = NOTES_ARR[rootPc];
+      // detect quality by checking scale membership
+      const relDeg = semitone;
+      const hasMinor = state.degrees.some(d => (d - relDeg + 12) % 12 === 3);
+      const hasDim = state.degrees.some(d => (d - relDeg + 12) % 12 === 6);
+      const quality = hasDim ? 'dim' : (hasMinor ? 'min' : 'maj');
+      const suffix = quality === 'dim' ? '°' : (quality === 'min' ? 'm' : '');
+      const tmpl = DSP.CHORD_TEMPLATES[quality] || DSP.CHORD_TEMPLATES.maj;
+      const midiNotes = tmpl.intervals.map((iv: number) => 60 + rootPc + iv);
+      return { chordName: `${rootName}${suffix}`, midiNotes };
+    });
+  };
+
+  const dragOrExportMidi = async (bytes: Uint8Array, fileName: string) => {
+    if (window.api.dragMidi) {
+      await window.api.dragMidi(fileName, Array.from(bytes));
+    } else if (window.api.saveMidi) {
+      const saved = await window.api.saveMidi(fileName, Array.from(bytes));
+      if (saved) toast('Chord MIDI exported', saved);
+    }
+  };
+
+  const chordPanel = el('div', 'chord-panel');
+  chordPanel.append(el('p', 'chord-panel__title', '🎹 Chord Ideas'));
+
+  const chordPanelBtns = el('div', 'chord-panel-btns');
+  const mostUsedBtn = el('button', 'chord-panel-tab-btn', '🎵 Most Used Progressions');
+  const allChordsBtn = el('button', 'chord-panel-tab-btn', '🎼 All Chords in Scale');
+  chordPanelBtns.append(mostUsedBtn, allChordsBtn);
+  chordPanel.append(chordPanelBtns);
+
+  const chordPanelContent = el('div', 'chord-panel-content');
+  chordPanel.append(chordPanelContent);
+
+  const showMostUsed = () => {
+    mostUsedBtn.classList.add('is-active');
+    allChordsBtn.classList.remove('is-active');
+    chordPanelContent.innerHTML = '';
+    const list = el('div', 'chord-prog-list');
+
+    MOST_USED_PROGRESSIONS.forEach((prog) => {
+      const resolved = resolveProgression(prog.degreeIndices);
+      const item = el('div', 'chord-prog-item');
+      item.append(el('div', 'chord-prog-item__roman', prog.roman.join(' – ')));
+      item.append(el('div', 'chord-prog-item__chords', resolved.map(r => r.chordName).join(' → ')));
+      item.append(el('div', 'chord-prog-item__name', prog.name));
+
+      const itemActions = el('div', 'chord-prog-item__actions');
+      const dragBtn = el('button', 'pill pill--sm scale-midi-btn');
+      dragBtn.innerHTML = '⤓ Drag MIDI';
+      dragBtn.title = `Drag "${prog.name}" progression MIDI into your DAW`;
+      dragBtn.draggable = true;
+      const progMidiItems = resolved.map(r => ({ midiNotes: r.midiNotes, durationBeats: 4 }));
+      const progBytes = progressionMidi(progMidiItems, { bpm: state.bpm });
+      const progFileName = `Chord_${prog.name.replace(/\s+/g, '_')}_${state.tonic}_${state.bpm}BPM.mid`;
+      dragBtn.addEventListener('dragstart', async (e: DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (window.api.dragMidi) await window.api.dragMidi(progFileName, Array.from(progBytes));
+      });
+      dragBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await dragOrExportMidi(progBytes, progFileName);
+      });
+      itemActions.append(dragBtn);
+      item.append(itemActions);
+      list.append(item);
+    });
+
+    chordPanelContent.append(list);
+  };
+
+  const showAllChords = () => {
+    allChordsBtn.classList.add('is-active');
+    mostUsedBtn.classList.remove('is-active');
+    chordPanelContent.innerHTML = '';
+    const diatonic = buildDiatonicChords();
+
+    const grid = el('div', 'chord-diatonic-grid');
+    diatonic.forEach((chord) => {
+      const pill = el('button', 'chord-pill');
+      const nameSpan = document.createElement('span');
+      nameSpan.textContent = chord.chordName;
+      const romanSpan = el('span', 'chord-pill__roman', chord.roman);
+      pill.append(nameSpan, romanSpan);
+      pill.title = `Click to audition ${chord.chordName}  |  Drag for 1-bar MIDI`;
+      pill.draggable = true;
+
+      const chordBytes = progressionMidi([{ midiNotes: chord.midiNotes, durationBeats: 4 }], { bpm: state.bpm });
+      const chordFileName = `Chord_${chord.chordName.replace(/[^a-zA-Z0-9]/g, '')}_${state.tonic}_${state.bpm}BPM.mid`;
+
+      pill.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // Audition: play all notes of the chord
+        chord.midiNotes.forEach((mNote: number, i: number) => {
+          const pc = mNote % 12;
+          const oct = Math.floor(mNote / 12) - 1;
+          setTimeout(() => playSynthNote(pc, oct, state.tuningA4, 1.2), i * 20);
+        });
+      });
+
+      pill.addEventListener('dragstart', async (e: DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (window.api.dragMidi) await window.api.dragMidi(chordFileName, Array.from(chordBytes));
+      });
+
+      grid.append(pill);
+    });
+
+    // Drag all diatonic chords in sequence
+    const allDiatonicItems = diatonic.map(c => ({ midiNotes: c.midiNotes, durationBeats: 4 }));
+    const allBytes = progressionMidi(allDiatonicItems, { bpm: state.bpm });
+    const allFileName = `Diatonic_${state.tonic}_${state.scaleName.replace(/[^a-zA-Z0-9_]/g, '_')}_${state.bpm}BPM.mid`;
+
+    const dragAllBtn = el('button', 'chord-panel-drag-all-btn', '⤓ Drag All Chords');
+    dragAllBtn.title = `Drag all ${diatonic.length} diatonic chords as a MIDI progression`;
+    dragAllBtn.draggable = true;
+    dragAllBtn.addEventListener('dragstart', async (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (window.api.dragMidi) await window.api.dragMidi(allFileName, Array.from(allBytes));
+    });
+    dragAllBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await dragOrExportMidi(allBytes, allFileName);
+    });
+
+    chordPanelContent.append(grid, dragAllBtn);
+  };
+
+  mostUsedBtn.addEventListener('click', () => showMostUsed());
+  allChordsBtn.addEventListener('click', () => showAllChords());
+
+  // Default view: Most Used
+  showMostUsed();
+
+  // Flex wrapper: keyboard left, chord panel right
+  const kbChordWrapper = el('div', 'scale-kb-chord-wrapper');
+  const kbLeft = el('div', 'scale-kb-left');
+  kbLeft.append(svgKb, scaleActions);
+  kbChordWrapper.append(kbLeft, chordPanel);
+  kbSection.innerHTML = '';
+  kbSection.append(el('h4', 'scale-notes__title', `Interactive Scale Keyboard: ${state.tonic} ${state.scaleName}`));
+  kbSection.append(kbChordWrapper);
+
   resultBox.append(kbSection);
+
+
 
   // World Musical Traditions & Scales Explorer in Randomizer
   const ragaChroma = new Float64Array(12);

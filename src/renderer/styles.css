@@ -8971,8 +8971,445 @@ button.is-loading {
   background: #512da8;
 }
 
+/* =================== Randomizer: Genre Inline Selector =================== */
+.randomizer-genre-select-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
 
+.randomizer-genre-select-label {
+  font-size: 10.5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
 
+.randomizer-genre-select {
+  flex: 1;
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, #c084fc 35%, var(--line));
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 12px;
+  padding: 4px 8px;
+  cursor: pointer;
+  appearance: auto;
+}
+
+.randomizer-genre-select:focus {
+  outline: none;
+  border-color: #c084fc;
+}
+
+/* =================== Randomizer: BPM Scroll-Drag =================== */
+.bpm-drag-container {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.bpm-nudge-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--raised);
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  transition: all 0.12s ease;
+  flex-shrink: 0;
+}
+
+.bpm-nudge-btn:hover {
+  background: var(--hover);
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
+.scale-metric__val--bpm {
+  cursor: ns-resize;
+  user-select: none;
+  transition: color 0.1s;
+  position: relative;
+}
+
+.scale-metric__val--bpm:hover {
+  color: var(--amber);
+}
+
+.scale-metric__val--bpm.is-dragging {
+  color: var(--amber);
+  text-shadow: 0 0 12px color-mix(in srgb, var(--amber) 60%, transparent);
+}
+
+.bpm-drag-hint {
+  position: fixed;
+  background: var(--raised);
+  border: 1px solid var(--amber);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--amber);
+  pointer-events: none;
+  z-index: 9999;
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+
+/* =================== Randomizer: Scale Search Panel =================== */
+.scale-search-toggle-btn {
+  font-size: 11px;
+  padding: 3px 9px;
+  margin-top: 6px;
+}
+
+.scale-search-panel {
+  margin-top: 8px;
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.scale-search-input {
+  width: 100%;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12px;
+  padding: 6px 10px;
+  box-sizing: border-box;
+}
+
+.scale-search-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.scale-search-results {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.scale-search-pill {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  color: var(--dim);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.12s ease;
+}
+
+.scale-search-pill:hover {
+  border-color: var(--accent);
+  color: var(--text);
+  background: var(--hover);
+}
+
+.scale-search-pill.is-active {
+  background: color-mix(in srgb, var(--accent) 18%, var(--raised));
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.scale-search-empty {
+  font-size: 11px;
+  color: var(--muted);
+  font-style: italic;
+  padding: 4px 2px;
+}
+
+/* =================== Randomizer: Custom Time Signature Picker =================== */
+.timesig-picker-panel {
+  margin-top: 8px;
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--amber) 35%, var(--line));
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.timesig-picker-label {
+  font-size: 11px;
+  color: var(--dim);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.timesig-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.timesig-num-input {
+  width: 54px;
+  text-align: center;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 700;
+  font-family: var(--mono);
+  padding: 4px 0;
+}
+
+.timesig-num-input:focus {
+  outline: none;
+  border-color: var(--amber);
+}
+
+.timesig-divider {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--amber);
+  line-height: 1;
+}
+
+.timesig-den-select {
+  width: 60px;
+  text-align: center;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 700;
+  font-family: var(--mono);
+  padding: 4px 4px;
+  cursor: pointer;
+}
+
+.timesig-den-select:focus {
+  outline: none;
+  border-color: var(--amber);
+}
+
+.timesig-picker-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* =================== Randomizer: Chord Progression Panel =================== */
+.scale-kb-chord-wrapper {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.scale-kb-left {
+  flex: 1 1 300px;
+  min-width: 0;
+}
+
+.chord-panel {
+  flex: 0 0 220px;
+  min-width: 200px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chord-panel__title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--dim);
+  margin: 0;
+}
+
+.chord-panel-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chord-panel-tab-btn {
+  width: 100%;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 10px;
+  border-radius: 7px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.12s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chord-panel-tab-btn:hover {
+  border-color: var(--accent);
+  background: var(--hover);
+  color: var(--accent);
+}
+
+.chord-panel-tab-btn.is-active {
+  background: color-mix(in srgb, var(--accent) 15%, var(--raised));
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.chord-panel-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Most Used Progressions list */
+.chord-prog-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.chord-prog-item {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.chord-prog-item__roman {
+  font-size: 11.5px;
+  font-weight: 700;
+  font-family: var(--mono);
+  color: var(--accent);
+}
+
+.chord-prog-item__chords {
+  font-size: 11px;
+  color: var(--text);
+}
+
+.chord-prog-item__name {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.chord-prog-item__actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 3px;
+}
+
+/* All Chords in Scale grid */
+.chord-diatonic-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+}
+
+.chord-pill {
+  font-size: 11.5px;
+  font-weight: 600;
+  font-family: var(--mono);
+  padding: 6px 4px;
+  border-radius: 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.12s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  text-align: center;
+}
+
+.chord-pill span.chord-pill__roman {
+  font-size: 9.5px;
+  color: var(--dim);
+  font-weight: 400;
+}
+
+.chord-pill:hover {
+  background: color-mix(in srgb, var(--accent) 14%, var(--raised));
+  border-color: var(--accent);
+  color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.chord-pill:active {
+  transform: translateY(0px);
+}
+
+.chord-panel-drag-all-btn {
+  width: 100%;
+  font-size: 11px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--raised));
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line));
+  color: var(--accent);
+  cursor: pointer;
+  transition: all 0.12s ease;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.chord-panel-drag-all-btn:hover {
+  background: color-mix(in srgb, var(--accent) 22%, var(--raised));
+  border-color: var(--accent);
+}
+
+.chord-panel-drag-all-btn[draggable="true"] {
+  cursor: grab;
+}
+
+.chord-panel-drag-all-btn[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+/* =================== Time Sig Custom Picker toggle btn in meter card =================== */
+.timesig-custom-btn {
+  font-size: 11px;
+  padding: 3px 9px;
+}
 
 
 
