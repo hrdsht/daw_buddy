@@ -90,8 +90,12 @@ jobs:
         run: |
           shopt -s nullglob
           files=(release/*.dmg release/*.exe release/*.AppImage release/*.deb release/*.rpm release/*.tar.gz release/*.zip)
-          echo "Uploading: ${files[*]}"
-          gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
+          if [ ${#files[@]} -gt 0 ]; then
+            echo "Uploading: ${files[*]}"
+            gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
+          else
+            echo "No matching release files found to upload on this runner."
+          fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
