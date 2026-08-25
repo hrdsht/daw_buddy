@@ -145,7 +145,7 @@ app.whenReady().then(async () => {
               ctx.fillText('DAW Buddy • Startup Video Reel', fx + 80, fy + 24);
 
               ctx.fillStyle = '#00f0ff';
-              ctx.fillText('v0.5.3-beta.2', fx + fw - 110, fy + 24);
+              ctx.fillText('v0.5.1-beta.2', fx + fw - 110, fy + 24);
 
               // Scanning Chip at bottom
               ctx.fillStyle = 'rgba(0,0,0,0.88)';
@@ -306,7 +306,7 @@ app.whenReady().then(async () => {
               ctx.fillText('DAW Buddy • Startup Video Reel', fx + 72, fy + 23);
 
               ctx.fillStyle = '#00f0ff';
-              ctx.fillText('v0.5.3-beta.2', fx + fw - 90, fy + 23);
+              ctx.fillText('v0.5.1-beta.2', fx + fw - 90, fy + 23);
 
               // Scanning Chip
               ctx.fillStyle = 'rgba(0,0,0,0.85)';

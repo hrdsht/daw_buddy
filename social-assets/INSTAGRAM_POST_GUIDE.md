@@ -38,7 +38,7 @@ Open the interactive generator in your browser:
 | # | Slide Title | Category | Content / Highlight |
 |---|---|---|---|
 | **01** | **Meet DAW Buddy.** | *Startup Video Reel* | The open-source, ultra-fast companion app designed specifically for modern music producers and beatmakers. *(Hero wallpaper + floating glassmorphic app)* |
-| **02** | **We’ve Been Cooking All Week.** | *Public Beta Drop* | **🚀 Public Beta v0.5.3-beta.2 is LIVE!** A dedicated glassmorphic announcement card highlighting the major features coming up in the carousel. |
+| **02** | **We’ve Been Cooking All Week.** | *Public Beta Drop* | **🚀 Public Beta v0.5.1-beta.2 is LIVE!** A dedicated glassmorphic announcement card highlighting the major features coming up in the carousel. |
 | **03** | **Never Lose A Project File Again.** | *Smart Project Hub* | Auto-detects FL Studio (`.flp`), Ableton Live (`.als`), Logic & Reaper projects with status tags (Mix Ready, Mastered, In Progress) and key/tempo detection. |
 | **04** | **Smart Version Grouping.** | *Clean Revisions* | No more messy folders. Automatically collates `_v1`, `_v2`, `_final`, and `_final_FINAL` into single unified project cards. |
 | **05** | **Latest Bounces At Your Fingertips.** | *Instant Renders* | Scans your rendered `.wav` and `.mp3` bounces in real-time. Sorted by date and linked straight to your projects. |
