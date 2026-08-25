@@ -4872,6 +4872,11 @@ body[data-anim-scale="0"] *::after {
   color: var(--amber);
 }
 
+.smart-badge--empty {
+  background: rgba(239, 68, 68, 0.18);
+  color: var(--alert, #ef4444);
+}
+
 .smart-badge--miss {
   background: rgba(255, 255, 255, 0.05);
   color: var(--dim);

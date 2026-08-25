@@ -9,6 +9,16 @@ is auto-generated on each GitHub Release; this file is the curated summary.
 
 - _Nothing yet._
 
+## [0.5.1-beta.2] — 2026-08-25
+
+### Added
+- **Smart Renamer Empty & Silent Track Tagging & Disk Space Reclaimer**:
+  - Automatically identifies empty 0-byte files, header-only WAVs, and full-length digital silence DAW mixer bounces during stem analysis.
+  - Distinct `🔇 Empty Track` badge tag in stem list with detailed reason readouts (`Digital silence (0.0 peak)` / `0-byte empty file`).
+  - Space-saving cleanup alert banner calculating total wasted gigabytes/megabytes across empty tracks.
+  - One-click `🗑️ Delete Empty Tracks` prompt to move unused mixer channel bounces to trash and instantly free up disk space.
+  - `Select Empty` batch toolbar button for fast multi-selection.
+
 ## [0.5.1-beta.1] — 2026-08-24
 
 

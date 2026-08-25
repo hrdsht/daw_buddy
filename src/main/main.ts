@@ -1306,22 +1306,68 @@ ipcMain.handle('tools:quickSaveAudio', async (event, { fileName, data, subfolder
 
 /* ------------------------- smart renamer -------------------------- */
 
+async function detectEmptyTrack(filePath: string): Promise<{ isEmpty: boolean; emptyReason?: string; sizeBytes: number; peakDb?: number }> {
+  try {
+    const stat = await fsp.stat(filePath);
+    const sizeBytes = stat.size || 0;
+    if (sizeBytes === 0) {
+      return { isEmpty: true, emptyReason: '0-byte empty file', sizeBytes: 0, peakDb: -Infinity };
+    }
+
+    const ext = path.extname(filePath).toLowerCase();
+    if (ext === '.wav') {
+      if (sizeBytes <= 44) {
+        return { isEmpty: true, emptyReason: 'Empty WAV header (no data)', sizeBytes, peakDb: -Infinity };
+      }
+      const stats = await silence.measure(filePath);
+      if (stats.error) {
+        if (stats.error.toLowerCase().includes('empty') || stats.error.toLowerCase().includes('missing')) {
+          return { isEmpty: true, emptyReason: stats.error, sizeBytes, peakDb: -Infinity };
+        }
+        return { isEmpty: false, sizeBytes };
+      }
+      // If peak is 0 or peakDb is -Infinity or <= -90 dB, it is digital silence
+      if (stats.peak === 0 || !Number.isFinite(stats.peakDb) || stats.peakDb <= -90) {
+        return {
+          isEmpty: true,
+          emptyReason: stats.peak === 0 ? 'Digital silence (0.0 peak)' : `Silent track (${stats.peakDb.toFixed(1)} dB peak)`,
+          sizeBytes,
+          peakDb: stats.peakDb
+        };
+      }
+      return { isEmpty: false, sizeBytes, peakDb: stats.peakDb };
+    }
+
+    return { isEmpty: false, sizeBytes };
+  } catch (err: any) {
+    return { isEmpty: false, sizeBytes: 0 };
+  }
+}
+
 ipcMain.handle('tools:smartClassify', async (event, folder, fileList) => {
   guardApproved(folder);
   const files = Array.isArray(fileList) ? fileList : [];
-  const results = files.map((file) => {
-    const fileName = typeof file === 'string' ? file : file.name;
-    const filePath = typeof file === 'string' ? path.join(folder, file) : (file.path || path.join(folder, file.name));
-    guardApproved(filePath);
+  const results = await Promise.all(
+    files.map(async (file) => {
+      const fileName = typeof file === 'string' ? file : file.name;
+      const filePath = typeof file === 'string' ? path.join(folder, file) : (file.path || path.join(folder, file.name));
+      guardApproved(filePath);
 
-    const classification = matcher.classify(fileName);
-    return {
-      name: fileName,
-      path: filePath,
-      ...classification,
-      suggestedStem: matcher.nameFor(classification)
-    };
-  });
+      const classification = matcher.classify(fileName);
+      const emptyCheck = await detectEmptyTrack(filePath);
+
+      return {
+        name: fileName,
+        path: filePath,
+        ...classification,
+        suggestedStem: matcher.nameFor(classification),
+        isEmpty: emptyCheck.isEmpty,
+        emptyReason: emptyCheck.emptyReason,
+        sizeBytes: emptyCheck.sizeBytes,
+        peakDb: emptyCheck.peakDb
+      };
+    })
+  );
 
   return {
     results,
@@ -1349,7 +1395,7 @@ ipcMain.handle('tools:smartAudioFeatures', async (event, filePath) => {
     const totalFrames = Math.floor(dataSize / blockAlign);
 
     if (totalFrames <= 0) {
-      return { ok: false, error: 'Empty WAV data' };
+      return { ok: true, isEmpty: true, emptyReason: 'Empty WAV data (0 frames)', features: null, category: null, subtype: null, confidence: 0 };
     }
 
     // Scan across the file in strides to find the loudest active audio window (avoids silent intros)
@@ -1370,6 +1416,18 @@ ipcMain.handle('tools:smartAudioFeatures', async (event, filePath) => {
         maxPeak = mag;
         peakFrame = f;
       }
+    }
+
+    if (maxPeak === 0) {
+      return {
+        ok: true,
+        isEmpty: true,
+        emptyReason: 'Digital silence (0.0 peak)',
+        features: null,
+        category: null,
+        subtype: null,
+        confidence: 0
+      };
     }
 
     // Extract a 3-second active window centered around the peak

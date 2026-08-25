@@ -736,7 +736,7 @@ async function boot() {
   }
 
   // Display the setup wizard on first run or on update so users configure their region & output location!
-  const currentAppVersion = (settings && settings.appVersion) || (await window.api?.getVersion?.()) || '0.5.1-beta.1';
+  const currentAppVersion = (settings && settings.appVersion) || (await window.api?.getVersion?.()) || '0.5.1-beta.2';
   const lastSeenVersion = (settings && settings.lastSeenVersion) || localStorage.getItem('dawBuddyRegionSetupVersion');
   const isSetupDone = Boolean(settings && settings.regionSetupComplete) && localStorage.getItem('dawBuddyRegionSetupComplete') === 'true';
   const isFreshInstallOrUpdate = !isSetupDone || !lastSeenVersion || lastSeenVersion !== currentAppVersion;
@@ -803,7 +803,7 @@ function applySettings() {
     $('enableCrashLogs').checked = settings.enableCrashLogs !== false;
   }
   if ($('appVersionDisplay')) {
-    $('appVersionDisplay').textContent = `v${(settings && settings.appVersion) || '0.5.3-beta.2'}`;
+    $('appVersionDisplay').textContent = `v${(settings && settings.appVersion) || '0.5.1-beta.2'}`;
   }
   $('dataDir').textContent = settings.dataDir;
   document.body.classList.toggle('is-mac', Boolean(settings.isMac));
@@ -5498,6 +5498,7 @@ function renderNotesTab(entry) {
 
 /* ------------------------------ rename ---------------------------- */
 
+let renamerSubMode: 'smart' | 'bulk' = 'smart';
 let renameFolder: string | null = null;
 const bulkRenameState = {
   mode: 'simple' as 'simple' | 'template',
@@ -5787,8 +5788,8 @@ function renderRenameTab(entry = null) {
   );
 
   // Hide whichever set of controls the current mode doesn't use.
-  controls.hidden = renameMode === 'template';
-  where.hidden = renameMode === 'template';
+  controls.hidden = bulkRenameState.mode === 'template';
+  where.hidden = bulkRenameState.mode === 'template';
 
   applyBtn.addEventListener('click', async () => {
     if (!plan) return;
@@ -5845,12 +5846,17 @@ let smartItems: Array<{
   audioCategory?: string | null;
   audioSubtype?: string | null;
   audioConfidence?: number;
+  isEmpty?: boolean;
+  emptyReason?: string | null;
+  sizeBytes?: number;
+  peakDb?: number | null;
 }> = [];
 let smartCategoriesList: Array<{ category: string; subtypes: string[] }> = [];
 let smartSelectedPath: string | null = null;
 let smartSelectedSet = new Set<string>();
 let smartExcludedSet = new Set<string>();
 let smartDismissedFlCleaner = false;
+let smartDismissedEmptyCleaner = false;
 let smartNamingFormat: 'snake' | 'title' | 'padded' | 'hyphen' = (localStorage.getItem('dawBuddySmartRenameFormat') as any) || 'snake';
 let smartSortMode: 'priority' | 'name' = 'priority';
 let smartManifests: any[] = [];
@@ -6097,6 +6103,8 @@ async function renderSmartRenameTab(entry: any = null) {
       smartRenameFolder = chosen;
       smartSelectedPath = null;
       smartSelectedSet.clear();
+      smartDismissedFlCleaner = false;
+      smartDismissedEmptyCleaner = false;
       render();
     }
   });
@@ -6109,6 +6117,8 @@ async function renderSmartRenameTab(entry: any = null) {
       smartRenameFolder = entry.folder;
       smartSelectedPath = null;
       smartSelectedSet.clear();
+      smartDismissedFlCleaner = false;
+      smartDismissedEmptyCleaner = false;
       render();
     });
     bar.append(useProject);
@@ -6124,6 +6134,10 @@ async function renderSmartRenameTab(entry: any = null) {
   /* FL Studio Redundant Artifact Cleaner Banner Container */
   const flCleanerContainer = el('div');
   section.append(flCleanerContainer);
+
+  /* Empty / Silent Tracks Cleaner Banner Container */
+  const emptyCleanerContainer = el('div');
+  section.append(emptyCleanerContainer);
 
   /* Manifests / Undo bar */
   const manifestContainer = el('div');
@@ -6309,6 +6323,92 @@ async function renderSmartRenameTab(entry: any = null) {
     flCleanerContainer.append(banner);
   }
 
+  function renderEmptyTracksBanner() {
+    emptyCleanerContainer.innerHTML = '';
+    if (smartDismissedEmptyCleaner || !smartItems || smartItems.length === 0) return;
+    const emptyTracks = smartItems.filter((item) => item.isEmpty);
+    if (emptyTracks.length === 0) return;
+
+    const totalBytes = emptyTracks.reduce((acc, it) => acc + (it.sizeBytes || 0), 0);
+    const formattedSpace = formatBytes(totalBytes);
+
+    const banner = el('div', 'callout smart-empty-cleaner-banner');
+    banner.style.padding = '12px 16px';
+    banner.style.marginBottom = '12px';
+    banner.style.border = '1.5px solid var(--alert)';
+    banner.style.borderRadius = 'var(--r)';
+    banner.style.background = 'linear-gradient(145deg, var(--surface), var(--raised))';
+
+    const top = el('div');
+    top.style.display = 'flex';
+    top.style.justifyContent = 'space-between';
+    top.style.alignItems = 'center';
+    top.style.marginBottom = '6px';
+
+    const header = el(
+      'div',
+      'page__kicker',
+      `🔇 Empty / Silent Tracks Detected (${emptyTracks.length} file${emptyTracks.length > 1 ? 's' : ''}${totalBytes > 0 ? ` · Save ${formattedSpace}` : ''})`
+    );
+    header.style.color = 'var(--alert)';
+    header.style.fontWeight = '600';
+    header.style.margin = '0';
+
+    const dismissBtn = el('button', 'pill pill--sm', '✕ Dismiss');
+    dismissBtn.addEventListener('click', () => {
+      smartDismissedEmptyCleaner = true;
+      banner.remove();
+    });
+    top.append(header, dismissBtn);
+
+    const desc = el(
+      'p',
+      'muted',
+      `DAWs frequently export unused mixer channels as full-length silent tracks: ${emptyTracks.map((a) => `"${a.name}"`).join(', ')}. Deleting them will free up ${formattedSpace} of disk space.`
+    );
+    desc.style.fontSize = '12.5px';
+    desc.style.margin = '0 0 10px 0';
+
+    const actions = el('div', 'tabs');
+    const excludeBtn = el('button', 'pill pill--sm', `🚫 Exclude from Rename (${emptyTracks.length})`);
+    excludeBtn.title = 'Keep these files in the folder but exclude them from renaming';
+    excludeBtn.addEventListener('click', () => {
+      emptyTracks.forEach((a) => {
+        smartExcludedSet.add(a.path);
+        smartSelectedSet.delete(a.path);
+      });
+      toast('Empty Tracks Excluded', `Skipped ${emptyTracks.length} empty track(s) from rename`);
+      renderPanes();
+    });
+
+    const deleteBtn = el(
+      'button',
+      'pill pill--solid pill--sm',
+      `🗑️ Delete Empty Tracks (${emptyTracks.length}${totalBytes > 0 ? ` · Free ${formattedSpace}` : ''})`
+    );
+    deleteBtn.style.background = 'var(--alert)';
+    deleteBtn.style.color = '#ffffff';
+    deleteBtn.title = 'Safely move empty / silent tracks to trash to conserve disk space';
+    deleteBtn.addEventListener('click', async () => {
+      const confirmDelete = window.confirm(
+        `Permanently remove ${emptyTracks.length} empty/silent track(s) (${emptyTracks.map((a) => a.name).join(', ')}) to conserve ${formattedSpace} disk space?`
+      );
+      if (confirmDelete) {
+        const res = await window.api.deleteFiles(emptyTracks.map((a) => a.path), true);
+        if (res.ok) {
+          toast('Empty Tracks Deleted', `Removed ${res.deleted} empty track(s) and conserved ${formattedSpace}`);
+          await loadFolder();
+        } else {
+          toast('Deletion Incomplete', `Failed to delete some files`, true);
+        }
+      }
+    });
+
+    actions.append(excludeBtn, deleteBtn);
+    banner.append(top, desc, actions);
+    emptyCleanerContainer.append(banner);
+  }
+
   async function loadFolder() {
     if (!smartRenameFolder) {
       summary.textContent = 'Choose a folder to begin classifying stems.';
@@ -6332,6 +6432,7 @@ async function renderSmartRenameTab(entry: any = null) {
       renderManifests();
       renderFlCleanerBanner();
       await runNameAnalysis();
+      renderEmptyTracksBanner();
     } catch (err: any) {
       summary.textContent = `Error reading folder: ${err.message}`;
     }
@@ -6370,6 +6471,7 @@ async function renderSmartRenameTab(entry: any = null) {
       smartItems = [];
       smartSelectedSet.clear();
       renderPanes();
+      renderEmptyTracksBanner();
       return;
     }
     const { results } = await window.api.smartClassify(smartRenameFolder, smartFiles);
@@ -6385,10 +6487,15 @@ async function renderSmartRenameTab(entry: any = null) {
       articulation: r.articulation,
       userCategory: null,
       userSubtype: null,
-      customName: null
+      customName: null,
+      isEmpty: Boolean(r.isEmpty),
+      emptyReason: r.emptyReason || null,
+      sizeBytes: r.sizeBytes || 0,
+      peakDb: r.peakDb !== undefined ? r.peakDb : null
     }));
     smartSelectedSet.clear();
     renderPanes();
+    renderEmptyTracksBanner();
   }
 
   async function runAudioAnalysis() {
@@ -6405,6 +6512,10 @@ async function renderSmartRenameTab(entry: any = null) {
             item.audioCategory = res.category;
             item.audioSubtype = res.subtype;
             item.audioConfidence = res.confidence;
+            if (res.isEmpty) {
+              item.isEmpty = true;
+              item.emptyReason = res.emptyReason || 'Digital silence (0.0 peak)';
+            }
             if (!item.matched && res.category) {
               item.category = res.category;
               item.subtype = res.subtype;
@@ -6421,6 +6532,7 @@ async function renderSmartRenameTab(entry: any = null) {
     restoreBtn();
     toast('Audio Analysis', `Extracted features & verified ${measured} file(s)`);
     renderPanes();
+    renderEmptyTracksBanner();
   }
 
   analyseNamesBtn.addEventListener('click', () => runNameAnalysis());
@@ -6630,6 +6742,19 @@ async function renderSmartRenameTab(entry: any = null) {
         renderPanes();
       });
 
+      const emptySelectable = smartItems.filter((it) => it.isEmpty && !smartExcludedSet.has(it.path));
+      if (emptySelectable.length > 0) {
+        const selectEmptyBtn = el('button', 'pill pill--sm', `Select Empty (${emptySelectable.length})`);
+        selectEmptyBtn.addEventListener('click', () => {
+          smartSelectedSet.clear();
+          smartItems.forEach((it) => {
+            if (it.isEmpty && !smartExcludedSet.has(it.path)) smartSelectedSet.add(it.path);
+          });
+          renderPanes();
+        });
+        batchActions.append(selectEmptyBtn);
+      }
+
       const invertBtn = el('button', 'pill pill--sm', 'Invert');
       invertBtn.addEventListener('click', () => {
         smartItems.forEach((it) => {
@@ -6656,6 +6781,7 @@ async function renderSmartRenameTab(entry: any = null) {
       displayItems.sort((a, b) => {
         const rank = (item: any) => {
           if (smartExcludedSet.has(item.path)) return 3;
+          if (item.isEmpty) return 0;
           const cat = item.userCategory !== undefined && item.userCategory !== null ? item.userCategory : item.category;
           if (!cat) return 0;
           if (item.confidence < 0.8) return 1;
@@ -6704,12 +6830,12 @@ async function renderSmartRenameTab(entry: any = null) {
       const sub = item.userSubtype !== undefined && item.userSubtype !== null ? item.userSubtype : item.subtype;
       const isChanged = planRow ? planRow.changed : false;
       if (!isExcluded && isChanged && !planRow?.problem) changingCount++;
-      if (!isExcluded && !cat) unresolvedCount++;
+      if (!isExcluded && !cat && !item.isEmpty) unresolvedCount++;
 
       /* Left Row */
       const lRow = el(
         'div',
-        `smart-row${isSelected ? ' is-selected' : ''}${isChecked ? ' is-checked' : ''}${isExcluded ? ' is-excluded' : cat ? ' is-matched' : ' is-unresolved'}`
+        `smart-row${isSelected ? ' is-selected' : ''}${isChecked ? ' is-checked' : ''}${isExcluded ? ' is-excluded' : ''}${item.isEmpty ? ' is-empty' : ''}${!isExcluded && !item.isEmpty && cat ? ' is-matched' : ''}${!isExcluded && !item.isEmpty && !cat ? ' is-unresolved' : ''}`
       );
 
       const check = document.createElement('input');
@@ -6727,7 +6853,10 @@ async function renderSmartRenameTab(entry: any = null) {
 
       let badgeType = 'smart-badge--miss';
       let badgeText = '? Unresolved';
-      if (isExcluded) {
+      if (item.isEmpty) {
+        badgeType = 'smart-badge--empty';
+        badgeText = '🔇 Empty Track';
+      } else if (isExcluded) {
         badgeType = 'smart-badge--warn';
         badgeText = '🚫 Excluded';
       } else if (cat) {
@@ -6756,14 +6885,14 @@ async function renderSmartRenameTab(entry: any = null) {
       /* Right Row */
       const rRow = el(
         'div',
-        `smart-row${isSelected ? ' is-selected' : ''}${isChecked ? ' is-checked' : ''}${isExcluded ? ' is-excluded' : ''}`
+        `smart-row${isSelected ? ' is-selected' : ''}${isChecked ? ' is-checked' : ''}${isExcluded ? ' is-excluded' : ''}${item.isEmpty ? ' is-empty' : ''}`
       );
       const suggestedText = isExcluded ? `${item.name} (excluded)` : planRow ? planRow.to : item.name;
       const rName = el('span', 'smart-row__name', suggestedText);
       rName.title = suggestedText;
       rName.style.fontWeight = isChanged && !isExcluded ? '600' : 'normal';
       if (isChanged && !isExcluded) rName.style.color = 'var(--amber)';
-      if (isExcluded) rName.style.opacity = '0.6';
+      if (isExcluded || item.isEmpty) rName.style.opacity = '0.6';
 
       /* Searchable Typable Combobox for Category */
       const rowCombobox = createSmartCombobox({
@@ -6786,7 +6915,7 @@ async function renderSmartRenameTab(entry: any = null) {
 
       // Cross-verification pill if audio analysis suggests a distinct instrument
       let audioInsightPill: HTMLElement | null = null;
-      if (!isExcluded && item.audioCategory) {
+      if (!isExcluded && !item.isEmpty && item.audioCategory) {
         const audioFull = item.audioSubtype ? `${item.audioCategory} / ${item.audioSubtype}` : item.audioCategory;
         const currentFull = sub ? `${cat} / ${sub}` : (cat || '');
         if (audioFull !== currentFull) {
@@ -6804,7 +6933,8 @@ async function renderSmartRenameTab(entry: any = null) {
       }
 
       let reasonText = '';
-      if (isExcluded) reasonText = 'FL Studio bounce clone';
+      if (item.isEmpty) reasonText = item.emptyReason || 'Empty audio track';
+      else if (isExcluded) reasonText = 'FL Studio bounce clone';
       else if (item.userCategory || item.customName) reasonText = 'Manual override';
       else if (item.matchedOn) reasonText = `Matched "${item.matchedOn}"`;
       else if (item.audioFeatures) reasonText = `Audio centroid ${item.audioFeatures.centroid}Hz`;
@@ -6843,7 +6973,8 @@ async function renderSmartRenameTab(entry: any = null) {
       rightBody.append(rRow);
     });
 
-    summary.textContent = `${changingCount} of ${smartItems.length} files will be renamed · ${unresolvedCount} unresolved (kept original)${smartExcludedSet.size > 0 ? ` · ${smartExcludedSet.size} excluded` : ''}`;
+    const emptyCount = smartItems.filter((it) => it.isEmpty && !smartExcludedSet.has(it.path)).length;
+    summary.textContent = `${changingCount} of ${smartItems.length} files will be renamed · ${unresolvedCount} unresolved (kept original)${emptyCount > 0 ? ` · ${emptyCount} empty track(s)` : ''}${smartExcludedSet.size > 0 ? ` · ${smartExcludedSet.size} excluded` : ''}`;
     commitBtn.disabled = changingCount === 0;
     commitBtn.textContent = `Rename ${changingCount} files`;
 
