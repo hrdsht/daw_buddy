@@ -5867,6 +5867,47 @@ function renderStandaloneSmartRename() {
 }
 
 /**
+ * Persistent helper functions for user-defined custom categories (e.g. 'rx', 'synth', 'bgv').
+ */
+function getSavedUserCategories(): string[] {
+  try {
+    const raw = localStorage.getItem('dawBuddyCustomCategories');
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) return arr.filter((x) => typeof x === 'string' && x.trim());
+    }
+  } catch {}
+  return [];
+}
+
+function saveUserCategory(cat: string | null | undefined, categoriesList: Array<{ category: string; subtypes: string[] }>) {
+  const clean = (cat || '').trim();
+  if (!clean || clean.length > 50) return;
+  if (clean.toLowerCase() === 'unresolved' || clean === '— Unresolved —' || clean === '-') return;
+  const cleanCat = clean.replace(/\s*\((generic|custom)\)\s*/i, '').trim();
+  if (!cleanCat) return;
+
+  const isBuiltIn = categoriesList.some(
+    (c) => c.category.toLowerCase() === cleanCat.toLowerCase() || c.subtypes.some((s) => s.toLowerCase() === cleanCat.toLowerCase())
+  );
+  if (isBuiltIn) return;
+
+  const current = getSavedUserCategories();
+  const exists = current.some((c) => c.toLowerCase() === cleanCat.toLowerCase());
+  if (!exists) {
+    current.push(cleanCat);
+    if (current.length > 50) current.shift();
+    localStorage.setItem('dawBuddyCustomCategories', JSON.stringify(current));
+  }
+}
+
+function removeUserCategory(cat: string) {
+  const clean = (cat || '').trim().toLowerCase();
+  const current = getSavedUserCategories().filter((c) => c.toLowerCase() !== clean);
+  localStorage.setItem('dawBuddyCustomCategories', JSON.stringify(current));
+}
+
+/**
  * Parses user input in smart combobox into category, subtype, or custom name.
  */
 function parseSmartComboboxValue(
@@ -5889,14 +5930,21 @@ function parseSmartComboboxValue(
     }
   }
 
-  // 2. Check exact category match (e.g. "drums", "percs", "percs (generic)")
-  const cleanCat = raw.replace(/\s*\(generic\)\s*/i, '').trim().toLowerCase();
+  // 2. Check exact category match (e.g. "drums", "percs", "percs (generic)", "rx (custom)")
+  const cleanCat = raw.replace(/\s*\((generic|custom)\)\s*/i, '').trim().toLowerCase();
   const foundCat = categoriesList.find((x) => x.category.toLowerCase() === cleanCat);
   if (foundCat) {
     return { category: foundCat.category, subtype: null, customName: null };
   }
 
-  // 3. Check if input matches any known subtype across categories (e.g. "tom", "snare", "tabla", "808", "lead")
+  // 3. Check saved user-defined categories (e.g. "rx", "bgv", etc.)
+  const savedUserCats = getSavedUserCategories();
+  const foundUserCat = savedUserCats.find((x) => x.toLowerCase() === cleanCat);
+  if (foundUserCat) {
+    return { category: foundUserCat, subtype: null, customName: null };
+  }
+
+  // 4. Check if input matches any known subtype across categories (e.g. "tom", "snare", "tabla", "808", "lead")
   for (const c of categoriesList) {
     const foundSub = c.subtypes.find((s) => s.toLowerCase() === cleanCat);
     if (foundSub) {
@@ -5904,13 +5952,13 @@ function parseSmartComboboxValue(
     }
   }
 
-  // 4. Check if user typed an exact filename ending with an audio extension
+  // 5. Check if user typed an exact filename ending with an audio extension
   if (/\.[a-zA-Z0-9]{2,5}$/.test(raw)) {
     return { category: null, subtype: null, customName: raw };
   }
 
-  // 5. Otherwise treat as custom category / stem prefix (e.g. "rx", "bgv", "sfx_riser", etc.)
-  return { category: raw, subtype: null, customName: null };
+  // 6. Otherwise treat as custom category / stem prefix (e.g. "rx", "bgv", "sfx_riser", etc.)
+  return { category: cleanCat || raw, subtype: null, customName: null };
 }
 
 /**
@@ -5941,7 +5989,8 @@ function createSmartCombobox(options: {
   } else if (options.currentCategory && options.currentSubtype) {
     initialDisplay = `${options.currentCategory} / ${options.currentSubtype}`;
   } else if (options.currentCategory) {
-    initialDisplay = `${options.currentCategory} (generic)`;
+    const isBuiltIn = options.categoriesList.some((c) => c.category.toLowerCase() === options.currentCategory?.toLowerCase());
+    initialDisplay = isBuiltIn ? `${options.currentCategory} (generic)` : options.currentCategory;
   }
   input.value = initialDisplay;
 
@@ -5970,8 +6019,41 @@ function createSmartCombobox(options: {
     });
     menu.append(unresItem);
 
-    // 2. Filtered Predefined Categories & Subtypes
     let exactMatchFound = false;
+
+    // 2. User-Defined / Saved Custom Categories
+    const savedUserCats = getSavedUserCategories();
+    const matchingUserCats = savedUserCats.filter((uc) => !q || uc.toLowerCase().includes(q));
+    if (matchingUserCats.length > 0) {
+      const userGroupTitle = el('div', 'smart-combobox__group', 'User Defined / Custom');
+      menu.append(userGroupTitle);
+      for (const uc of matchingUserCats) {
+        if (uc.toLowerCase() === q) exactMatchFound = true;
+        const uItem = el('div', 'smart-combobox__item is-user-defined');
+        const uSpan = el('span', '', `🏷️ ${uc}`);
+        const uTag = el('span', 'smart-combobox__item-tag', 'Custom');
+        const uDel = el('button', 'smart-combobox__item-del', '✕');
+        uDel.type = 'button';
+        uDel.title = `Remove "${uc}" from saved custom categories`;
+        uDel.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          removeUserCategory(uc);
+          renderMenuItems(input.value);
+        });
+        uItem.append(uSpan, uTag, uDel);
+        uItem.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          input.value = uc;
+          initialDisplay = input.value;
+          closeMenu();
+          options.onApply({ category: uc, subtype: null, customName: null });
+        });
+        menu.append(uItem);
+      }
+    }
+
+    // 3. Filtered Predefined Categories & Subtypes
     for (const c of options.categoriesList) {
       const catMatches = !q || c.category.toLowerCase().includes(q);
       const matchingSubtypes = c.subtypes.filter(
@@ -6012,13 +6094,14 @@ function createSmartCombobox(options: {
       }
     }
 
-    // 3. Custom text suggestion if user typed something not explicitly identical to a standard category
+    // 4. Custom text suggestion if user typed something not explicitly identical to a standard category
     if (q && q !== 'unresolved' && !exactMatchFound) {
       const customItem = el('div', 'smart-combobox__item is-custom');
       customItem.innerHTML = `<span>⚡ Use custom: "<strong>${filterQuery}</strong>"</span><span class="smart-combobox__item-tag">Custom</span>`;
       customItem.addEventListener('mousedown', (e) => {
         e.preventDefault();
         const parsed = parseSmartComboboxValue(filterQuery, options.categoriesList);
+        if (parsed.category) saveUserCategory(parsed.category, options.categoriesList);
         initialDisplay = input.value;
         closeMenu();
         options.onApply(parsed);
@@ -6039,6 +6122,7 @@ function createSmartCombobox(options: {
   function commitCurrentInput() {
     if (input.value.trim() !== initialDisplay.trim()) {
       const parsed = parseSmartComboboxValue(input.value, options.categoriesList);
+      if (parsed.category) saveUserCategory(parsed.category, options.categoriesList);
       initialDisplay = input.value;
       options.onApply(parsed);
     }
@@ -6748,6 +6832,9 @@ async function renderSmartRenameTab(entry: any = null) {
       });
 
       async function applyBatchChoice(choice: { category: string | null; subtype: string | null; customName?: string | null }) {
+        if (choice.category) {
+          saveUserCategory(choice.category, smartCategoriesList);
+        }
         let count = 0;
         for (const item of smartItems) {
           if (smartSelectedSet.has(item.path)) {
@@ -6937,6 +7024,9 @@ async function renderSmartRenameTab(entry: any = null) {
         currentCustomName: item.customName,
         categoriesList: smartCategoriesList,
         onApply: async (res) => {
+          if (res.category) {
+            saveUserCategory(res.category, smartCategoriesList);
+          }
           const targetItems = smartSelectedSet.has(item.path)
             ? smartItems.filter((it) => smartSelectedSet.has(it.path))
             : [item];

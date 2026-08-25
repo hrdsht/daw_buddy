@@ -5060,6 +5060,30 @@ body[data-anim-scale="0"] *::after {
   border-top: 1px solid var(--line);
 }
 
+.smart-combobox__item.is-user-defined {
+  color: #38bdf8;
+}
+
+.smart-combobox__item-del {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 10px;
+  padding: 2px 5px;
+  cursor: pointer;
+  border-radius: 3px;
+  line-height: 1;
+  opacity: 0.6;
+  transition: all 120ms ease;
+  margin-left: auto;
+}
+
+.smart-combobox__item-del:hover {
+  opacity: 1;
+  background: rgba(239, 68, 68, 0.25);
+  color: #f87171;
+}
+
 .smart-combobox__item.is-unresolved {
   color: var(--dim);
   border-bottom: 1px solid var(--line);

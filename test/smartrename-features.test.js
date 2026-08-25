@@ -107,9 +107,30 @@ function testStemNamingFormats() {
   ]);
 }
 
+function testUserDefinedCustomCategories() {
+  const customStems = ['vocal_take1.wav', 'vocal_take2.wav', 'vocal_take3.wav'];
+  const formattedCustomSnake = customStems.map((_, i) => formatStemOutputName('bgv', null, i + 1, '.wav', 'snake'));
+  assert.deepEqual(formattedCustomSnake, [
+    'bgv_1.wav',
+    'bgv_2.wav',
+    'bgv_3.wav'
+  ]);
+
+  const formattedCustomTitle = customStems.map((_, i) => formatStemOutputName('bgv', null, i + 1, '.wav', 'title'));
+  assert.deepEqual(formattedCustomTitle, [
+    'Bgv 1.wav',
+    'Bgv 2.wav',
+    'Bgv 3.wav'
+  ]);
+}
+
 testFlStudioArtifactDetection();
 console.log('ok - testFlStudioArtifactDetection');
 
 testStemNamingFormats();
 console.log('ok - testStemNamingFormats');
+
+testUserDefinedCustomCategories();
+console.log('ok - testUserDefinedCustomCategories');
+
 
