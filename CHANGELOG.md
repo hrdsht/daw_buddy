@@ -9,6 +9,14 @@ is auto-generated on each GitHub Release; this file is the curated summary.
 
 - _Nothing yet._
 
+## [0.5.1-beta.3] — 2026-08-25
+
+### Added
+- **Persistent User-Defined Custom Categories in Smart Renamer**:
+  - Automatically remembers and stores custom categories (e.g. `rx`, `bgv`, `synth_lead`) in persistent storage.
+  - Dedicated **User Defined / Custom** section in category dropdowns for instant one-click selection.
+  - Instant tag removal button (`✕`) in dropdowns to easily manage saved custom tags.
+
 ## [0.5.1-beta.2] — 2026-08-25
 
 ### Added
