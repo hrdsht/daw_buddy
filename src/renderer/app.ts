@@ -424,6 +424,125 @@ const analysisJobs = new Map();
 const audioAnalysisCache = new Map<string, any>();
 const navigationHistory = new NavigationHistory();
 
+/* Tool State */
+let renamerSubMode: 'smart' | 'bulk' = 'smart';
+let renameFolder: string | null = null;
+const bulkRenameState = {
+  mode: 'simple' as 'simple' | 'template',
+  remove: '',
+  add: '',
+  template: '{project}_{name}_{n:02}',
+  position: 'prefix' as 'prefix' | 'suffix'
+};
+
+let smartRenameFolder: string | null = null;
+let smartFiles: Array<{ name: string; path: string }> = [];
+let smartItems: Array<{
+  name: string;
+  path: string;
+  matched: boolean;
+  category: string | null;
+  subtype: string | null;
+  confidence: number;
+  matchedOn: string | null;
+  contested: boolean;
+  articulation: string | null;
+  userCategory?: string | null;
+  userSubtype?: string | null;
+  customName?: string | null;
+  audioFeatures?: any;
+  audioCategory?: string | null;
+  audioSubtype?: string | null;
+  audioConfidence?: number;
+  isEmpty?: boolean;
+  emptyReason?: string | null;
+  sizeBytes?: number;
+  peakDb?: number | null;
+}> = [];
+let smartCategoriesList: Array<{ category: string; subtypes: string[] }> = [];
+let smartSelectedPath: string | null = null;
+let smartSelectedSet = new Set<string>();
+let smartExcludedSet = new Set<string>();
+let smartDismissedFlCleaner = false;
+let smartDismissedEmptyCleaner = false;
+let smartNamingFormat: 'snake' | 'title' | 'padded' | 'hyphen' = (localStorage.getItem('dawBuddySmartRenameFormat') as any) || 'snake';
+let smartSortMode: 'priority' | 'name' = 'priority';
+let smartManifests: any[] = [];
+
+let trimFolder: string | null = null;
+let trimFile: any = null; // { path, name, size }
+let trimStart = 0; // seconds
+let trimEnd: number | null = null; // seconds, null until a file's length is known
+let trimDuration = 0; // authoritative length from trim:analyse (WAV frames / sr)
+let trimPeaks: Float32Array | null = null; // Float32Array of 0..1 peaks, or null while decoding
+let trimLoadToken = 0; // guards against a slow decode landing after a newer pick
+
+let silenceFolder: string | null = null;
+let silenceResults: any[] = [];
+let silenceChosen = new Set<number>();
+
+let vocalTab = 'split';
+let vocalFolder: string | null = null;
+let vocalFiles: any[] = [];
+let vocalSelected = new Set<any>();
+let vocalSplitPreviews = new Map<string, any>();
+let vocalManifestPath: string | null = null;
+let vocalBlocksFolder: string | null = null;
+let vocalRebuildPreview: any = null;
+
+let qcFolder: string | null = null;
+
+let slowedReverbState: {
+  file: { name: string; size: number; path?: string; rawBuffer?: ArrayBuffer } | null;
+  sourceBuffer: AudioBuffer | null;
+  renderedBuffer: AudioBuffer | null;
+  renderedAtSampleRate: number;
+  renderedAtRate: number;
+  renderedAtMix: number;
+  options: SlowedReverbOptions;
+  isProcessing: boolean;
+  statusText: string;
+  statusType: 'info' | 'success' | 'error';
+  player: SlowedReverbWaveformPlayer | null;
+} = {
+  file: null,
+  sourceBuffer: null,
+  renderedBuffer: null,
+  renderedAtSampleRate: 44100,
+  renderedAtRate: 0.87,
+  renderedAtMix: 0.35,
+  options: { ...DEFAULT_SLOWED_REVERB_OPTIONS },
+  isProcessing: false,
+  statusText: '',
+  statusType: 'info',
+  player: null
+};
+
+interface ConverterFileItem {
+  path: string;
+  name: string;
+  size: number;
+}
+
+const converterState = {
+  files: [] as ConverterFileItem[],
+  options: {
+    format: 'mp3' as 'mp3' | 'wav',
+    bitrate: 192,
+    sampleRate: null as number | null,
+    bitDepth: 24,
+    enableSplit: true,
+    maxSeconds: 300, // 5 minutes
+    maxBytes: 50 * 1024 * 1024, // 50 MB
+    trimSilence: true,
+    padSeconds: 1.5
+  },
+  encodersInfo: null as any,
+  plan: null as any,
+  isProcessing: false,
+  progress: null as { done: number; total: number } | null
+};
+
 function getFileAnalysis(filePath?: string | null, fileName?: string | null, entry?: any): any | null {
   if (filePath && audioAnalysisCache.has(filePath)) {
     return audioAnalysisCache.get(filePath);
@@ -723,7 +842,10 @@ async function boot() {
   settings = await window.api.getSettings();
   records = await window.api.getRecords();
   applySettings();
-  await refresh();
+  render();
+
+  // Background scan for projects so UI never hangs during boot
+  refresh().catch((err) => console.error('[refresh] Startup scan failed:', err));
 
   // Check if a prior crash occurred and show skippable recovery modal
   try {
@@ -5498,16 +5620,6 @@ function renderNotesTab(entry) {
 
 /* ------------------------------ rename ---------------------------- */
 
-let renamerSubMode: 'smart' | 'bulk' = 'smart';
-let renameFolder: string | null = null;
-const bulkRenameState = {
-  mode: 'simple' as 'simple' | 'template',
-  remove: '',
-  add: '',
-  template: '{project}_{name}_{n:02}',
-  position: 'prefix' as 'prefix' | 'suffix'
-};
-
 function renderRenamerSwitcher(entry: any = null, activeMode: 'smart' | 'bulk' = 'smart') {
   const switcher = el('div', 'renamer-mode-switcher');
   
@@ -5827,40 +5939,6 @@ function fieldInput(label) {
 
 /* -------------------------- smart renamer ------------------------- */
 
-let smartRenameFolder: string | null = null;
-let smartFiles: Array<{ name: string; path: string }> = [];
-let smartItems: Array<{
-  name: string;
-  path: string;
-  matched: boolean;
-  category: string | null;
-  subtype: string | null;
-  confidence: number;
-  matchedOn: string | null;
-  contested: boolean;
-  articulation: string | null;
-  userCategory?: string | null;
-  userSubtype?: string | null;
-  customName?: string | null;
-  audioFeatures?: any;
-  audioCategory?: string | null;
-  audioSubtype?: string | null;
-  audioConfidence?: number;
-  isEmpty?: boolean;
-  emptyReason?: string | null;
-  sizeBytes?: number;
-  peakDb?: number | null;
-}> = [];
-let smartCategoriesList: Array<{ category: string; subtypes: string[] }> = [];
-let smartSelectedPath: string | null = null;
-let smartSelectedSet = new Set<string>();
-let smartExcludedSet = new Set<string>();
-let smartDismissedFlCleaner = false;
-let smartDismissedEmptyCleaner = false;
-let smartNamingFormat: 'snake' | 'title' | 'padded' | 'hyphen' = (localStorage.getItem('dawBuddySmartRenameFormat') as any) || 'snake';
-let smartSortMode: 'priority' | 'name' = 'priority';
-let smartManifests: any[] = [];
-
 function renderStandaloneSmartRename() {
   viewEl.innerHTML = '';
   renderSmartRenameTab(null);
@@ -5869,15 +5947,22 @@ function renderStandaloneSmartRename() {
 /**
  * Persistent helper functions for user-defined custom categories (e.g. 'rx', 'synth', 'bgv').
  */
+let cachedUserCategories: string[] | null = null;
+
 function getSavedUserCategories(): string[] {
+  if (cachedUserCategories !== null) return cachedUserCategories;
   try {
     const raw = localStorage.getItem('dawBuddyCustomCategories');
     if (raw) {
       const arr = JSON.parse(raw);
-      if (Array.isArray(arr)) return arr.filter((x) => typeof x === 'string' && x.trim());
+      if (Array.isArray(arr)) {
+        cachedUserCategories = arr.filter((x) => typeof x === 'string' && x.trim());
+        return cachedUserCategories;
+      }
     }
   } catch {}
-  return [];
+  cachedUserCategories = [];
+  return cachedUserCategories;
 }
 
 function saveUserCategory(cat: string | null | undefined, categoriesList: Array<{ category: string; subtypes: string[] }>) {
@@ -5892,11 +5977,12 @@ function saveUserCategory(cat: string | null | undefined, categoriesList: Array<
   );
   if (isBuiltIn) return;
 
-  const current = getSavedUserCategories();
+  const current = [...getSavedUserCategories()];
   const exists = current.some((c) => c.toLowerCase() === cleanCat.toLowerCase());
   if (!exists) {
     current.push(cleanCat);
     if (current.length > 50) current.shift();
+    cachedUserCategories = current;
     localStorage.setItem('dawBuddyCustomCategories', JSON.stringify(current));
   }
 }
@@ -5904,8 +5990,20 @@ function saveUserCategory(cat: string | null | undefined, categoriesList: Array<
 function removeUserCategory(cat: string) {
   const clean = (cat || '').trim().toLowerCase();
   const current = getSavedUserCategories().filter((c) => c.toLowerCase() !== clean);
+  cachedUserCategories = current;
   localStorage.setItem('dawBuddyCustomCategories', JSON.stringify(current));
 }
+
+/** Single active combobox tracker to avoid adding document listeners per row instance */
+let activeOpenCombobox: { wrap: HTMLElement; close: () => void; commit: () => void } | null = null;
+
+document.addEventListener('pointerdown', (e) => {
+  if (activeOpenCombobox && !activeOpenCombobox.wrap.contains(e.target as Node)) {
+    activeOpenCombobox.commit();
+    activeOpenCombobox.close();
+    activeOpenCombobox = null;
+  }
+});
 
 /**
  * Parses user input in smart combobox into category, subtype, or custom name.
@@ -6111,12 +6209,20 @@ function createSmartCombobox(options: {
   }
 
   function openMenu() {
+    if (activeOpenCombobox && activeOpenCombobox.wrap !== wrap) {
+      activeOpenCombobox.commit();
+      activeOpenCombobox.close();
+    }
+    activeOpenCombobox = { wrap, close: closeMenu, commit: commitCurrentInput };
     renderMenuItems(input.value);
     menu.classList.add('is-open');
   }
 
   function closeMenu() {
     menu.classList.remove('is-open');
+    if (activeOpenCombobox && activeOpenCombobox.wrap === wrap) {
+      activeOpenCombobox = null;
+    }
   }
 
   function commitCurrentInput() {
@@ -6159,22 +6265,14 @@ function createSmartCombobox(options: {
     }
   });
 
-  input.addEventListener('blur', () => {
+  input.addEventListener('blur', (e) => {
+    // Only close if focus did not move inside wrap (e.g. arrow or delete button)
     setTimeout(() => {
       if (!wrap.contains(document.activeElement)) {
         commitCurrentInput();
         closeMenu();
       }
-    }, 150);
-  });
-
-  document.addEventListener('click', (e) => {
-    if (!wrap.contains(e.target as Node)) {
-      if (menu.classList.contains('is-open')) {
-        commitCurrentInput();
-        closeMenu();
-      }
-    }
+    }, 120);
   });
 
   return wrap;
@@ -7404,14 +7502,6 @@ function renderAudioFinishing() {
 
 /* --------------------------- waveform trim ------------------------ */
 
-let trimFolder = null;
-let trimFile = null; // { path, name, size }
-let trimStart = 0; // seconds
-let trimEnd = null; // seconds, null until a file's length is known
-let trimDuration = 0; // authoritative length from trim:analyse (WAV frames / sr)
-let trimPeaks = null; // Float32Array of 0..1 peaks, or null while decoding
-let trimLoadToken = 0; // guards against a slow decode landing after a newer pick
-
 function buildTrimPeaks(buffer, buckets) {
   const data = buffer.getChannelData(0);
   const n = data.length;
@@ -7709,10 +7799,6 @@ function buildTrimEditor(mount) {
 
 /* ----------------------------- silence ---------------------------- */
 
-let silenceFolder = null;
-let silenceResults = [];
-let silenceChosen = new Set<number>();
-
 function renderStandaloneSilence() {
   viewEl.innerHTML = '';
   renderSilenceTab(null);
@@ -7997,15 +8083,6 @@ function renderSilenceTab(entry = null) {
 }
 
 /* -------------------------- vocal timeline -------------------------- */
-
-let vocalTab = 'split';
-let vocalFolder = null;
-let vocalFiles = [];
-let vocalSelected = new Set();
-let vocalSplitPreviews = new Map();
-let vocalManifestPath = null;
-let vocalBlocksFolder = null;
-let vocalRebuildPreview = null;
 
 function renderStandaloneVocal() {
   viewEl.innerHTML = '';
@@ -8388,8 +8465,6 @@ function renderVocalRebuildTab(section) {
 }
 
 /* ------------------------------- QC ------------------------------- */
-
-let qcFolder = null;
 
 function renderQcTab(entry) {
   if (!qcFolder) qcFolder = entry.folder;
@@ -12617,32 +12692,6 @@ function renderRandomizerTool(entry: any = null) {
 
 /* ======================= Slowed + Reverb Studio ======================= */
 
-let slowedReverbState: {
-  file: { name: string; size: number; path?: string; rawBuffer?: ArrayBuffer } | null;
-  sourceBuffer: AudioBuffer | null;
-  renderedBuffer: AudioBuffer | null;
-  renderedAtSampleRate: number;
-  renderedAtRate: number;
-  renderedAtMix: number;
-  options: SlowedReverbOptions;
-  isProcessing: boolean;
-  statusText: string;
-  statusType: 'info' | 'success' | 'error';
-  player: SlowedReverbWaveformPlayer | null;
-} = {
-  file: null,
-  sourceBuffer: null,
-  renderedBuffer: null,
-  renderedAtSampleRate: 44100,
-  renderedAtRate: 0.87,
-  renderedAtMix: 0.35,
-  options: { ...DEFAULT_SLOWED_REVERB_OPTIONS },
-  isProcessing: false,
-  statusText: '',
-  statusType: 'info',
-  player: null
-};
-
 function buildSlowedReverbInterface(container: HTMLElement, isModal = false, onCloseModal?: () => void) {
   container.innerHTML = '';
   const root = el('div', 'slowed-reverb-container');
@@ -14224,30 +14273,7 @@ function attachDraggableAndSelectable(rowElement: HTMLElement, item: SelectedIte
 /* 🎚️ Format Converter & Audio Splitter Tool                          */
 /* ================================================================== */
 
-interface ConverterFileItem {
-  path: string;
-  name: string;
-  size: number;
-}
-
-const converterState = {
-  files: [] as ConverterFileItem[],
-  options: {
-    format: 'mp3' as 'mp3' | 'wav',
-    bitrate: 192,
-    sampleRate: null as number | null,
-    bitDepth: 24,
-    enableSplit: true,
-    maxSeconds: 300, // 5 minutes
-    maxBytes: 50 * 1024 * 1024, // 50 MB
-    trimSilence: true,
-    padSeconds: 1.5
-  },
-  encodersInfo: null as any,
-  plan: null as any,
-  isProcessing: false,
-  progress: null as { done: number; total: number } | null
-};
+// Listen to convert progress from main process
 
 // Listen to convert progress from main process
 if (window.api && window.api.onConvertProgress) {

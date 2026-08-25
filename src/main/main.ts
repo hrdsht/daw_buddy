@@ -123,7 +123,7 @@ function createSplashWindow({ show = true }: { show?: boolean } = {}) {
   const onFinished = (event) => {
     if (event.sender === splash.webContents) finish();
   };
-  const fallback = setTimeout(finish, 12000);
+  const fallback = setTimeout(finish, 3500);
 
   ipcMain.on('splash:finished', onFinished);
 
@@ -157,21 +157,37 @@ function createWindow({ splash = null, revealWhen = Promise.resolve() }: any = {
     }
   });
 
+  const showMainWindow = () => {
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+    if (splash && !splash.isDestroyed()) {
+      splash.close();
+    }
+  };
+
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+
   mainWindow.once('ready-to-show', () => {
     Promise.resolve(revealWhen)
       .catch((error) => console.error('[startup] Could not prepare the first view:', error.message))
       .finally(() => {
-        // Give the renderer one paint after it receives the prefetched scan.
-        setTimeout(() => {
-          if (splash && !splash.isDestroyed()) splash.close();
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.show();
-            mainWindow.focus();
-          }
-        }, 100);
+        setTimeout(showMainWindow, 50);
       });
   });
+
+  mainWindow.webContents.once('did-finish-load', () => {
+    Promise.resolve(revealWhen)
+      .catch(() => {})
+      .finally(() => {
+        setTimeout(showMainWindow, 100);
+      });
+  });
+
+  // Safety fallback: ensure mainWindow is shown within 2 seconds
+  setTimeout(showMainWindow, 2000);
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
@@ -288,11 +304,7 @@ app.whenReady().then(async () => {
   const isTest = process.env.NODE_ENV === 'test';
   createWindow({
     splash: splashState.splash,
-    revealWhen: isTest
-      ? Promise.resolve()
-      : (indexed
-          ? splashState.finished
-          : Promise.all([splashState.finished, initialScanPromise]))
+    revealWhen: isTest ? Promise.resolve() : splashState.finished
   });
   createTray();
   restartWatcher();
@@ -306,23 +318,26 @@ function createTray() {
   if (tray) return;
   try {
     const iconPath = path.join(__dirname, '..', 'renderer', 'assets', 'dawbuddy-logo-v2.png');
-    const icon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
-    tray = new Tray(icon);
-    tray.setToolTip('DAW Buddy');
+    let icon = nativeImage.createFromPath(iconPath);
+    if (icon && !icon.isEmpty()) {
+      icon = icon.resize({ width: 16, height: 16 });
+      tray = new Tray(icon);
+      tray.setToolTip('DAW Buddy');
 
-    updateTrayMenu();
+      updateTrayMenu();
 
-    tray.on('click', () => {
-      toggleMiniPlayer();
-    });
+      tray.on('click', () => {
+        toggleMiniPlayer();
+      });
 
-    tray.on('double-click', () => {
-      if (mainWindow) {
-        if (mainWindow.isMinimized()) mainWindow.restore();
-        mainWindow.show();
-        mainWindow.focus();
-      }
-    });
+      tray.on('double-click', () => {
+        if (mainWindow) {
+          if (mainWindow.isMinimized()) mainWindow.restore();
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      });
+    }
   } catch (err: any) {
     console.error('[tray] Could not initialize tray:', err.message);
   }
@@ -450,6 +465,9 @@ ipcMain.handle('tray:toggleMini', () => {
 });
 
 app.on('window-all-closed', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    return;
+  }
   if (!isMac) {
     stopWatching();
     app.quit();
@@ -1319,23 +1337,61 @@ async function detectEmptyTrack(filePath: string): Promise<{ isEmpty: boolean; e
       if (sizeBytes <= 44) {
         return { isEmpty: true, emptyReason: 'Empty WAV header (no data)', sizeBytes, peakDb: -Infinity };
       }
-      const stats = await silence.measure(filePath);
-      if (stats.error) {
-        if (stats.error.toLowerCase().includes('empty') || stats.error.toLowerCase().includes('missing')) {
-          return { isEmpty: true, emptyReason: stats.error, sizeBytes, peakDb: -Infinity };
+
+      // Fast streaming probe: read only header + tiny sample chunks instead of multi-gigabyte files
+      let fd: any = null;
+      try {
+        fd = await fsp.open(filePath, 'r');
+        const headerBuf = Buffer.alloc(8192);
+        const { bytesRead } = await fd.read(headerBuf, 0, 8192, 0);
+        const subBuf = headerBuf.subarray(0, bytesRead);
+        const parsed = silence.parseWav(subBuf);
+        if (parsed.error) {
+          if (parsed.error.toLowerCase().includes('empty') || parsed.error.toLowerCase().includes('missing')) {
+            return { isEmpty: true, emptyReason: parsed.error, sizeBytes, peakDb: -Infinity };
+          }
+        } else if (parsed.dataSize === 0) {
+          return { isEmpty: true, emptyReason: 'Empty WAV data (0 frames)', sizeBytes, peakDb: -Infinity };
+        } else if (parsed.fmt) {
+          const { fmt, dataOffset, dataSize } = parsed;
+          const bytesPerSample = Math.max(1, Math.floor(fmt.bitsPerSample / 8));
+          const blockAlign = fmt.blockAlign || (fmt.numChannels * bytesPerSample);
+          
+          let peak = 0;
+          const probePositions = [
+            dataOffset,
+            Math.floor(dataOffset + dataSize / 2),
+            Math.max(dataOffset, dataOffset + dataSize - 4096)
+          ];
+          const probeBuf = Buffer.alloc(4096);
+          
+          for (const pos of probePositions) {
+            if (pos >= sizeBytes) continue;
+            const readRes = await fd.read(probeBuf, 0, 4096, pos);
+            const chunk = probeBuf.subarray(0, readRes.bytesRead);
+            for (let offset = 0; offset + bytesPerSample <= chunk.length; offset += blockAlign) {
+              const mag = silence.readMagnitude(chunk, offset, fmt);
+              if (mag > peak) {
+                peak = mag;
+              }
+            }
+            if (peak > 0.0001) break;
+          }
+
+          if (peak === 0) {
+            return {
+              isEmpty: true,
+              emptyReason: 'Digital silence (0.0 peak)',
+              sizeBytes,
+              peakDb: -Infinity
+            };
+          }
+          const toDb = (v: number) => (v > 0 ? 20 * Math.log10(v) : -Infinity);
+          return { isEmpty: false, sizeBytes, peakDb: toDb(peak) };
         }
-        return { isEmpty: false, sizeBytes };
+      } finally {
+        if (fd) await fd.close();
       }
-      // If peak is 0 or peakDb is -Infinity or <= -90 dB, it is digital silence
-      if (stats.peak === 0 || !Number.isFinite(stats.peakDb) || stats.peakDb <= -90) {
-        return {
-          isEmpty: true,
-          emptyReason: stats.peak === 0 ? 'Digital silence (0.0 peak)' : `Silent track (${stats.peakDb.toFixed(1)} dB peak)`,
-          sizeBytes,
-          peakDb: stats.peakDb
-        };
-      }
-      return { isEmpty: false, sizeBytes, peakDb: stats.peakDb };
     }
 
     return { isEmpty: false, sizeBytes };

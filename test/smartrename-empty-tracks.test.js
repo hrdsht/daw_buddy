@@ -66,22 +66,60 @@ async function detectEmptyTrack(filePath) {
       if (sizeBytes <= 44) {
         return { isEmpty: true, emptyReason: 'Empty WAV header (no data)', sizeBytes, peakDb: -Infinity };
       }
-      const stats = await silence.measure(filePath);
-      if (stats.error) {
-        if (stats.error.toLowerCase().includes('empty') || stats.error.toLowerCase().includes('missing')) {
-          return { isEmpty: true, emptyReason: stats.error, sizeBytes, peakDb: -Infinity };
+
+      let fd = null;
+      try {
+        fd = await fs.open(filePath, 'r');
+        const headerBuf = Buffer.alloc(8192);
+        const { bytesRead } = await fd.read(headerBuf, 0, 8192, 0);
+        const subBuf = headerBuf.subarray(0, bytesRead);
+        const parsed = silence.parseWav(subBuf);
+        if (parsed.error) {
+          if (parsed.error.toLowerCase().includes('empty') || parsed.error.toLowerCase().includes('missing')) {
+            return { isEmpty: true, emptyReason: parsed.error, sizeBytes, peakDb: -Infinity };
+          }
+        } else if (parsed.dataSize === 0) {
+          return { isEmpty: true, emptyReason: 'Empty WAV data (0 frames)', sizeBytes, peakDb: -Infinity };
+        } else if (parsed.fmt) {
+          const { fmt, dataOffset, dataSize } = parsed;
+          const bytesPerSample = Math.max(1, Math.floor(fmt.bitsPerSample / 8));
+          const blockAlign = fmt.blockAlign || (fmt.numChannels * bytesPerSample);
+          
+          let peak = 0;
+          const probePositions = [
+            dataOffset,
+            Math.floor(dataOffset + dataSize / 2),
+            Math.max(dataOffset, dataOffset + dataSize - 4096)
+          ];
+          const probeBuf = Buffer.alloc(4096);
+          
+          for (const pos of probePositions) {
+            if (pos >= sizeBytes) continue;
+            const readRes = await fd.read(probeBuf, 0, 4096, pos);
+            const chunk = probeBuf.subarray(0, readRes.bytesRead);
+            for (let offset = 0; offset + bytesPerSample <= chunk.length; offset += blockAlign) {
+              const mag = silence.readMagnitude(chunk, offset, fmt);
+              if (mag > peak) {
+                peak = mag;
+              }
+            }
+            if (peak > 0.0001) break;
+          }
+
+          if (peak === 0) {
+            return {
+              isEmpty: true,
+              emptyReason: 'Digital silence (0.0 peak)',
+              sizeBytes,
+              peakDb: -Infinity
+            };
+          }
+          const toDb = (v) => (v > 0 ? 20 * Math.log10(v) : -Infinity);
+          return { isEmpty: false, sizeBytes, peakDb: toDb(peak) };
         }
-        return { isEmpty: false, sizeBytes };
+      } finally {
+        if (fd) await fd.close();
       }
-      if (stats.peak === 0 || !Number.isFinite(stats.peakDb) || stats.peakDb <= -90) {
-        return {
-          isEmpty: true,
-          emptyReason: stats.peak === 0 ? 'Digital silence (0.0 peak)' : `Silent track (${stats.peakDb.toFixed(1)} dB peak)`,
-          sizeBytes,
-          peakDb: stats.peakDb
-        };
-      }
-      return { isEmpty: false, sizeBytes, peakDb: stats.peakDb };
     }
 
     return { isEmpty: false, sizeBytes };

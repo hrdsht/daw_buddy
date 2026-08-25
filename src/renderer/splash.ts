@@ -11,8 +11,10 @@ function finish() {
 
 video.addEventListener('ended', finish, { once: true });
 video.addEventListener('error', finish, { once: true });
+document.addEventListener('click', finish, { once: true });
+document.addEventListener('keydown', finish, { once: true });
 
 // Autoplay is expected because the animation is muted. If the operating
 // system blocks it anyway, do not leave the user trapped behind the splash.
-video.play().catch(() => setTimeout(finish, 2500));
-setTimeout(finish, 12000);
+video.play().catch(() => setTimeout(finish, 2000));
+setTimeout(finish, 8000);
