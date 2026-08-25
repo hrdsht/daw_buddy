@@ -86,6 +86,25 @@ function testStemNamingFormats() {
     formatStemOutputName('vox', 'lead', 1, '.wav', 'padded', null, 'ritesh'),
     'Vox Ritesh 01.wav'
   );
+  // 7. Batch custom category numbering (e.g. "rx" on 5 files)
+  const stems = ['stem_a.wav', 'stem_b.wav', 'stem_c.wav', 'stem_d.wav', 'stem_e.wav'];
+  const formattedSnake = stems.map((_, i) => formatStemOutputName('rx', null, i + 1, '.wav', 'snake'));
+  assert.deepEqual(formattedSnake, [
+    'rx_1.wav',
+    'rx_2.wav',
+    'rx_3.wav',
+    'rx_4.wav',
+    'rx_5.wav'
+  ]);
+
+  const formattedPadded = stems.map((_, i) => formatStemOutputName('rx', null, i + 1, '.wav', 'padded'));
+  assert.deepEqual(formattedPadded, [
+    'Rx 01.wav',
+    'Rx 02.wav',
+    'Rx 03.wav',
+    'Rx 04.wav',
+    'Rx 05.wav'
+  ]);
 }
 
 testFlStudioArtifactDetection();
@@ -93,3 +112,4 @@ console.log('ok - testFlStudioArtifactDetection');
 
 testStemNamingFormats();
 console.log('ok - testStemNamingFormats');
+

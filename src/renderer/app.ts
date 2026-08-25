@@ -5867,6 +5867,53 @@ function renderStandaloneSmartRename() {
 }
 
 /**
+ * Parses user input in smart combobox into category, subtype, or custom name.
+ */
+function parseSmartComboboxValue(
+  val: string,
+  categoriesList: Array<{ category: string; subtypes: string[] }>
+): { category: string | null; subtype: string | null; customName?: string | null } {
+  const raw = (val || '').trim();
+  if (!raw || raw === '— Unresolved —' || raw.toLowerCase() === 'unresolved' || raw === '-') {
+    return { category: null, subtype: null, customName: null };
+  }
+
+  // 1. Check exact category / subtype match (e.g. "drums / kick", "drums:kick", "drums_kick")
+  const slashMatch = raw.split(/[\/:]/).map((s) => s.trim());
+  if (slashMatch.length === 2) {
+    const [c, s] = slashMatch;
+    const foundCat = categoriesList.find((x) => x.category.toLowerCase() === c.toLowerCase());
+    if (foundCat) {
+      const foundSub = foundCat.subtypes.find((x) => x.toLowerCase() === s.toLowerCase());
+      return { category: foundCat.category, subtype: foundSub || s.toLowerCase(), customName: null };
+    }
+  }
+
+  // 2. Check exact category match (e.g. "drums", "percs", "percs (generic)")
+  const cleanCat = raw.replace(/\s*\(generic\)\s*/i, '').trim().toLowerCase();
+  const foundCat = categoriesList.find((x) => x.category.toLowerCase() === cleanCat);
+  if (foundCat) {
+    return { category: foundCat.category, subtype: null, customName: null };
+  }
+
+  // 3. Check if input matches any known subtype across categories (e.g. "tom", "snare", "tabla", "808", "lead")
+  for (const c of categoriesList) {
+    const foundSub = c.subtypes.find((s) => s.toLowerCase() === cleanCat);
+    if (foundSub) {
+      return { category: c.category, subtype: foundSub, customName: null };
+    }
+  }
+
+  // 4. Check if user typed an exact filename ending with an audio extension
+  if (/\.[a-zA-Z0-9]{2,5}$/.test(raw)) {
+    return { category: null, subtype: null, customName: raw };
+  }
+
+  // 5. Otherwise treat as custom category / stem prefix (e.g. "rx", "bgv", "sfx_riser", etc.)
+  return { category: raw, subtype: null, customName: null };
+}
+
+/**
  * Reusable Typable Combobox for Category selection & custom name input with live suggestions.
  */
 function createSmartCombobox(options: {
@@ -5907,47 +5954,6 @@ function createSmartCombobox(options: {
   const menu = el('div', 'smart-combobox__menu');
   wrap.append(input, arrow, menu);
 
-  function parseInput(val: string): { category: string | null; subtype: string | null; customName?: string | null } {
-    const raw = (val || '').trim();
-    if (!raw || raw === '— Unresolved —' || raw.toLowerCase() === 'unresolved' || raw === '-') {
-      return { category: null, subtype: null, customName: null };
-    }
-
-    // 1. Check exact category / subtype match (e.g. "drums / kick", "drums:kick", "drums_kick")
-    const slashMatch = raw.split(/[\/:]/).map((s) => s.trim());
-    if (slashMatch.length === 2) {
-      const [c, s] = slashMatch;
-      const foundCat = options.categoriesList.find((x) => x.category.toLowerCase() === c.toLowerCase());
-      if (foundCat) {
-        const foundSub = foundCat.subtypes.find((x) => x.toLowerCase() === s.toLowerCase());
-        return { category: foundCat.category, subtype: foundSub || s.toLowerCase(), customName: null };
-      }
-    }
-
-    // 2. Check exact category match (e.g. "drums", "percs", "percs (generic)")
-    const cleanCat = raw.replace(/\s*\(generic\)\s*/i, '').trim().toLowerCase();
-    const foundCat = options.categoriesList.find((x) => x.category.toLowerCase() === cleanCat);
-    if (foundCat) {
-      return { category: foundCat.category, subtype: null, customName: null };
-    }
-
-    // 3. Check if input matches any known subtype across categories (e.g. "tom", "snare", "tabla", "808", "lead")
-    for (const c of options.categoriesList) {
-      const foundSub = c.subtypes.find((s) => s.toLowerCase() === cleanCat);
-      if (foundSub) {
-        return { category: c.category, subtype: foundSub, customName: null };
-      }
-    }
-
-    // 4. Check if user typed an exact filename ending with an audio extension
-    if (/\.[a-zA-Z0-9]{2,5}$/.test(raw)) {
-      return { category: null, subtype: null, customName: raw };
-    }
-
-    // 5. Otherwise treat as custom category / stem prefix
-    return { category: raw, subtype: null, customName: null };
-  }
-
   function renderMenuItems(filterQuery: string = '') {
     menu.innerHTML = '';
     const q = (filterQuery || '').trim().toLowerCase();
@@ -5958,6 +5964,7 @@ function createSmartCombobox(options: {
     unresItem.addEventListener('mousedown', (e) => {
       e.preventDefault();
       input.value = '';
+      initialDisplay = '';
       closeMenu();
       options.onApply({ category: null, subtype: null, customName: null });
     });
@@ -5982,6 +5989,7 @@ function createSmartCombobox(options: {
           genericItem.addEventListener('mousedown', (e) => {
             e.preventDefault();
             input.value = `${c.category} (generic)`;
+            initialDisplay = input.value;
             closeMenu();
             options.onApply({ category: c.category, subtype: null, customName: null });
           });
@@ -5995,6 +6003,7 @@ function createSmartCombobox(options: {
           subItem.addEventListener('mousedown', (e) => {
             e.preventDefault();
             input.value = `${c.category} / ${s}`;
+            initialDisplay = input.value;
             closeMenu();
             options.onApply({ category: c.category, subtype: s, customName: null });
           });
@@ -6009,7 +6018,8 @@ function createSmartCombobox(options: {
       customItem.innerHTML = `<span>⚡ Use custom: "<strong>${filterQuery}</strong>"</span><span class="smart-combobox__item-tag">Custom</span>`;
       customItem.addEventListener('mousedown', (e) => {
         e.preventDefault();
-        const parsed = parseInput(filterQuery);
+        const parsed = parseSmartComboboxValue(filterQuery, options.categoriesList);
+        initialDisplay = input.value;
         closeMenu();
         options.onApply(parsed);
       });
@@ -6024,6 +6034,14 @@ function createSmartCombobox(options: {
 
   function closeMenu() {
     menu.classList.remove('is-open');
+  }
+
+  function commitCurrentInput() {
+    if (input.value.trim() !== initialDisplay.trim()) {
+      const parsed = parseSmartComboboxValue(input.value, options.categoriesList);
+      initialDisplay = input.value;
+      options.onApply(parsed);
+    }
   }
 
   arrow.addEventListener('click', (e) => {
@@ -6049,17 +6067,29 @@ function createSmartCombobox(options: {
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      const parsed = parseInput(input.value);
       closeMenu();
-      options.onApply(parsed);
+      commitCurrentInput();
     } else if (e.key === 'Escape') {
+      input.value = initialDisplay;
       closeMenu();
     }
   });
 
+  input.addEventListener('blur', () => {
+    setTimeout(() => {
+      if (!wrap.contains(document.activeElement)) {
+        commitCurrentInput();
+        closeMenu();
+      }
+    }, 150);
+  });
+
   document.addEventListener('click', (e) => {
     if (!wrap.contains(e.target as Node)) {
-      closeMenu();
+      if (menu.classList.contains('is-open')) {
+        commitCurrentInput();
+        closeMenu();
+      }
     }
   });
 
@@ -6708,7 +6738,13 @@ async function renderSmartRenameTab(entry: any = null) {
 
       const applyBtn = el('button', 'pill pill--solid pill--sm', `Apply to ${smartSelectedSet.size} files`);
       applyBtn.addEventListener('click', () => {
-        applyBatchChoice(currentBatchChoice);
+        const batchInput = batchCombobox.querySelector('input') as HTMLInputElement | null;
+        if (batchInput && batchInput.value.trim()) {
+          const parsed = parseSmartComboboxValue(batchInput.value, smartCategoriesList);
+          applyBatchChoice(parsed);
+        } else {
+          applyBatchChoice(currentBatchChoice);
+        }
       });
 
       async function applyBatchChoice(choice: { category: string | null; subtype: string | null; customName?: string | null }) {
@@ -6901,13 +6937,25 @@ async function renderSmartRenameTab(entry: any = null) {
         currentCustomName: item.customName,
         categoriesList: smartCategoriesList,
         onApply: async (res) => {
-          item.userCategory = res.category;
-          item.userSubtype = res.subtype;
-          item.customName = res.customName || null;
-          item.confidence = 1.0;
-          const tokens = (item.name || '').split(/[^a-zA-Z0-9]+/).filter((t: string) => t.length > 2);
-          if (item.userCategory) {
-            await window.api.userDictLearn(tokens, item.userCategory, item.userSubtype || null);
+          const targetItems = smartSelectedSet.has(item.path)
+            ? smartItems.filter((it) => smartSelectedSet.has(it.path))
+            : [item];
+
+          for (const target of targetItems) {
+            target.userCategory = res.category;
+            target.userSubtype = res.subtype;
+            target.customName = res.customName || null;
+            target.confidence = 1.0;
+            const tokens = (target.name || '').split(/[^a-zA-Z0-9]+/).filter((t: string) => t.length > 2);
+            if (target.userCategory) {
+              await window.api.userDictLearn(tokens, target.userCategory, target.userSubtype || null);
+            }
+          }
+          if (targetItems.length > 1) {
+            const label = res.category
+              ? (res.subtype ? `${res.category}_${res.subtype}` : res.category)
+              : (res.customName || 'Unresolved');
+            toast('Batch Rename Applied', `Set "${label}" for ${targetItems.length} selected files`);
           }
           renderPanes();
         }
