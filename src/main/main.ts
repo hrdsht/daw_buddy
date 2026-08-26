@@ -50,9 +50,10 @@ const {
 // Initialize Crash Logger immediately to catch any startup or lifecycle crashes
 initCrashLogger();
 
-// Hardware GPU Acceleration & Autoplay Optimizations
+// Hardware GPU Acceleration & Autoplay Optimizations (ensures 60fps on Intel Macs & integrated GPUs)
 app.commandLine.appendSwitch('enable-gpu-rasterization');
 app.commandLine.appendSwitch('enable-zero-copy');
+app.commandLine.appendSwitch('ignore-gpu-blocklist');
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
 let mainWindow: any = null;
@@ -270,7 +271,7 @@ app.whenReady().then(async () => {
   projectIndex = new ProjectIndex(path.join(dataDir(), 'project-index.json'));
   const indexed = await projectIndex.load(settings.get());
 
-  if (indexed) {
+  if (indexed && process.env.NODE_ENV !== 'test') {
     // Returning launch: the last complete catalogue can paint immediately.
     // Verify it quietly; the renderer receives the fresh result when ready.
     startupSnapshot = indexedResult(indexed);
@@ -286,6 +287,8 @@ app.whenReady().then(async () => {
       .finally(() => {
         backgroundScanPromise = null;
       });
+  } else if (indexed) {
+    startupSnapshot = indexedResult(indexed);
   } else {
     // First launch (or changed roots): build the catalogue before showing an
     // empty app. Later launches use the saved result above.

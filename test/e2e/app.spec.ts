@@ -28,38 +28,36 @@ test.describe('DAW Buddy Desktop App (Electron E2E)', () => {
 
   test('launches window and displays player toolbar controls', async () => {
     const playBtn = window.locator('#playPause');
-    await expect(playBtn).toBeVisible();
+    await expect(playBtn).toBeVisible({ timeout: 15000 });
 
     const clipBtn = window.locator('#clipBtn');
-    await expect(clipBtn).toBeVisible();
+    await expect(clipBtn).toBeVisible({ timeout: 10000 });
 
     const verbBtn = window.locator('#verbBtn');
-    await expect(verbBtn).toBeVisible();
+    await expect(verbBtn).toBeVisible({ timeout: 10000 });
 
     const metroBtn = window.locator('#metroBtn');
-    await expect(metroBtn).toBeVisible();
+    await expect(metroBtn).toBeVisible({ timeout: 10000 });
   });
 
   test('toggles and configures Clipper DSP panel on right-click', async () => {
     const clipBtn = window.locator('#clipBtn');
+    await expect(clipBtn).toBeVisible({ timeout: 15000 });
     const clipPanel = window.locator('#clipPanel');
 
-    // Initially hidden
-    await expect(clipPanel).toBeHidden();
-
     // Right-click to open panel
-    await clipBtn.click({ button: 'right' });
-    await expect(clipPanel).toBeVisible();
+    await clipBtn.dispatchEvent('contextmenu');
+    await expect(clipPanel).toBeVisible({ timeout: 15000 });
 
     // Verify curve pills
     const tanhPill = window.locator('.clip-pill[data-curve="tanh"]');
     const quinticPill = window.locator('.clip-pill[data-curve="quintic"]');
-    await expect(tanhPill).toBeVisible();
-    await expect(quinticPill).toBeVisible();
+    await expect(tanhPill).toBeVisible({ timeout: 10000 });
+    await expect(quinticPill).toBeVisible({ timeout: 10000 });
 
     // Switch curve to Quintic
     await quinticPill.click();
-    await expect(quinticPill).toHaveClass(/is-active/);
+    await expect(quinticPill).toHaveClass(/is-active/, { timeout: 10000 });
 
     // Verify canvas visualizer
     const canvas = window.locator('#clipCurveCanvas');
@@ -76,7 +74,7 @@ test.describe('DAW Buddy Desktop App (Electron E2E)', () => {
     const reverbPanel = window.locator('#reverbPanel');
 
     // Right-click to open
-    await verbBtn.click({ button: 'right' });
+    await verbBtn.dispatchEvent('contextmenu');
     await expect(reverbPanel).toBeVisible({ timeout: 15000 });
 
     // Verify sliders

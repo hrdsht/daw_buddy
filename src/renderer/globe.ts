@@ -347,7 +347,8 @@ export class InteractiveGlobe {
         this.animFrameId = null;
         return;
       }
-      if (document.hidden) {
+      // Skip physics and drawing if document is hidden or canvas is not currently displayed
+      if (document.hidden || this.canvas.offsetParent === null) {
         this.animFrameId = requestAnimationFrame(render);
         return;
       }
