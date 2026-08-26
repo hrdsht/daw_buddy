@@ -93,24 +93,24 @@ function createSplashWindow({ show = true }: { show?: boolean } = {}) {
   if (process.env.NODE_ENV === 'test' || !show) {
     return { splash: null, finished: Promise.resolve() };
   }
-  let resolveFinished;
+  let resolveFinished: any;
   let settled = false;
   const finished = new Promise((resolve) => {
     resolveFinished = resolve;
   });
 
   const splash = new BrowserWindow({
-    width: 640,
-    height: 640,
+    width: 600,
+    height: 600,
     frame: false,
-    transparent: true,
+    transparent: false,
     resizable: false,
     movable: true,
     show: false,
     center: true,
     alwaysOnTop: true,
     skipTaskbar: true,
-    backgroundColor: '#00000000',
+    backgroundColor: '#070908',
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload', 'splash-preload.js'),
       contextIsolation: true,
@@ -125,15 +125,18 @@ function createSplashWindow({ show = true }: { show?: boolean } = {}) {
     ipcMain.removeListener('splash:finished', onFinished);
     resolveFinished();
   };
-  const onFinished = (event) => {
+  const onFinished = (event: any) => {
     if (event.sender === splash.webContents) finish();
   };
-  const fallback = setTimeout(finish, 3800);
+  // The splash video is 8.04s long, allow it full playback time before timing out
+  const fallback = setTimeout(finish, 9000);
 
   ipcMain.on('splash:finished', onFinished);
 
   splash.loadFile(path.join(__dirname, '..', 'renderer', 'splash.html'));
-  splash.once('ready-to-show', () => splash.show());
+  splash.once('ready-to-show', () => {
+    if (!settled && splash && !splash.isDestroyed()) splash.show();
+  });
   splash.on('closed', () => {
     finish();
     if (splashWindow === splash) splashWindow = null;
@@ -149,7 +152,7 @@ function createWindow({ splash = null, revealWhen = Promise.resolve() }: any = {
     minWidth: 900,
     minHeight: 560,
     show: process.env.NODE_ENV === 'test',
-    backgroundColor: '#101310',
+    backgroundColor: '#0e1210',
     icon: path.join(__dirname, '..', 'renderer', 'assets', 'dawbuddy-logo-v2.png'),
     alwaysOnTop: settings.get().alwaysOnTop,
     ...(isMac
@@ -190,8 +193,8 @@ function createWindow({ splash = null, revealWhen = Promise.resolve() }: any = {
       });
   });
 
-  // Safety fallback: ensure mainWindow is shown within 4.5 seconds if splash video stalls
-  setTimeout(showMainWindow, 4500);
+  // Safety fallback: allow ample time for splash to finish (10s)
+  setTimeout(showMainWindow, 10000);
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -205,7 +208,7 @@ function createWindow({ splash = null, revealWhen = Promise.resolve() }: any = {
   });
   // Windows and Linux expose extra mouse buttons as browser app commands.
   // DAW Buddy is a single-page app, so forward them to its own history.
-  mainWindow.on('app-command', (event, command) => {
+  mainWindow.on('app-command', (event: any, command: any) => {
     if (command !== 'browser-backward' && command !== 'browser-forward') return;
     event.preventDefault();
     if (!mainWindow || mainWindow.isDestroyed()) return;

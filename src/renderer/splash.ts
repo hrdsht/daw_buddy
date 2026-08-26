@@ -2,6 +2,7 @@
 
 const video = document.getElementById('splashVideo') as HTMLVideoElement | null;
 const fallback = document.getElementById('splashFallback');
+const skipBtn = document.getElementById('splashSkipBtn');
 let sent = false;
 
 function finish() {
@@ -12,13 +13,20 @@ function finish() {
   }
 }
 
+if (skipBtn) {
+  skipBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    finish();
+  });
+}
+
 if (video) {
   video.muted = true;
   video.defaultMuted = true;
   video.playsInline = true;
 
   video.addEventListener('ended', () => {
-    setTimeout(finish, 100);
+    setTimeout(finish, 150);
   }, { once: true });
 
   video.addEventListener('error', (e) => {
@@ -52,11 +60,16 @@ if (video) {
     tryPlay();
   }
 } else {
-  setTimeout(finish, 1500);
+  setTimeout(finish, 2000);
 }
 
 document.addEventListener('click', finish, { once: true });
-document.addEventListener('keydown', finish, { once: true });
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' || e.key === ' ' || e.key === 'Enter') {
+    finish();
+  }
+}, { once: true });
 
-// Hard fallback so the app never gets stuck indefinitely
-setTimeout(finish, 4500);
+// Hard safety fallback matching video length (9s)
+setTimeout(finish, 9000);
+

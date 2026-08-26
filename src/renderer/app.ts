@@ -378,7 +378,22 @@ if ($('miniToggle')) {
 
 /* ============================== state ============================== */
 
-let settings: any = null;
+let settings: any = {
+  roots: [],
+  ignore: [],
+  alwaysOnTop: false,
+  pollWatching: false,
+  followLinks: false,
+  enableCrashLogs: true,
+  region: 'indian',
+  scaleTraditions: ['all'],
+  listSort: { by: 'modified', dir: -1 }
+};
+try {
+  const cachedSettingsRaw = localStorage.getItem('dawBuddyCachedSettings');
+  if (cachedSettingsRaw) settings = { ...settings, ...JSON.parse(cachedSettingsRaw) };
+} catch {}
+
 let records: any = {};
 try {
   const cachedRecordsRaw = localStorage.getItem('dawBuddyCachedRecords');
@@ -860,17 +875,34 @@ async function boot() {
   decorateAction('openSettings', 'settings', 'Settings');
   buildSortMenu();
 
-  const [loadedSettings, loadedRecords] = await Promise.all([
-    window.api.getSettings().catch(() => ({ roots: [], ignore: [] })),
-    window.api.getRecords().catch(() => ({}))
-  ]);
-  settings = loadedSettings;
-  records = loadedRecords;
+  // Instant 0ms synchronous render using cached settings & projects
+  applySettings();
+  renderCollections();
+  render();
+
   try {
-    localStorage.setItem('dawBuddyCachedRecords', JSON.stringify(records));
-  } catch {}
+    const [loadedSettings, loadedRecords] = await Promise.all([
+      window.api.getSettings().catch(() => null),
+      window.api.getRecords().catch(() => ({}))
+    ]);
+    if (loadedSettings) {
+      settings = { ...settings, ...loadedSettings };
+      try {
+        localStorage.setItem('dawBuddyCachedSettings', JSON.stringify(settings));
+      } catch {}
+    }
+    if (loadedRecords) {
+      records = loadedRecords;
+      try {
+        localStorage.setItem('dawBuddyCachedRecords', JSON.stringify(records));
+      } catch {}
+    }
+  } catch (err) {
+    console.warn('[boot] Error loading settings/records:', err);
+  }
 
   applySettings();
+  renderCollections();
   render();
 
   // Background non-blocking scan for projects so UI never hangs during boot
@@ -912,6 +944,9 @@ async function boot() {
             patch.outputFolder = result.outputFolder;
           }
           settings = await window.api.updateSettings(patch);
+          try {
+            localStorage.setItem('dawBuddyCachedSettings', JSON.stringify(settings));
+          } catch {}
           applySettings();
           render();
         },
@@ -922,6 +957,9 @@ async function boot() {
             regionSetupComplete: true,
             lastSeenVersion: currentAppVersion
           });
+          try {
+            localStorage.setItem('dawBuddyCachedSettings', JSON.stringify(settings));
+          } catch {}
           applySettings();
           render();
         },
@@ -934,21 +972,21 @@ async function boot() {
       startFeatureWalkthrough(false);
     }, 750);
   }
-
 }
 
 function applySettings() {
+  if (!settings) return;
   if (settings.listSort && settings.listSort.by) {
     sortBy = settings.listSort.by;
     sortDir = settings.listSort.dir === 1 ? 1 : -1;
   }
-  $('alwaysOnTop').checked = settings.alwaysOnTop;
-  $('pollWatching').checked = settings.pollWatching;
+  if ($('alwaysOnTop')) $('alwaysOnTop').checked = Boolean(settings.alwaysOnTop);
+  if ($('pollWatching')) $('pollWatching').checked = Boolean(settings.pollWatching);
   if ($('followLinks')) $('followLinks').checked = Boolean(settings.followLinks);
   if ($('outputPath')) {
     $('outputPath').textContent = settings.outputFolder || 'Created on first scan';
   }
-  $('ignoreInput').value = settings.ignore.join(', ');
+  if ($('ignoreInput')) $('ignoreInput').value = Array.isArray(settings.ignore) ? settings.ignore.join(', ') : '';
   if ($('webhookInput')) $('webhookInput').value = settings.webhookUrl || '';
   if ($('enableCrashLogs')) {
     $('enableCrashLogs').checked = settings.enableCrashLogs !== false;
@@ -956,7 +994,7 @@ function applySettings() {
   if ($('appVersionDisplay')) {
     $('appVersionDisplay').textContent = `v${(settings && settings.appVersion) || '0.5.1-beta.3'}`;
   }
-  $('dataDir').textContent = settings.dataDir;
+  if ($('dataDir')) $('dataDir').textContent = settings.dataDir || '';
   document.body.classList.toggle('is-mac', Boolean(settings.isMac));
 
   const regSelect = $('settingRegionSelect') as HTMLSelectElement | null;
@@ -1244,8 +1282,10 @@ function navigateBack() {
   }
   if (!browsing) return;
   const parent = browsing.split(/[\\/]/).slice(0, -1).join(sep());
-  const stillInside = settings.roots.some(
-    (root) => parent && (parent === root || parent.startsWith(root))
+  const stillInside = Boolean(
+    settings &&
+    Array.isArray(settings.roots) &&
+    settings.roots.some((root: string) => parent && (parent === root || parent.startsWith(root)))
   );
   browsing = stillInside ? parent : null;
   refresh();
@@ -1368,7 +1408,7 @@ function renderCollections() {
   });
   collectionsEl.append(everyFile);
 
-  if (settings.roots.length > 0) {
+  if (settings && Array.isArray(settings.roots) && settings.roots.length > 0) {
     collectionsEl.append(el('div', 'coll__label', 'Folders'));
     settings.roots.forEach((root) => {
       const count = entries.filter((e) => e.root === root).length;
@@ -1547,7 +1587,7 @@ function visible() {
 function renderList() {
   viewEl.innerHTML = '';
 
-  if (settings.roots.length === 0) {
+  if (!settings || !Array.isArray(settings.roots) || (settings.roots.length === 0 && entries.length === 0)) {
     return renderEmpty(
       'Add your projects folder',
       'Open Settings and point it at the folder your sessions live in.'
@@ -1832,75 +1872,79 @@ async function preloadLatestRender({ autoplay = false } = {}) {
   if (Player.getCurrent() || isPreloadingRender) return;
   isPreloadingRender = true;
 
-  try {
-    // 1. If viewing a specific project, try its newest render first
-    if (view === 'project' && openProject && openProject.audioCount > 0) {
-      let file: any = null;
-      const result = await window.api.findRenders(
-        openProject.sessionPath,
-        openProject.root,
-        stemsFolderFor(openProject),
-        siblingsOf(openProject)
-      );
-      if (result && result.renders && result.renders.length > 0) {
-        file = result.renders[0].primary || result.renders[0].files?.[0];
-      }
-      if (!file && openProject.folder) {
-        const allAudio = await window.api.listAllAudio(openProject.folder);
-        if (allAudio && allAudio.length > 0) file = allAudio[0];
-      }
-      if (file) {
-        selected = openProject.path;
-        activeAuditionPath = openProject.path;
-        await Player.load(file, { autoplay, project: openProject });
-        return;
-      }
-    }
-
-    // 2. Otherwise find the top project in the list (newest first) and load its newest render
-    const candidates = (entries || []).filter((e) => e.audioCount > 0);
-    for (const entry of candidates) {
+  setTimeout(async () => {
+    try {
       if (Player.getCurrent()) return;
-      let file: any = null;
-      const result = await window.api.findRenders(
-        entry.sessionPath,
-        entry.root,
-        stemsFolderFor(entry),
-        siblingsOf(entry)
-      );
-      if (result && result.renders && result.renders.length > 0) {
-        file = result.renders[0].primary || result.renders[0].files?.[0];
-      }
-      if (!file && entry.isGroup && Array.isArray(entry.versions)) {
-        for (const ver of entry.versions) {
-          const verRes = await window.api.findRenders(
-            ver.sessionPath,
-            ver.root || entry.root,
-            stemsFolderFor(ver),
-            siblingsOf(ver)
-          );
-          if (verRes && verRes.renders && verRes.renders.length > 0) {
-            file = verRes.renders[0].primary || verRes.renders[0].files?.[0];
-            if (file) break;
-          }
+
+      // 1. If viewing a specific project, try its newest render first
+      if (view === 'project' && openProject && openProject.audioCount > 0) {
+        let file: any = null;
+        const result = await window.api.findRenders(
+          openProject.sessionPath,
+          openProject.root,
+          stemsFolderFor(openProject),
+          siblingsOf(openProject)
+        );
+        if (result && result.renders && result.renders.length > 0) {
+          file = result.renders[0].primary || result.renders[0].files?.[0];
+        }
+        if (!file && openProject.folder) {
+          const allAudio = await window.api.listAllAudio(openProject.folder);
+          if (allAudio && allAudio.length > 0) file = allAudio[0];
+        }
+        if (file && !Player.getCurrent()) {
+          selected = openProject.path;
+          activeAuditionPath = openProject.path;
+          await Player.load(file, { autoplay, project: openProject });
+          return;
         }
       }
-      if (!file && entry.folder) {
-        const allAudio = await window.api.listAllAudio(entry.folder);
-        if (allAudio && allAudio.length > 0) file = allAudio[0];
+
+      // 2. Otherwise find the top project in the list (newest first) and load its newest render
+      const candidates = (entries || []).filter((e) => e.audioCount > 0).slice(0, 5);
+      for (const entry of candidates) {
+        if (Player.getCurrent()) return;
+        let file: any = null;
+        const result = await window.api.findRenders(
+          entry.sessionPath,
+          entry.root,
+          stemsFolderFor(entry),
+          siblingsOf(entry)
+        );
+        if (result && result.renders && result.renders.length > 0) {
+          file = result.renders[0].primary || result.renders[0].files?.[0];
+        }
+        if (!file && entry.isGroup && Array.isArray(entry.versions)) {
+          for (const ver of entry.versions) {
+            const verRes = await window.api.findRenders(
+              ver.sessionPath,
+              ver.root || entry.root,
+              stemsFolderFor(ver),
+              siblingsOf(ver)
+            );
+            if (verRes && verRes.renders && verRes.renders.length > 0) {
+              file = verRes.renders[0].primary || verRes.renders[0].files?.[0];
+              if (file) break;
+            }
+          }
+        }
+        if (!file && entry.folder) {
+          const allAudio = await window.api.listAllAudio(entry.folder);
+          if (allAudio && allAudio.length > 0) file = allAudio[0];
+        }
+        if (file && !Player.getCurrent()) {
+          selected = entry.path;
+          activeAuditionPath = entry.path;
+          await Player.load(file, { autoplay, project: entry });
+          return;
+        }
       }
-      if (file) {
-        selected = entry.path;
-        activeAuditionPath = entry.path;
-        await Player.load(file, { autoplay, project: entry });
-        return;
-      }
+    } catch (err) {
+      console.warn('[preloadLatestRender] Error preloading render:', err);
+    } finally {
+      isPreloadingRender = false;
     }
-  } catch (err) {
-    console.warn('[preloadLatestRender] Error preloading render:', err);
-  } finally {
-    isPreloadingRender = false;
-  }
+  }, 600);
 }
 
 /** Other session files sitting in the same folder. */
