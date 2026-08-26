@@ -378,10 +378,30 @@ if ($('miniToggle')) {
 
 /* ============================== state ============================== */
 
-let settings = null;
-let records = {};
-let entries = [];
-let groupedRows = [];
+let settings: any = null;
+let records: any = {};
+try {
+  const cachedRecordsRaw = localStorage.getItem('dawBuddyCachedRecords');
+  if (cachedRecordsRaw) records = JSON.parse(cachedRecordsRaw);
+} catch {}
+
+let entries: any[] = [];
+let groupedRows: any[] = [];
+try {
+  const cachedProjectsRaw = localStorage.getItem('dawBuddyCachedProjects');
+  if (cachedProjectsRaw) {
+    const parsed = JSON.parse(cachedProjectsRaw);
+    if (Array.isArray(parsed.entries)) {
+      entries = parsed.entries;
+      groupedRows = parsed.grouped || [];
+      const perFolder = new Map();
+      entries.forEach((e: any) => perFolder.set(e.folder, (perFolder.get(e.folder) || 0) + 1));
+      entries.forEach((e: any) => {
+        e.siblingCount = perFolder.get(e.folder) || 1;
+      });
+    }
+  }
+} catch {}
 let groupVersionsOn = true;
 let expanded = new Set();
 let browsing = null;
@@ -839,12 +859,21 @@ async function boot() {
   decorateAction('openTools', 'sliders', 'Tools');
   decorateAction('openSettings', 'settings', 'Settings');
   buildSortMenu();
-  settings = await window.api.getSettings();
-  records = await window.api.getRecords();
+
+  const [loadedSettings, loadedRecords] = await Promise.all([
+    window.api.getSettings().catch(() => ({ roots: [], ignore: [] })),
+    window.api.getRecords().catch(() => ({}))
+  ]);
+  settings = loadedSettings;
+  records = loadedRecords;
+  try {
+    localStorage.setItem('dawBuddyCachedRecords', JSON.stringify(records));
+  } catch {}
+
   applySettings();
   render();
 
-  // Background scan for projects so UI never hangs during boot
+  // Background non-blocking scan for projects so UI never hangs during boot
   refresh().catch((err) => console.error('[refresh] Startup scan failed:', err));
 
   // Check if a prior crash occurred and show skippable recovery modal
@@ -1003,13 +1032,17 @@ async function refresh() {
   projectRendersCache.clear();
   projectStemsCache.clear();
   projectAllAudioCache.clear();
-  if (view === 'list') showSpinner('Scanning', 'Reading your folders.');
+  
+  // Only show the blocking full-screen spinner if we have no projects loaded at all
+  if (view === 'list' && entries.length === 0 && !browsing) {
+    showSpinner('Scanning', 'Reading your folders.');
+  }
 
   const result = browsing
     ? await window.api.browse(browsing)
     : await window.api.scan();
 
-  applyProjectResult(result);
+  applyProjectResult(result, { background: true });
 }
 
 function applyProjectResult(result, { background = false } = {}) {
@@ -1019,6 +1052,16 @@ function applyProjectResult(result, { background = false } = {}) {
 
   entries = result.entries || [];
   groupedRows = result.grouped || [];
+
+  // Persist to local cache for instant 0ms painting on next launch
+  if (!browsing && entries.length > 0) {
+    try {
+      localStorage.setItem(
+        'dawBuddyCachedProjects',
+        JSON.stringify({ entries, grouped: groupedRows, savedAt: Date.now() })
+      );
+    } catch {}
+  }
 
   // How many sessions share each folder, so a row can show "8 in folder".
   const perFolder = new Map();

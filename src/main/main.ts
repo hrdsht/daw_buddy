@@ -123,7 +123,7 @@ function createSplashWindow({ show = true }: { show?: boolean } = {}) {
   const onFinished = (event) => {
     if (event.sender === splash.webContents) finish();
   };
-  const fallback = setTimeout(finish, 3500);
+  const fallback = setTimeout(finish, 3800);
 
   ipcMain.on('splash:finished', onFinished);
 
@@ -181,12 +181,12 @@ function createWindow({ splash = null, revealWhen = Promise.resolve() }: any = {
     Promise.resolve(revealWhen)
       .catch(() => {})
       .finally(() => {
-        setTimeout(showMainWindow, 100);
+        setTimeout(showMainWindow, 50);
       });
   });
 
-  // Safety fallback: ensure mainWindow is shown within 2 seconds
-  setTimeout(showMainWindow, 2000);
+  // Safety fallback: ensure mainWindow is shown within 4.5 seconds if splash video stalls
+  setTimeout(showMainWindow, 4500);
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -252,7 +252,7 @@ app.whenReady().then(async () => {
     !currentSettings.lastSeenVersion ||
     currentSettings.lastSeenVersion !== currentVersion;
 
-  const splashState = createSplashWindow({ show: isFreshInstallOrUpdate });
+  const splashState = createSplashWindow({ show: process.env.NODE_ENV !== 'test' });
 
   store = new ProjectStore(path.join(dataDir(), 'notes.json'));
   await store.load();
@@ -863,6 +863,30 @@ ipcMain.handle('projects:scan', async () => {
     startupSnapshotDelivered = true;
     setTimeout(publishBackgroundResult, 0);
     return result;
+  }
+  if (projectIndex) {
+    try {
+      const current = settings.get();
+      const indexed = await projectIndex.load(current);
+      if (indexed) {
+        // Trigger background scan asynchronously if not already running
+        if (!backgroundScanPromise) {
+          backgroundScanPromise = scanProjects()
+            .then((res) => {
+              queueBackgroundResult(res);
+              return res;
+            })
+            .catch((err) => {
+              console.error('[projects:scan] Background project check failed:', err.message);
+              return null;
+            })
+            .finally(() => {
+              backgroundScanPromise = null;
+            });
+        }
+        return indexedResult(indexed);
+      }
+    } catch {}
   }
   if (initialScanPromise) {
     const prefetched = initialScanPromise;

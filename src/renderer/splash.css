@@ -41,6 +41,23 @@ body {
   object-fit: cover;
 }
 
+.splash__fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at center, #101c12 0%, #070908 75%);
+}
+
+.splash__logo {
+  width: 220px;
+  height: 220px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 40px rgba(157, 222, 100, 0.45));
+  animation: pulse 1.6s ease-in-out infinite alternate;
+}
+
 .splash__status {
   position: absolute;
   right: 22px;

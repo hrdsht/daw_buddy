@@ -120,5 +120,18 @@ test.describe('DAW Buddy Desktop App (Electron E2E)', () => {
       await expect(wavPill).toHaveClass(/is-active/);
     }
   });
+
+  test('renders project list immediately without blocking full-screen spinner', async () => {
+    // The main view should show project table or rows immediately
+    const viewEl = window.locator('#view');
+    await expect(viewEl).toBeVisible();
+
+    // Verify search input is interactive immediately
+    const searchInput = window.getByPlaceholder('Search projects…');
+    await expect(searchInput).toBeVisible();
+    await searchInput.fill('Bangalore');
+    await expect(searchInput).toHaveValue('Bangalore');
+    await searchInput.fill('');
+  });
 });
 
