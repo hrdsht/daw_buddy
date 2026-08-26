@@ -50,10 +50,10 @@ const {
 // Initialize Crash Logger immediately to catch any startup or lifecycle crashes
 initCrashLogger();
 
-// Hardware GPU Acceleration & Autoplay Optimizations (ensures 60fps on Intel Macs & integrated GPUs)
+// Keep Chromium's normal GPU safety decisions. Forcing a blocklisted driver back
+// on can leave both the splash and main renderer alive but painting at 0 FPS.
 app.commandLine.appendSwitch('enable-gpu-rasterization');
 app.commandLine.appendSwitch('enable-zero-copy');
-app.commandLine.appendSwitch('ignore-gpu-blocklist');
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
 let mainWindow: any = null;
@@ -79,6 +79,8 @@ let backgroundScanPromise = null;
 let startupSnapshot = null;
 let startupSnapshotDelivered = false;
 let queuedBackgroundResult = null;
+let coreDataReadyPromise: Promise<any> = Promise.resolve();
+let catalogueReadyPromise: Promise<any> = Promise.resolve();
 let activeDiskScan = 0;
 let quitting = false;
 const pendingNoteSaves = new Set();
@@ -240,6 +242,10 @@ if (!gotTheLock) {
 }
 
 app.whenReady().then(async () => {
+  // Paint the splash before touching persisted data or configured drives.
+  // Even a slow/unavailable disk must not prevent the first window appearing.
+  const splashState = createSplashWindow({ show: process.env.NODE_ENV !== 'test' });
+
   // Renaming the app moved the data folder. Bring the old one across before
   // anything reads from it, or it looks like every note vanished.
   await migrate(dataDir());
@@ -248,53 +254,9 @@ app.whenReady().then(async () => {
   settings.load();
   setCrashLoggingEnabled(settings.get().enableCrashLogs !== false);
 
-  const currentVersion = app.getVersion();
-  const currentSettings = settings.get();
-  const isFreshInstallOrUpdate =
-    !currentSettings.regionSetupComplete ||
-    !currentSettings.lastSeenVersion ||
-    currentSettings.lastSeenVersion !== currentVersion;
-
-  const splashState = createSplashWindow({ show: process.env.NODE_ENV !== 'test' });
-
   store = new ProjectStore(path.join(dataDir(), 'notes.json'));
-  await store.load();
-  Object.values(store.all()).forEach((record: any) => {
-    if (record && record.stemsPath) pickedFolders.add(path.resolve(record.stemsPath));
-  });
-
   cache = new ParseCache(path.join(dataDir(), 'cache.json'));
-  await cache.load();
-
-  await ensureOutputFolder();
-
   projectIndex = new ProjectIndex(path.join(dataDir(), 'project-index.json'));
-  const indexed = await projectIndex.load(settings.get());
-
-  if (indexed && process.env.NODE_ENV !== 'test') {
-    // Returning launch: the last complete catalogue can paint immediately.
-    // Verify it quietly; the renderer receives the fresh result when ready.
-    startupSnapshot = indexedResult(indexed);
-    backgroundScanPromise = scanProjects()
-      .then((result) => {
-        queueBackgroundResult(result);
-        return result;
-      })
-      .catch((error) => {
-        console.error('[startup] Background project check failed:', error.message);
-        return null;
-      })
-      .finally(() => {
-        backgroundScanPromise = null;
-      });
-  } else if (indexed) {
-    startupSnapshot = indexedResult(indexed);
-  } else {
-    // First launch (or changed roots): build the catalogue before showing an
-    // empty app. Later launches use the saved result above.
-    initialScanPromise = scanProjects().catch((error) => failedScan(error));
-  }
-
   notes = new NoteWriter();
   notes.onRenamed = (sessionPath, newFile) => {
     store.set(sessionPath, { noteFile: newFile });
@@ -304,7 +266,24 @@ app.whenReady().then(async () => {
   };
 
   userDictionary = new UserDictionary(path.join(dataDir(), 'userdict.json'));
-  await userDictionary.load();
+
+  // Start local data reads, but do not hold window creation behind them.
+  coreDataReadyPromise = Promise.all([
+    store.load(),
+    cache.load(),
+    userDictionary.load()
+  ]).then(() => {
+    Object.values(store.all()).forEach((record: any) => {
+      if (record && record.stemsPath) pickedFolders.add(path.resolve(record.stemsPath));
+    });
+  });
+
+  // Loading the saved catalogue is local and cheap, but it is still kept out
+  // of the window-critical path. A drive walk is never started here.
+  catalogueReadyPromise = coreDataReadyPromise.then(async () => {
+    const indexed = await projectIndex.load(settings.get());
+    if (indexed) startupSnapshot = indexedResult(indexed);
+  });
 
   const isTest = process.env.NODE_ENV === 'test';
   createWindow({
@@ -312,7 +291,17 @@ app.whenReady().then(async () => {
     revealWhen: isTest ? Promise.resolve() : splashState.finished
   });
   createTray();
-  restartWatcher();
+
+  // Output-folder checks and filesystem watching can wake external drives.
+  // Let both renderers settle first, then initialise them independently.
+  mainWindow.webContents.once('did-finish-load', () => {
+    setTimeout(() => {
+      ensureOutputFolder().catch((error) => {
+        console.error('[startup] Could not prepare the output folder:', error.message);
+      });
+      restartWatcher();
+    }, 1500);
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -862,36 +851,30 @@ function publishBackgroundResult() {
 }
 
 ipcMain.handle('projects:scan', async () => {
+  await catalogueReadyPromise;
+
   if (startupSnapshot) {
     const result = startupSnapshot;
     startupSnapshot = null;
     startupSnapshotDelivered = true;
-    setTimeout(publishBackgroundResult, 0);
+    // Return cached projects immediately. Verify drives only after the cached
+    // result has reached the renderer and had time to paint.
+    setTimeout(() => {
+      if (backgroundScanPromise || quitting) return;
+      backgroundScanPromise = scanProjects()
+        .then((fresh) => {
+          queueBackgroundResult(fresh);
+          return fresh;
+        })
+        .catch((error) => {
+          console.error('[startup] Background project check failed:', error.message);
+          return null;
+        })
+        .finally(() => {
+          backgroundScanPromise = null;
+        });
+    }, 1000);
     return result;
-  }
-  if (projectIndex) {
-    try {
-      const current = settings.get();
-      const indexed = await projectIndex.load(current);
-      if (indexed) {
-        // Trigger background scan asynchronously if not already running
-        if (!backgroundScanPromise) {
-          backgroundScanPromise = scanProjects()
-            .then((res) => {
-              queueBackgroundResult(res);
-              return res;
-            })
-            .catch((err) => {
-              console.error('[projects:scan] Background project check failed:', err.message);
-              return null;
-            })
-            .finally(() => {
-              backgroundScanPromise = null;
-            });
-        }
-        return indexedResult(indexed);
-      }
-    } catch {}
   }
   if (initialScanPromise) {
     const prefetched = initialScanPromise;
@@ -926,7 +909,10 @@ ipcMain.handle('projects:browse', async (event, target) => {
 
 /* ----------------------------- records ---------------------------- */
 
-ipcMain.handle('records:all', () => store.all());
+ipcMain.handle('records:all', async () => {
+  await coreDataReadyPromise;
+  return store.all();
+});
 
 ipcMain.handle('records:set', (event, key, patch) => {
   guardApproved(key);

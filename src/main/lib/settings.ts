@@ -93,8 +93,10 @@ class Settings {
     // carrying a dead field around forever.
     delete this.data.searchDepth;
 
-    // Drop folders that have been deleted or unplugged since last launch.
-    this.data.roots = this.data.roots.filter((root) => fs.existsSync(root));
+    // Do not probe roots during startup. existsSync can block for seconds on
+    // sleeping, unplugged, or unavailable network drives, preventing even the
+    // splash window from painting. The background scanner reports unavailable
+    // roots without silently forgetting the user's configuration.
 
     return this.get();
   }

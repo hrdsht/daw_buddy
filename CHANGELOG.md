@@ -7,7 +7,10 @@ is auto-generated on each GitHub Release; this file is the curated summary.
 
 ## [Unreleased]
 
-- _Nothing yet._
+### Fixed
+- Startup windows now paint before project-drive verification, output-folder checks, or filesystem watching begin.
+- Unavailable external/network drives no longer block the splash or get removed from settings during startup.
+- Removed the forced GPU blocklist override that could leave affected systems rendering at 0 FPS.
 
 ## [0.5.1-beta.3] — 2026-08-25
 

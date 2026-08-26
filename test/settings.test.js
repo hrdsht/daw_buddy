@@ -87,11 +87,36 @@ async function testFreshInstallAndUpdateConditions() {
   );
 }
 
+async function testUnavailableRootsSurviveStartup() {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'daw-buddy-settings-roots-'));
+  try {
+    const settingsPath = path.join(dir, 'settings.json');
+    const unavailableRoot = path.join(dir, 'unplugged-external-drive');
+    await fs.writeFile(
+      settingsPath,
+      JSON.stringify({ roots: [unavailableRoot] }),
+      'utf8'
+    );
+
+    const settings = new Settings(settingsPath);
+    settings.load();
+    assert.deepEqual(
+      settings.get().roots,
+      [unavailableRoot],
+      'Startup must not probe or discard an unavailable project drive'
+    );
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+}
+
 async function main() {
   await testSettingsDefaultsAndPersistence();
   console.log('ok - testSettingsDefaultsAndPersistence');
   await testFreshInstallAndUpdateConditions();
   console.log('ok - testFreshInstallAndUpdateConditions');
+  await testUnavailableRootsSurviveStartup();
+  console.log('ok - testUnavailableRootsSurviveStartup');
 }
 
 main().catch((error) => {
