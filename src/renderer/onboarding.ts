@@ -50,6 +50,14 @@ export function showRegionOnboardingModal(options: {
   const modal = document.createElement('div');
   modal.className = 'onboarding-modal';
 
+  const auditionTimers: Array<ReturnType<typeof setTimeout>> = [];
+  const clearAuditionTimers = () => {
+    while (auditionTimers.length > 0) {
+      const t = auditionTimers.pop();
+      if (t !== undefined) clearTimeout(t);
+    }
+  };
+
   // --- Header ---
   const header = document.createElement('div');
   header.className = 'onboarding-header';
@@ -69,6 +77,7 @@ export function showRegionOnboardingModal(options: {
   closeBtn.innerHTML = '✕';
   closeBtn.title = 'Close';
   closeBtn.addEventListener('click', () => {
+    clearAuditionTimers();
     localStorage.setItem('dawBuddyRegionSetupComplete', 'true');
     if (options.onClose) {
       options.onClose();
@@ -105,7 +114,7 @@ export function showRegionOnboardingModal(options: {
 
   const globe = new InteractiveGlobe({
     container: globeContainer,
-    size: 340,
+    size: 290,
     initialRegion: selectedRegion,
     onSelectRegion: (region) => {
       selectedRegion = region.id;
@@ -254,7 +263,8 @@ export function showRegionOnboardingModal(options: {
   auditionBtn.className = 'pill pill--sm onboarding-audition-btn';
   auditionBtn.innerHTML = '▶ Audition Selected Tradition';
   auditionBtn.addEventListener('click', () => {
-    playTraditionSample(selectedRegion, options.playSynthNote);
+    clearAuditionTimers();
+    playTraditionSample(selectedRegion, options.playSynthNote, auditionTimers);
   });
   previewSection.append(auditionBtn);
 
@@ -376,6 +386,8 @@ export function showRegionOnboardingModal(options: {
       return;
     }
 
+    clearAuditionTimers();
+
     // Save configuration
     const traditionsArray = selectedTraditions.has('all')
       ? ['all']
@@ -440,7 +452,8 @@ export function showRegionOnboardingModal(options: {
 
 function playTraditionSample(
   regionId: ScaleTraditionId,
-  playSynthNote?: (pc: number, octave: number, a4?: number) => void
+  playSynthNote?: (pc: number, octave: number, a4?: number) => void,
+  timersList?: Array<ReturnType<typeof setTimeout>>
 ) {
   if (!playSynthNote) return;
 
@@ -449,11 +462,16 @@ function playTraditionSample(
   const phrase = sampleScale.ascendingPhrase || sampleScale.degrees;
 
   phrase.forEach((interval, idx) => {
-    setTimeout(() => {
-      const pc = (0 + interval) % 12;
-      const oct = 4 + Math.floor(interval / 12);
-      playSynthNote(pc, oct, 440);
+    const timer = setTimeout(() => {
+      try {
+        const pc = (0 + interval) % 12;
+        const oct = 4 + Math.floor(interval / 12);
+        playSynthNote(pc, oct, 440);
+      } catch (err) {
+        console.warn('[Onboarding] Synth audition error:', err);
+      }
     }, idx * 190);
+    if (timersList) timersList.push(timer);
   });
 }
 

@@ -918,18 +918,17 @@ async function boot() {
     console.warn('[CrashRecovery] Check error:', err);
   }
 
-  // Display the setup wizard on first run or on update so users configure their region & output location!
+  // Display the setup wizard only on fresh first install so users can pick their regional scale tradition & output location!
   const currentAppVersion = (settings && settings.appVersion) || (await window.api?.getVersion?.()) || '0.5.1-beta.4';
   const lastSeenVersion = (settings && settings.lastSeenVersion) || localStorage.getItem('dawBuddyRegionSetupVersion');
-  const isSetupDone = Boolean(settings && settings.regionSetupComplete) && localStorage.getItem('dawBuddyRegionSetupComplete') === 'true';
-  const isFreshInstallOrUpdate = !isSetupDone || !lastSeenVersion || lastSeenVersion !== currentAppVersion;
+  const isSetupDone = Boolean(settings && (settings.regionSetupComplete || (settings.roots && settings.roots.length > 0) || settings.outputFolder)) || localStorage.getItem('dawBuddyRegionSetupComplete') === 'true';
 
-  if (isFreshInstallOrUpdate) {
+  if (!isSetupDone) {
     setTimeout(() => {
       showRegionOnboardingModal({
-        currentRegion: settings.region || 'indian',
-        currentTraditions: settings.scaleTraditions || ['all'],
-        initialOutputFolder: settings.outputFolder || null,
+        currentRegion: settings?.region || 'indian',
+        currentTraditions: settings?.scaleTraditions || ['all'],
+        initialOutputFolder: settings?.outputFolder || null,
         isUpdateOrSettings: false,
         onSave: async (result) => {
           localStorage.setItem('dawBuddyRegionSetupComplete', 'true');
@@ -967,10 +966,12 @@ async function boot() {
       });
     }, 450);
   } else {
-    // Auto-launch walkthrough on first start or after version updates
-    setTimeout(() => {
-      startFeatureWalkthrough(false);
-    }, 750);
+    // Existing user or update: sync version silently without blocking UI
+    if (lastSeenVersion !== currentAppVersion) {
+      localStorage.setItem('dawBuddyRegionSetupVersion', currentAppVersion);
+      localStorage.setItem('dawBuddyRegionSetupComplete', 'true');
+      window.api?.updateSettings?.({ lastSeenVersion: currentAppVersion, regionSetupComplete: true }).catch(() => {});
+    }
   }
 }
 

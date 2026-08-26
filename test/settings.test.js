@@ -45,15 +45,16 @@ async function testSettingsDefaultsAndPersistence() {
 }
 
 async function testFreshInstallAndUpdateConditions() {
-  const isFreshInstallOrUpdate = (settings, currentAppVersion) => {
-    const isSetupDone = Boolean(settings && settings.regionSetupComplete);
-    const lastSeen = settings && settings.lastSeenVersion;
-    return !isSetupDone || !lastSeen || lastSeen !== currentAppVersion;
+  const shouldShowOnboarding = (settings) => {
+    const isSetupDone = Boolean(
+      settings && (settings.regionSetupComplete || (settings.roots && settings.roots.length > 0) || settings.outputFolder)
+    );
+    return !isSetupDone;
   };
 
-  // Case 1: Fresh Install (no setup, no last seen version)
-  const freshSettings = { ...DEFAULTS, regionSetupComplete: false, lastSeenVersion: null };
-  assert.equal(isFreshInstallOrUpdate(freshSettings, '0.5.1-beta.1'), true, 'Fresh install must trigger setup');
+  // Case 1: Fresh Install (no setup, no roots, no output folder)
+  const freshSettings = { ...DEFAULTS, regionSetupComplete: false, lastSeenVersion: null, roots: [], outputFolder: null };
+  assert.equal(shouldShowOnboarding(freshSettings), true, 'Fresh install must trigger setup');
 
   // Case 2: Configured on current version
   const completedSettings = {
@@ -62,28 +63,28 @@ async function testFreshInstallAndUpdateConditions() {
     lastSeenVersion: '0.5.1-beta.1'
   };
   assert.equal(
-    isFreshInstallOrUpdate(completedSettings, '0.5.1-beta.1'),
+    shouldShowOnboarding(completedSettings),
     false,
     'Subsequent run on same version must NOT trigger setup'
   );
 
-  // Case 3: App updated to newer version (e.g. 0.5.2)
+  // Case 3: App updated to newer version (e.g. 0.5.2) -> existing user must NOT be disrupted
   assert.equal(
-    isFreshInstallOrUpdate(completedSettings, '0.5.2'),
-    true,
-    'Updated app version must trigger setup'
+    shouldShowOnboarding(completedSettings),
+    false,
+    'Updated app version must seamlessly open without intrusive setup wizard'
   );
 
-  // Case 4: User closed setup on new version -> now on new version
-  const updatedAndSavedSettings = {
+  // Case 4: Existing user with configured roots
+  const existingUserWithRoots = {
     ...DEFAULTS,
-    regionSetupComplete: true,
-    lastSeenVersion: '0.5.2'
+    regionSetupComplete: false,
+    roots: ['/Users/music/Ableton Projects']
   };
   assert.equal(
-    isFreshInstallOrUpdate(updatedAndSavedSettings, '0.5.2'),
+    shouldShowOnboarding(existingUserWithRoots),
     false,
-    'After saving on updated version, regular launches must NOT trigger setup'
+    'User with existing project roots must not be blocked by onboarding wizard'
   );
 }
 

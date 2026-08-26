@@ -122,6 +122,14 @@ export class InteractiveGlobe {
 
   private animFrameId: number | null = null;
   private pulsePhase = 0;
+  private isDestroyed = false;
+
+  private onMouseDownHandler?: (e: MouseEvent) => void;
+  private onMouseMoveHandler?: (e: MouseEvent) => void;
+  private onMouseUpHandler?: (e: MouseEvent) => void;
+  private onTouchStartHandler?: (e: TouchEvent) => void;
+  private onTouchMoveHandler?: (e: TouchEvent) => void;
+  private onTouchEndHandler?: (e: TouchEvent) => void;
 
   constructor(options: GlobeOptions) {
     this.size = options.size || 380;
@@ -137,7 +145,12 @@ export class InteractiveGlobe {
     this.canvas.style.width = `${this.size}px`;
     this.canvas.style.height = `${this.size}px`;
     this.canvas.className = 'interactive-globe-canvas';
-    this.ctx = this.canvas.getContext('2d')!;
+    const ctx = this.canvas.getContext('2d');
+    if (!ctx) {
+      this.ctx = ({} as unknown) as CanvasRenderingContext2D;
+      return;
+    }
+    this.ctx = ctx;
     this.ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
 
     options.container.append(this.canvas);
@@ -148,6 +161,7 @@ export class InteractiveGlobe {
   }
 
   public setSize(size: number) {
+    if (this.isDestroyed || !this.ctx || typeof this.ctx.scale !== 'function') return;
     this.size = size;
     this.radius = Math.floor(this.size * 0.42);
     this.cx = this.size / 2;
@@ -202,6 +216,7 @@ export class InteractiveGlobe {
 
   private attachEvents() {
     const onPointerDown = (clientX: number, clientY: number) => {
+      if (this.isDestroyed) return;
       this.isDragging = true;
       this.isInterpolating = false;
       this.lastMouseX = clientX;
@@ -212,6 +227,7 @@ export class InteractiveGlobe {
     };
 
     const onPointerMove = (clientX: number, clientY: number) => {
+      if (this.isDestroyed || !this.canvas.isConnected) return;
       const rect = this.canvas.getBoundingClientRect();
       const x = clientX - rect.left;
       const y = clientY - rect.top;
@@ -230,19 +246,19 @@ export class InteractiveGlobe {
 
         this.rotY += this.velY;
         this.rotX = Math.max(-1.25, Math.min(1.25, this.rotX + this.velX));
-      } else {
-        // Hit-test region pins on hover
+      } else if (x >= 0 && x <= rect.width && y >= 0 && y <= rect.height) {
+        // Hit-test region pins on hover only when inside canvas
         this.checkHover(x, y);
       }
     };
 
     const onPointerUp = (clientX: number, clientY: number) => {
-      if (!this.isDragging) return;
+      if (this.isDestroyed || !this.isDragging) return;
       this.isDragging = false;
       const dragDuration = Date.now() - this.dragStartTime;
 
       // If it was a quick click rather than a drag, check pin clicks
-      if (dragDuration < 200) {
+      if (dragDuration < 200 && this.canvas.isConnected) {
         const rect = this.canvas.getBoundingClientRect();
         const x = clientX - rect.left;
         const y = clientY - rect.top;
@@ -250,31 +266,27 @@ export class InteractiveGlobe {
       }
     };
 
-    this.canvas.addEventListener('mousedown', (e) => onPointerDown(e.clientX, e.clientY));
-    window.addEventListener('mousemove', (e) => onPointerMove(e.clientX, e.clientY));
-    window.addEventListener('mouseup', (e) => onPointerUp(e.clientX, e.clientY));
+    this.onMouseDownHandler = (e) => onPointerDown(e.clientX, e.clientY);
+    this.onMouseMoveHandler = (e) => onPointerMove(e.clientX, e.clientY);
+    this.onMouseUpHandler = (e) => onPointerUp(e.clientX, e.clientY);
 
-    this.canvas.addEventListener(
-      'touchstart',
-      (e) => {
-        if (e.touches.length > 0) onPointerDown(e.touches[0].clientX, e.touches[0].clientY);
-      },
-      { passive: true }
-    );
-    window.addEventListener(
-      'touchmove',
-      (e) => {
-        if (e.touches.length > 0) onPointerMove(e.touches[0].clientX, e.touches[0].clientY);
-      },
-      { passive: true }
-    );
-    window.addEventListener(
-      'touchend',
-      (e) => {
-        if (e.changedTouches.length > 0) onPointerUp(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
-      },
-      { passive: true }
-    );
+    this.onTouchStartHandler = (e) => {
+      if (e.touches.length > 0) onPointerDown(e.touches[0].clientX, e.touches[0].clientY);
+    };
+    this.onTouchMoveHandler = (e) => {
+      if (e.touches.length > 0) onPointerMove(e.touches[0].clientX, e.touches[0].clientY);
+    };
+    this.onTouchEndHandler = (e) => {
+      if (e.changedTouches.length > 0) onPointerUp(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+    };
+
+    this.canvas.addEventListener('mousedown', this.onMouseDownHandler);
+    window.addEventListener('mousemove', this.onMouseMoveHandler);
+    window.addEventListener('mouseup', this.onMouseUpHandler);
+
+    this.canvas.addEventListener('touchstart', this.onTouchStartHandler, { passive: true });
+    window.addEventListener('touchmove', this.onTouchMoveHandler, { passive: true });
+    window.addEventListener('touchend', this.onTouchEndHandler, { passive: true });
   }
 
   private checkHover(x: number, y: number) {
@@ -588,10 +600,31 @@ export class InteractiveGlobe {
   }
 
   public destroy() {
+    this.isDestroyed = true;
     if (this.animFrameId !== null) {
       cancelAnimationFrame(this.animFrameId);
       this.animFrameId = null;
     }
+
+    if (this.onMouseDownHandler) {
+      this.canvas.removeEventListener('mousedown', this.onMouseDownHandler);
+    }
+    if (this.onMouseMoveHandler) {
+      window.removeEventListener('mousemove', this.onMouseMoveHandler);
+    }
+    if (this.onMouseUpHandler) {
+      window.removeEventListener('mouseup', this.onMouseUpHandler);
+    }
+    if (this.onTouchStartHandler) {
+      this.canvas.removeEventListener('touchstart', this.onTouchStartHandler);
+    }
+    if (this.onTouchMoveHandler) {
+      window.removeEventListener('touchmove', this.onTouchMoveHandler);
+    }
+    if (this.onTouchEndHandler) {
+      window.removeEventListener('touchend', this.onTouchEndHandler);
+    }
+
     this.canvas.remove();
   }
 }

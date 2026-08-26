@@ -7918,17 +7918,19 @@ button.is-loading {
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.75), 0 0 32px rgba(74, 222, 128, 0.12);
   border-radius: 14px;
   width: 100%;
-  max-width: 940px;
-  max-height: 90vh;
+  max-width: 900px;
+  max-height: min(88vh, 660px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  margin: auto;
 }
 
 .onboarding-header {
-  padding: 20px 24px 14px;
+  padding: 16px 22px 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   background: #151d2a;
+  flex-shrink: 0;
 }
 
 .onboarding-header__title-row {
@@ -7939,7 +7941,7 @@ button.is-loading {
 }
 
 .onboarding-header__title {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
   color: #f8fafc;
   margin: 0;
@@ -7963,34 +7965,35 @@ button.is-loading {
 }
 
 .onboarding-header__subtitle {
-  margin: 6px 0 0;
-  font-size: 13px;
+  margin: 4px 0 0;
+  font-size: 12.5px;
   color: #94a3b8;
-  line-height: 1.45;
+  line-height: 1.4;
 }
 
 .onboarding-body {
   display: flex;
   flex: 1;
-  overflow-y: auto;
+  overflow: hidden;
   min-height: 0;
 }
 
 .onboarding-globe-col {
-  width: 360px;
+  width: 320px;
+  flex-shrink: 0;
   background: #0d121c;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 20px 16px;
+  padding: 16px 12px;
   user-select: none;
 }
 
 .onboarding-globe-wrapper {
-  width: 340px;
-  height: 340px;
+  width: 290px;
+  height: 290px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -8006,7 +8009,7 @@ button.is-loading {
 .onboarding-globe-hint {
   font-size: 11px;
   color: #64748b;
-  margin-top: 12px;
+  margin-top: 10px;
   display: flex;
   gap: 8px;
   align-items: center;
@@ -8014,11 +8017,14 @@ button.is-loading {
 
 .onboarding-config-col {
   flex: 1;
-  padding: 20px 24px;
+  padding: 16px 20px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(74, 222, 128, 0.3) transparent;
 }
 
 .onboarding-section {
