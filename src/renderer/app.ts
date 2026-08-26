@@ -919,7 +919,7 @@ async function boot() {
   }
 
   // Display the setup wizard on first run or on update so users configure their region & output location!
-  const currentAppVersion = (settings && settings.appVersion) || (await window.api?.getVersion?.()) || '0.5.1-beta.3';
+  const currentAppVersion = (settings && settings.appVersion) || (await window.api?.getVersion?.()) || '0.5.1-beta.4';
   const lastSeenVersion = (settings && settings.lastSeenVersion) || localStorage.getItem('dawBuddyRegionSetupVersion');
   const isSetupDone = Boolean(settings && settings.regionSetupComplete) && localStorage.getItem('dawBuddyRegionSetupComplete') === 'true';
   const isFreshInstallOrUpdate = !isSetupDone || !lastSeenVersion || lastSeenVersion !== currentAppVersion;
@@ -992,7 +992,7 @@ function applySettings() {
     $('enableCrashLogs').checked = settings.enableCrashLogs !== false;
   }
   if ($('appVersionDisplay')) {
-    $('appVersionDisplay').textContent = `v${(settings && settings.appVersion) || '0.5.1-beta.3'}`;
+    $('appVersionDisplay').textContent = `v${(settings && settings.appVersion) || '0.5.1-beta.4'}`;
   }
   if ($('dataDir')) $('dataDir').textContent = settings.dataDir || '';
   document.body.classList.toggle('is-mac', Boolean(settings.isMac));

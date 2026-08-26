@@ -5,12 +5,12 @@ All notable changes to DAW Buddy. Format follows
 [semantic versioning](https://semver.org/). Per-release detail (every merged PR)
 is auto-generated on each GitHub Release; this file is the curated summary.
 
-## [Unreleased]
+## [0.5.1-beta.4] — 2026-08-26
 
 ### Fixed
-- Startup windows now paint before project-drive verification, output-folder checks, or filesystem watching begin.
-- Unavailable external/network drives no longer block the splash or get removed from settings during startup.
-- Removed the forced GPU blocklist override that could leave affected systems rendering at 0 FPS.
+- **Instant Paint & Black Screen Resolution**: Synchronously initialized settings and project caches on startup with non-blocking typography stylesheets, eliminating the startup black screen and freeze.
+- **Splash Video Playback**: Adjusted timeout handling and window composition so the full 8-second MP4 splash video plays smoothly without premature aborts, plus added an interactive skip button and keyboard shortcuts.
+- **Background Audio Preload**: Deferred background render preloading to prevent UI thread lockups during startup.
 
 ## [0.5.1-beta.3] — 2026-08-25
 
