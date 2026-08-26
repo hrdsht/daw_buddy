@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self' data: blob: file:; img-src 'self' data:; script-src 'self'"
+      content="default-src 'self' 'unsafe-inline' data: blob: file:; style-src 'self' 'unsafe-inline'; media-src 'self' data: blob: file: *; img-src 'self' data: blob: file:; script-src 'self' 'unsafe-inline'"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>DAW Buddy</title>
@@ -15,12 +15,15 @@
       <video
         id="splashVideo"
         class="splash__video"
-        src="assets/splash%20screen.mp4"
         autoplay
         muted
         playsinline
         preload="auto"
-      ></video>
+      >
+        <source src="assets/splash-screen.mp4" type="video/mp4" />
+        <source src="assets/splash.mp4" type="video/mp4" />
+        <source src="assets/splash%20screen.mp4" type="video/mp4" />
+      </video>
       <div class="splash__fallback" id="splashFallback" style="display: none;">
         <img src="assets/dawbuddy-logo-v2.png" alt="DAW Buddy" class="splash__logo" />
       </div>

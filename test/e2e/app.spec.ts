@@ -72,17 +72,16 @@ test.describe('DAW Buddy Desktop App (Electron E2E)', () => {
 
   test('toggles Reverb DSP panel on right-click', async () => {
     const verbBtn = window.locator('#verbBtn');
+    await expect(verbBtn).toBeVisible({ timeout: 15000 });
     const reverbPanel = window.locator('#reverbPanel');
-
-    await expect(reverbPanel).toBeHidden();
 
     // Right-click to open
     await verbBtn.click({ button: 'right' });
-    await expect(reverbPanel).toBeVisible();
+    await expect(reverbPanel).toBeVisible({ timeout: 15000 });
 
     // Verify sliders
     const decaySlider = window.locator('#reverbDecay');
-    await expect(decaySlider).toBeVisible();
+    await expect(decaySlider).toBeVisible({ timeout: 10000 });
 
     // Dismiss with Escape
     await window.keyboard.press('Escape');

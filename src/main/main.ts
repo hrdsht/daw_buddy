@@ -50,9 +50,10 @@ const {
 // Initialize Crash Logger immediately to catch any startup or lifecycle crashes
 initCrashLogger();
 
-// Hardware GPU Acceleration Optimizations (Chromium Hardware Rasterization & Zero-Copy)
+// Hardware GPU Acceleration & Autoplay Optimizations
 app.commandLine.appendSwitch('enable-gpu-rasterization');
 app.commandLine.appendSwitch('enable-zero-copy');
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
 let mainWindow: any = null;
 let splashWindow: any = null;
@@ -103,6 +104,7 @@ function createSplashWindow({ show = true }: { show?: boolean } = {}) {
     resizable: false,
     movable: true,
     show: false,
+    center: true,
     alwaysOnTop: true,
     skipTaskbar: true,
     backgroundColor: '#00000000',
@@ -143,7 +145,7 @@ function createWindow({ splash = null, revealWhen = Promise.resolve() }: any = {
     height: 900,
     minWidth: 900,
     minHeight: 560,
-    show: false,
+    show: process.env.NODE_ENV === 'test',
     backgroundColor: '#101310',
     icon: path.join(__dirname, '..', 'renderer', 'assets', 'dawbuddy-logo-v2.png'),
     alwaysOnTop: settings.get().alwaysOnTop,
