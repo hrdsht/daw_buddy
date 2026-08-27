@@ -5,8 +5,8 @@ const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
 
-const { CatalogueService } = require('../dist/services/catalogue-service');
-const { AudioJobService } = require('../dist/services/audio-service');
+const { CatalogueService } = require('../src/services/catalogue-service');
+const { AudioJobService } = require('../src/services/audio-service');
 
 async function testCatalogueServiceLifecycle() {
   console.log('--- Testing CatalogueService Lifecycle & Message Protocol ---');
