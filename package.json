@@ -1,6 +1,6 @@
 {
   "name": "daw-buddy",
-  "version": "0.5.1-beta.4",
+  "version": "0.5.1-beta.5",
   "description": "Browse, analyse and tidy your music production sessions",
   "main": "dist/main/main.js",
   "author": "ba55ick <hpkalas@gmail.com>",
@@ -12,7 +12,7 @@
     "start": "node scripts/launch.js",
     "start:dev": "npm run build && electron .",
     "start:debug": "npm run build && electron --remote-debugging-port=9222 .",
-    "test": "tsx test/regression.js && tsx test/search.test.js && tsx test/matching.test.js && tsx test/webhook.test.js && tsx test/dsp.test.js && tsx test/drone.test.js && tsx test/scaleview.test.js && tsx test/midiwrite.test.js && tsx test/navigation.test.js && tsx test/projectindex.test.js && tsx test/disk.test.js && tsx test/finisher.test.js && tsx test/silence-leading.test.js && tsx test/convert.test.js && tsx test/smartrename.test.js && tsx test/smartrename-features.test.js && tsx test/smartrename-empty-tracks.test.js && tsx test/dragselect.test.js && tsx test/theme.test.js && tsx test/trim.test.js && tsx test/samples.test.js && tsx test/tour.test.js && tsx test/watcher.test.js && tsx test/world-scales.test.js && tsx test/linux-compat.test.js && tsx test/cross-platform-compat.test.js && tsx test/crashlog.test.js && tsx test/metronome.test.js && tsx test/slowed-reverb.test.js && tsx test/clipper.test.js && tsx test/settings.test.js",
+    "test": "tsx test/regression.js && tsx test/search.test.js && tsx test/matching.test.js && tsx test/webhook.test.js && tsx test/dsp.test.js && tsx test/drone.test.js && tsx test/scaleview.test.js && tsx test/midiwrite.test.js && tsx test/navigation.test.js && tsx test/projectindex.test.js && tsx test/disk.test.js && tsx test/finisher.test.js && tsx test/silence-leading.test.js && tsx test/convert.test.js && tsx test/smartrename.test.js && tsx test/smartrename-features.test.js && tsx test/smartrename-empty-tracks.test.js && tsx test/dragselect.test.js && tsx test/theme.test.js && tsx test/trim.test.js && tsx test/samples.test.js && tsx test/tour.test.js && tsx test/watcher.test.js && tsx test/world-scales.test.js && tsx test/linux-compat.test.js && tsx test/cross-platform-compat.test.js && tsx test/crashlog.test.js && tsx test/metronome.test.js && tsx test/slowed-reverb.test.js && tsx test/clipper.test.js && tsx test/settings.test.js && tsx test/workload-isolation.test.js",
     "test:e2e": "npm run build && playwright test",
     "test:a11y": "npm run build && playwright test test/e2e/a11y-visual.spec.ts",
     "test:all": "npm test && npm run test:e2e",

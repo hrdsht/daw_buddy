@@ -5,19 +5,31 @@ const fallback = document.getElementById('splashFallback');
 const skipBtn = document.getElementById('splashSkipBtn');
 let sent = false;
 
-function finish() {
+function finish(closeImmediately = false) {
   if (sent) return;
   sent = true;
+  if (video) {
+    video.pause();
+    video.removeAttribute('src');
+  }
   if ((window as any).splashApi && (window as any).splashApi.finished) {
     (window as any).splashApi.finished();
   }
+  // A user-requested skip must not depend on an IPC round trip. Closing the
+  // splash also resolves the supervisor's splash gate via its `closed` event.
+  if (closeImmediately) window.close();
 }
 
 if (skipBtn) {
-  skipBtn.addEventListener('click', (e) => {
+  const skip = (e: Event) => {
+    e.preventDefault();
     e.stopPropagation();
-    finish();
-  });
+    finish(true);
+  };
+  // pointerdown fires before click and avoids the button feeling stuck while
+  // the video decoder is busy. click remains as keyboard/accessibility fallback.
+  skipBtn.addEventListener('pointerdown', skip, { once: true, capture: true });
+  skipBtn.addEventListener('click', skip, { once: true });
 }
 
 if (video) {
@@ -26,7 +38,7 @@ if (video) {
   video.playsInline = true;
 
   video.addEventListener('ended', () => {
-    setTimeout(finish, 150);
+    finish();
   }, { once: true });
 
   video.addEventListener('error', (e) => {
@@ -63,7 +75,7 @@ if (video) {
   setTimeout(finish, 2000);
 }
 
-document.addEventListener('click', finish, { once: true });
+document.addEventListener('click', () => finish(), { once: true });
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' || e.key === ' ' || e.key === 'Enter') {
     finish();

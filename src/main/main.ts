@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, dialog, shell, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Tray, Menu, nativeImage, utilityProcess } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const fsp = require('fs/promises');
@@ -50,10 +50,7 @@ const {
 // Initialize Crash Logger immediately to catch any startup or lifecycle crashes
 initCrashLogger();
 
-// Keep Chromium's normal GPU safety decisions. Forcing a blocklisted driver back
-// on can leave both the splash and main renderer alive but painting at 0 FPS.
-app.commandLine.appendSwitch('enable-gpu-rasterization');
-app.commandLine.appendSwitch('enable-zero-copy');
+// Use standard Chromium GPU acceleration without zero-copy buffer locking
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
 let mainWindow: any = null;
@@ -84,10 +81,65 @@ let catalogueReadyPromise: Promise<any> = Promise.resolve();
 let activeDiskScan = 0;
 let quitting = false;
 const pendingNoteSaves = new Set();
+let catalogueProcess: any = null;
+let catalogueRequestSequence = 0;
+const pendingCatalogueRequests = new Map<string, { resolve: (value: any) => void; reject: (error: Error) => void }>();
 
 const isMac = process.platform === 'darwin';
 const dataDir = () => app.getPath('userData');
 const undoLog = () => path.join(dataDir(), 'rename-undo.json');
+
+function rejectCatalogueRequests(reason: string) {
+  for (const request of pendingCatalogueRequests.values()) request.reject(new Error(reason));
+  pendingCatalogueRequests.clear();
+}
+
+function ensureCatalogueProcess() {
+  if (catalogueProcess) return catalogueProcess;
+
+  const modulePath = path.join(__dirname, '..', 'services', 'catalogue-service.js');
+  const child = utilityProcess.fork(modulePath, [], {
+    serviceName: 'DAW Buddy Catalogue',
+    stdio: 'pipe'
+  });
+  child.on('message', (message: any) => {
+    if (!message || !message.replyToId) return;
+    const pending = pendingCatalogueRequests.get(message.replyToId);
+    if (!pending) return;
+    pendingCatalogueRequests.delete(message.replyToId);
+    if (message.type === 'SCAN_FAILED') {
+      pending.reject(new Error(message.payload?.error || 'Catalogue scan failed'));
+    } else {
+      pending.resolve(message.payload);
+    }
+  });
+  child.on('exit', (_code: number) => {
+    if (catalogueProcess === child) catalogueProcess = null;
+    rejectCatalogueRequests('Catalogue utility process exited');
+  });
+  if (child.stderr) child.stderr.on('data', (data: Buffer) => console.error(`[catalogue] ${data.toString().trim()}`));
+  catalogueProcess = child;
+  return child;
+}
+
+function scanProjectsInUtility(current: any) {
+  const id = `catalogue-${++catalogueRequestSequence}`;
+  const child = ensureCatalogueProcess();
+  return new Promise((resolve, reject) => {
+    pendingCatalogueRequests.set(id, { resolve, reject });
+    child.postMessage({
+      id,
+      type: 'SCAN_ROOTS',
+      generationId: catalogueRequestSequence,
+      payload: {
+        roots: current.roots,
+        dataDir: dataDir(),
+        ignore: current.ignore,
+        followLinks: current.followLinks
+      }
+    });
+  });
+}
 
 function createSplashWindow({ show = true }: { show?: boolean } = {}) {
   if (process.env.NODE_ENV === 'test' || !show) {
@@ -472,6 +524,11 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', (event) => {
+  if (catalogueProcess) {
+    catalogueProcess.kill();
+    catalogueProcess = null;
+    rejectCatalogueRequests('Application is quitting');
+  }
   if (quitting) return;
   event.preventDefault();
   quitting = true;
@@ -775,6 +832,16 @@ ipcMain.handle('settings:removeRoot', async (event, root) => {
 async function scanProjects() {
   const current = settings.get();
   if (current.roots.length === 0) return { entries: [], errors: [], roots: [] };
+
+  // The drive walk and DAW parsing run in a dedicated utility process. The
+  // Electron supervisor stays responsive even when a drive is slow or asleep.
+  if (process.env.NODE_ENV !== 'test') {
+    try {
+      return await scanProjectsInUtility(current);
+    } catch (error: any) {
+      console.error('[catalogue] Isolated scan failed; using guarded fallback:', error.message);
+    }
+  }
 
   cache.resetCounters();
 

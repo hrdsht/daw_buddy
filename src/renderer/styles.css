@@ -36,7 +36,7 @@
   --accent-glow: 0 0 14px rgba(0, 240, 255, 0.3);
 }
 
-html {
+html[data-custom-filter="true"] {
   filter: brightness(var(--theme-brightness, 1)) contrast(var(--theme-contrast, 1));
 }
 
@@ -1346,6 +1346,8 @@ body.is-mac .topbar {
   border-radius: var(--r);
   cursor: pointer;
   border-bottom: 1px solid var(--line);
+  content-visibility: auto;
+  contain-intrinsic-size: 0 54px;
 }
 
 .row__ableton-tag {

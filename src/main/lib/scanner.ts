@@ -127,6 +127,9 @@ async function walk(dir, root, depth, options, out) {
     return;
   }
   options.budget -= 1;
+  if (options.budget % 30 === 0) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
 
   // Cycle guard. Resolve to the real path and refuse to walk it twice, so a
   // junction pointing back at its own parent can't loop forever. Cheap, and

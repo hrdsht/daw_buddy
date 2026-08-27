@@ -875,7 +875,9 @@ async function boot() {
   decorateAction('openSettings', 'settings', 'Settings');
   buildSortMenu();
 
-  // Instant 0ms synchronous render using cached settings & projects
+  // Cached state is loaded once at module initialisation. Render it immediately;
+  // the list renderer yields between small batches so this cannot monopolise the
+  // renderer while the splash is playing.
   applySettings();
   renderCollections();
   render();
@@ -1084,13 +1086,21 @@ async function refresh() {
   applyProjectResult(result, { background: true });
 }
 
+function catalogueSignature(list: any[]) {
+  return list
+    .map((entry) => `${entry.path || entry.sessionPath || ''}:${entry.modified || entry.mtimeMs || ''}`)
+    .join('|');
+}
+
 function applyProjectResult(result, { background = false } = {}) {
   // Do not replace a folder-specific browsing view with the root catalogue.
   // The next trip back to All projects will request the verified root list.
   if (background && browsing) return;
 
+  const previousSignature = catalogueSignature(entries);
   entries = result.entries || [];
   groupedRows = result.grouped || [];
+  const catalogueChanged = previousSignature !== catalogueSignature(entries);
 
   // Persist to local cache for instant 0ms painting on next launch
   if (!browsing && entries.length > 0) {
@@ -1143,11 +1153,14 @@ function applyProjectResult(result, { background = false } = {}) {
     }
   }
 
-  render();
+  // A verification scan commonly returns the exact cached catalogue. Do not
+  // destroy and recreate hundreds of rows in that case; it causes a visible
+  // multi-second freeze for no user-facing change.
+  if (!background || catalogueChanged) render();
 
-  if (!Player.getCurrent()) {
-    preloadLatestRender({ autoplay: false });
-  }
+  // Do not decode audio as a side effect of catalogue startup or refresh.
+  // The player is initialised only by an explicit user play action, keeping
+  // waveform decoding completely outside the first-paint/scroll path.
 }
 
 /* ============================ navigation =========================== */
@@ -1585,7 +1598,10 @@ function visible() {
   });
 }
 
+let listRenderGeneration = 0;
+
 function renderList() {
+  const generation = ++listRenderGeneration;
   viewEl.innerHTML = '';
 
   if (!settings || !Array.isArray(settings.roots) || (settings.roots.length === 0 && entries.length === 0)) {
@@ -1631,15 +1647,32 @@ function renderList() {
     );
   }
 
-  const fragment = document.createDocumentFragment();
+  const rows: Array<{ entry: any; version: boolean }> = [];
   list.forEach((entry) => {
-    fragment.append(buildRow(entry));
-
+    rows.push({ entry, version: false });
     if (entry.isGroup && expanded.has(entry.path)) {
-      entry.versions.forEach((version) => fragment.append(buildVersionRow(version)));
+      entry.versions.forEach((version) => rows.push({ entry: version, version: true }));
     }
   });
-  viewEl.append(fragment);
+
+  let index = 0;
+  const appendBatch = () => {
+    if (generation !== listRenderGeneration || !viewEl.isConnected) return;
+    const fragment = document.createDocumentFragment();
+    const startedAt = performance.now();
+
+    // Keep each renderer task below a frame budget. This gives wheel input,
+    // animation and paint a chance to run even with very large catalogues.
+    do {
+      const item = rows[index++];
+      fragment.append(item.version ? buildVersionRow(item.entry) : buildRow(item.entry));
+    } while (index < rows.length && performance.now() - startedAt < 8);
+
+    viewEl.append(fragment);
+    if (index < rows.length) requestAnimationFrame(appendBatch);
+  };
+
+  appendBatch();
 }
 
 // NOTE: buildVersionRow is referenced by the grouped-versions expand path but
@@ -14321,22 +14354,24 @@ function attachDraggableAndSelectable(rowElement: HTMLElement, item: SelectedIte
         if ('vibrate' in navigator) navigator.vibrate(40);
       } catch {}
     }, 450);
-  };
 
-  const onPointerMove = (e: PointerEvent) => {
-    if (Math.abs(e.clientX - startX) > 8 || Math.abs(e.clientY - startY) > 8) {
+    const cleanup = () => {
       clearTimeout(pressTimer);
-    }
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+    };
+    const onPointerMove = (event: PointerEvent) => {
+      if (Math.abs(event.clientX - startX) > 8 || Math.abs(event.clientY - startY) > 8) cleanup();
+    };
+    const onPointerUp = () => cleanup();
+
+    window.addEventListener('pointermove', onPointerMove, { passive: true });
+    window.addEventListener('pointerup', onPointerUp, { once: true });
+    window.addEventListener('pointercancel', onPointerUp, { once: true });
   };
 
-  const onPointerUp = () => {
-    clearTimeout(pressTimer);
-  };
-
-  rowElement.addEventListener('pointerdown', onPointerDown);
-  rowElement.addEventListener('pointermove', onPointerMove);
-  rowElement.addEventListener('pointerup', onPointerUp);
-  rowElement.addEventListener('pointercancel', onPointerUp);
+  rowElement.addEventListener('pointerdown', onPointerDown, { passive: true });
 
   // When multi-select mode is active, clicking row toggles selection
   rowElement.addEventListener('click', (e) => {

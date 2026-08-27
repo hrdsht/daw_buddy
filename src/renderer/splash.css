@@ -70,6 +70,8 @@ body {
   font-weight: 500;
   padding: 5px 12px;
   cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
   backdrop-filter: blur(8px);
   transition: all 0.2s ease;
   z-index: 20;

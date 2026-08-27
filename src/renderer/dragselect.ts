@@ -265,22 +265,30 @@ export function attachDraggableAndSelectable(rowElement: HTMLElement, item: Sele
         if ('vibrate' in navigator) navigator.vibrate(40);
       } catch {}
     }, 450);
-  };
 
-  const onPointerMove = (e: PointerEvent) => {
-    if (Math.abs(e.clientX - startX) > 8 || Math.abs(e.clientY - startY) > 8) {
+    const onPointerMove = (ev: PointerEvent) => {
+      if (Math.abs(ev.clientX - startX) > 8 || Math.abs(ev.clientY - startY) > 8) {
+        cleanup();
+      }
+    };
+
+    const onPointerUp = () => {
+      cleanup();
+    };
+
+    const cleanup = () => {
       clearTimeout(pressTimer);
-    }
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+    };
+
+    window.addEventListener('pointermove', onPointerMove, { passive: true });
+    window.addEventListener('pointerup', onPointerUp, { once: true });
+    window.addEventListener('pointercancel', onPointerUp, { once: true });
   };
 
-  const onPointerUp = () => {
-    clearTimeout(pressTimer);
-  };
-
-  rowElement.addEventListener('pointerdown', onPointerDown);
-  rowElement.addEventListener('pointermove', onPointerMove);
-  rowElement.addEventListener('pointerup', onPointerUp);
-  rowElement.addEventListener('pointercancel', onPointerUp);
+  rowElement.addEventListener('pointerdown', onPointerDown, { passive: true });
 
   // When multi-select mode is active, clicking row toggles selection
   rowElement.addEventListener('click', (e: MouseEvent) => {

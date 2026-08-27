@@ -20,6 +20,6 @@
     "strict": false,
     "noImplicitAny": false
   },
-  "include": ["src/main/**/*", "src/preload/**/*"],
+  "include": ["src/main/**/*", "src/preload/**/*", "src/services/**/*", "src/shared/**/*"],
   "exclude": ["node_modules", "dist"]
 }

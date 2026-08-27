@@ -5,6 +5,29 @@ All notable changes to DAW Buddy. Format follows
 [semantic versioning](https://semver.org/). Per-release detail (every merged PR)
 is auto-generated on each GitHub Release; this file is the curated summary.
 
+## [0.5.1-beta.5] — 2026-08-27
+
+### Added
+- **Isolated Catalogue Utility Process**:
+  - Project filesystem walking, parsing, cache maintenance, and index writing are offloaded into an Electron `utilityProcess`, ensuring the main process supervisor and UI remain smooth and responsive even when dealing with slow, sleeping, or external drives.
+- **Audio Job Service & Workload Isolation**:
+  - Background audio tasks (silence trimming, conversion) now utilize prioritized job queues with concurrency limits and cancellation support.
+
+### Performance & UI
+- **Chunked Frame-Budgeted List Rendering**:
+  - `renderList()` renders project items in small batches (< 8ms frame budget) using `requestAnimationFrame`, eliminating scroll/input jank on large project catalogues.
+  - Added signature diffing to bypass DOM rebuilds when periodic scans find unchanged data.
+  - Enabled CSS `content-visibility: auto` and `contain-intrinsic-size` on project rows for hardware-accelerated scroll performance.
+  - Optimized conditional filter rendering so `--theme-brightness` and `--theme-contrast` only activate when non-default.
+- **Instant Splash Skip**:
+  - Splash screen skip button reacts instantly on `pointerdown` with capture, immediately cleaning up decoder resources and closing without waiting for IPC delays.
+
+### Fixed
+- **Drag-Select Event Listener Leaks**:
+  - Added comprehensive pointer event cleanup on pointer move/up/cancel to prevent memory leaks during multi-select operations.
+- **Scanner Event Loop Starvation**:
+  - Added periodic `setImmediate` event loop yielding in `scanner.ts` during deep folder traversals.
+
 ## [0.5.1-beta.4] — 2026-08-26
 
 ### Fixed

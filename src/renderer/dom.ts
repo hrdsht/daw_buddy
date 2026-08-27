@@ -13,6 +13,18 @@ export function el(tag: string, className?: string | null, text?: any): any {
   return node;
 }
 
+const BASIC_ICONS: Record<string, string> = {
+  disc: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/>',
+  folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  star: '<polygon points="12 2 15.1 8.3 22 9.3 17 14.2 18.2 21 12 17.8 5.8 21 7 14.2 2 9.3 8.9 8.3 12 2"/>'
+};
+
+export function svgIcon(name: string, className = 'coll__icon', size = 16) {
+  const span = el('span', className);
+  span.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" width="${size}" height="${size}" aria-hidden="true">${BASIC_ICONS[name] || ''}</svg>`;
+  return span;
+}
+
 export function headRow(title: string, subtitle?: string | null) {
   const head = el('div', 'section__head');
   head.append(el('h3', null, title));
@@ -340,8 +352,15 @@ export function applyThemeTuning(brightness?: number, contrast?: number) {
   const bVal = Math.max(50, Math.min(150, Math.round(brightness)));
   const cVal = Math.max(50, Math.min(150, Math.round(contrast)));
 
-  document.documentElement.style.setProperty('--theme-brightness', String(bVal / 100));
-  document.documentElement.style.setProperty('--theme-contrast', String(cVal / 100));
+  if (bVal === 100 && cVal === 100) {
+    document.documentElement.removeAttribute('data-custom-filter');
+    document.documentElement.style.removeProperty('--theme-brightness');
+    document.documentElement.style.removeProperty('--theme-contrast');
+  } else {
+    document.documentElement.setAttribute('data-custom-filter', 'true');
+    document.documentElement.style.setProperty('--theme-brightness', String(bVal / 100));
+    document.documentElement.style.setProperty('--theme-contrast', String(cVal / 100));
+  }
 
   localStorage.setItem('dawBuddyBrightness', String(bVal));
   localStorage.setItem('dawBuddyContrast', String(cVal));
