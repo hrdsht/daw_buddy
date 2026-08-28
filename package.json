@@ -29,8 +29,8 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.62.1",
-    "@types/node": "^26.2.0",
-    "electron": "^43.4.1",
+    "@types/node": "^26.3.0",
+    "electron": "^44.0.0",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.2",
     "tsx": "^4.23.12",
