@@ -22,6 +22,7 @@ const { ProjectIndex } = require('../main/lib/projectindex');
 const { ParseCache } = require('../main/lib/cache');
 const { groupVersions } = require('../main/lib/versions');
 const watcher = require('../main/lib/watcher');
+const path = require('path');
 
 export class CatalogueService {
   private currentGenerationId = 0;
@@ -29,8 +30,8 @@ export class CatalogueService {
   private isScanning = false;
   private cancelRequested = false;
   private dataDir = '';
-  private projectIndex: any = null;
-  private parseCache: any = null;
+  private projectIndex: InstanceType<typeof ProjectIndex> | null = null;
+  private parseCache: InstanceType<typeof ParseCache> | null = null;
   private cacheReady: Promise<any> = Promise.resolve();
   private activeRoots: string[] = [];
 
@@ -42,7 +43,6 @@ export class CatalogueService {
 
   public setDataDir(dataDir: string) {
     this.dataDir = dataDir;
-    const path = require('path');
     this.projectIndex = new ProjectIndex(path.join(this.dataDir, 'project-index.json'));
     this.parseCache = new ParseCache(path.join(this.dataDir, 'cache.json'));
     this.cacheReady = this.parseCache.load();
@@ -94,7 +94,7 @@ export class CatalogueService {
           replyToId: cmd.id,
           type: 'WATCH_EVENT',
           generationId: cmd.generationId,
-          payload: { status: 'stopped' }
+          payload: { event: 'status', status: 'stopped' }
         };
 
       default:
@@ -119,14 +119,22 @@ export class CatalogueService {
     this.activeRoots = payload.roots || [];
 
     try {
-      if (progressCallback) {
-        progressCallback({
-          phase: 'discovering',
-          foundProjects: 0,
-          parsedProjects: 0,
-          totalEstimated: 0
+      const emitProgress = (p: ScanProgressPayload) => {
+        if (progressCallback) progressCallback(p);
+        this.emitToSupervisor({
+          replyToId: cmd.id,
+          type: 'SCAN_PROGRESS',
+          generationId: cmd.generationId,
+          payload: p
         });
-      }
+      };
+
+      emitProgress({
+        phase: 'discovering',
+        foundProjects: 0,
+        parsedProjects: 0,
+        totalEstimated: 0
+      });
 
       await this.cacheReady;
       if (this.parseCache) this.parseCache.resetCounters();
@@ -138,15 +146,13 @@ export class CatalogueService {
         cache: this.parseCache,
         onProgress: (p: any) => {
           if (this.cancelRequested) return false;
-          if (progressCallback) {
-            progressCallback({
-              phase: 'parsing',
-              foundProjects: p.found || 0,
-              parsedProjects: p.parsed || 0,
-              totalEstimated: p.total || 0,
-              currentPath: p.current
-            });
-          }
+          emitProgress({
+            phase: 'parsing',
+            foundProjects: p.found || 0,
+            parsedProjects: p.parsed || 0,
+            totalEstimated: p.total || 0,
+            currentPath: p.current
+          });
           return true;
         }
       };
@@ -186,13 +192,14 @@ export class CatalogueService {
           durationMs
         },
         unavailableRoots: result.unavailableRoots || [],
-        truncated: Boolean(result.truncated)
+        truncated: Boolean(result.truncated),
+        errors: result.errors || []
       };
 
       this.currentSnapshot = snapshot;
 
-      // Save index to disk in background
-      if (this.projectIndex && !payload.shallow) {
+      // Save index to disk in background when complete
+      if (this.projectIndex && !payload.shallow && !result.truncated && (!result.errors || result.errors.length === 0)) {
         await this.projectIndex.save(
           { roots: this.activeRoots, ignore: payload.ignore || [], followLinks: payload.followLinks },
           entries
@@ -252,7 +259,7 @@ export class CatalogueService {
       replyToId: cmd.id,
       type: 'WATCH_EVENT',
       generationId: cmd.generationId,
-      payload: { status: 'watching', rootsCount: rootsToWatch.length }
+      payload: { event: 'status', status: 'watching', rootsCount: rootsToWatch.length }
     };
   }
 
@@ -268,7 +275,7 @@ export class CatalogueService {
   }
 }
 
-// Automatically bootstrap listener if executed as an isolated process
+// Automatically bootstrap listener if executed as an isolated utilityProcess
 if (typeof process !== 'undefined') {
   const parentPort = (process as any).parentPort;
   const service = new CatalogueService();
@@ -276,6 +283,7 @@ if (typeof process !== 'undefined') {
   if (parentPort && typeof parentPort.on === 'function') {
     parentPort.on('message', async (e: any) => {
       const cmd: CatalogueCommand = e.data;
+      if (!cmd) return;
       const response = await service.handleCommand(cmd);
       if (response) {
         parentPort.postMessage(response);
@@ -283,6 +291,7 @@ if (typeof process !== 'undefined') {
     });
   } else if (typeof process.on === 'function') {
     process.on('message', async (cmd: any) => {
+      if (!cmd) return;
       const response = await service.handleCommand(cmd);
       if (response && typeof process.send === 'function') {
         process.send(response);

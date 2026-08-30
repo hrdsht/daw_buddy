@@ -26,29 +26,53 @@ async function testCatalogueServiceLifecycle() {
     assert.equal(pingRes.replyToId, 'cmd-1');
     assert.equal(pingRes.generationId, 1);
 
-    // 2. Test Scan on empty directory
-    const scanRes = await service.handleCommand({
-      id: 'cmd-2',
-      type: 'SCAN_ROOTS',
-      generationId: 2,
-      payload: {
-        roots: [tempDir],
-        dataDir: tempDir,
-        shallow: false
-      }
-    });
+    // 2. Test Scan on empty directory with progress tracking
+    const progressEvents = [];
+    const scanRes = await service.executeScan(
+      {
+        id: 'cmd-2',
+        type: 'SCAN_ROOTS',
+        generationId: 2,
+        payload: {
+          roots: [tempDir],
+          dataDir: tempDir,
+          shallow: false
+        }
+      },
+      (p) => progressEvents.push(p)
+    );
 
     assert.equal(scanRes.type, 'SCAN_COMPLETED');
     assert.equal(scanRes.generationId, 2);
     assert.equal(Array.isArray(scanRes.payload.projects), true);
     assert.equal(scanRes.payload.stats.scannedRootsCount, 1);
+    assert.ok(progressEvents.length > 0, 'Should have received scan progress callbacks');
+    assert.equal(progressEvents[0].phase, 'discovering');
 
     // 3. Test Snapshot retrieval
     const snapshot = service.getSnapshot();
     assert.ok(snapshot, 'Snapshot should be stored in service');
     assert.equal(snapshot.generationId, 2);
 
-    console.log('✔ CatalogueService lifecycle, scanning and snapshots verified.');
+    // 4. Test Watch / Unwatch lifecycle
+    const watchRes = await service.handleCommand({
+      id: 'cmd-3',
+      type: 'WATCH_ROOTS',
+      generationId: 3,
+      payload: { roots: [tempDir] }
+    });
+    assert.equal(watchRes.type, 'WATCH_EVENT');
+    assert.equal(watchRes.payload.status, 'watching');
+
+    const unwatchRes = await service.handleCommand({
+      id: 'cmd-4',
+      type: 'UNWATCH_ROOTS',
+      generationId: 4
+    });
+    assert.equal(unwatchRes.type, 'WATCH_EVENT');
+    assert.equal(unwatchRes.payload.status, 'stopped');
+
+    console.log('✔ CatalogueService lifecycle, scanning, progress and snapshots verified.');
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true });
   }

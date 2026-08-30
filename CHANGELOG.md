@@ -5,6 +5,18 @@ All notable changes to DAW Buddy. Format follows
 [semantic versioning](https://semver.org/). Per-release detail (every merged PR)
 is auto-generated on each GitHub Release; this file is the curated summary.
 
+## [0.5.1-beta.6] — 2026-08-30
+
+### Fixed & Enhanced
+- **Resilient Catalogue Supervisor Cutover**:
+  - Full cutover of root scanning and filesystem monitoring (`watcher.ts`) to the isolated `CatalogueService` utility process.
+  - Added automatic supervisor crash detection with bounded exponential backoff recovery (500ms, 1500ms, 4500ms).
+  - Emits `catalogue:degraded` event and falls back to cached `ProjectIndex` snapshots if crash limits (>3 in 30s) are exceeded.
+- **Audio Job Service IPC Integration**:
+  - Wired offline DSP operations (`silence:process`, `finish:process`, `vocal:split`) to dispatch through `AudioJobService` with bounded concurrency, priority queueing, and cancellation.
+- **Strict Protocol Types**:
+  - Replaced loose `any` types with strictly typed discriminated unions and payload interfaces in `catalogue-protocol.ts` and `audio-protocol.ts`.
+
 ## [0.5.1-beta.5] — 2026-08-27
 
 ### Added

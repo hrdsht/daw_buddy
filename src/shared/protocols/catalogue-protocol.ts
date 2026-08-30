@@ -24,17 +24,19 @@ export interface CatalogueProjectFact {
   missingSamplesCount?: number;
 }
 
+export interface CatalogueStats {
+  totalProjects: number;
+  totalAudioCount: number;
+  scannedRootsCount: number;
+  durationMs: number;
+}
+
 export interface CatalogueSnapshot {
   generationId: number;
   timestamp: number;
   roots: string[];
   projects: CatalogueProjectFact[];
-  stats: {
-    totalProjects: number;
-    totalAudioCount: number;
-    scannedRootsCount: number;
-    durationMs: number;
-  };
+  stats: CatalogueStats;
   unavailableRoots?: string[];
   truncated?: boolean;
   errors?: string[];
@@ -49,13 +51,6 @@ export type CatalogueCommandType =
   | 'CANCEL_SCAN'
   | 'PING';
 
-export interface CatalogueCommand<T = any> {
-  id: string;
-  type: CatalogueCommandType;
-  generationId: number;
-  payload?: T;
-}
-
 export interface ScanRootsPayload {
   roots: string[];
   dataDir: string;
@@ -69,6 +64,17 @@ export interface WatchRootsPayload {
   roots: string[];
 }
 
+export interface InitPayload {
+  dataDir: string;
+}
+
+export interface CatalogueCommand<T = any> {
+  id: string;
+  type: CatalogueCommandType;
+  generationId: number;
+  payload?: T;
+}
+
 export type CatalogueEventMessageType =
   | 'SNAPSHOT_UPDATED'
   | 'SCAN_PROGRESS'
@@ -76,14 +82,8 @@ export type CatalogueEventMessageType =
   | 'SCAN_FAILED'
   | 'WATCH_EVENT'
   | 'ROOT_UNAVAILABLE'
+  | 'CATALOGUE_DEGRADED'
   | 'PONG';
-
-export interface CatalogueEventMessage<T = any> {
-  replyToId?: string;
-  type: CatalogueEventMessageType;
-  generationId: number;
-  payload: T;
-}
 
 export interface ScanProgressPayload {
   phase: 'discovering' | 'parsing' | 'indexing' | 'idle';
@@ -91,4 +91,26 @@ export interface ScanProgressPayload {
   parsedProjects: number;
   totalEstimated: number;
   currentPath?: string;
+}
+
+export interface WatchEventPayload {
+  event: 'bounce_detected' | 'projects_changed' | 'status';
+  bounce?: any;
+  paths?: string[];
+  status?: string;
+  rootsCount?: number;
+}
+
+export interface DegradedStatePayload {
+  reason: string;
+  crashCount: number;
+  fallbackAvailable: boolean;
+  restarting: boolean;
+}
+
+export interface CatalogueEventMessage<T = any> {
+  replyToId?: string;
+  type: CatalogueEventMessageType;
+  generationId: number;
+  payload: T;
 }

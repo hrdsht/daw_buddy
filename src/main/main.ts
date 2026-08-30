@@ -49,6 +49,8 @@ const {
 
 // Initialize Crash Logger immediately to catch any startup or lifecycle crashes
 initCrashLogger();
+const { AudioJobService } = require('../services/audio-service');
+const audioJobService = new AudioJobService(1);
 
 // Use standard Chromium GPU acceleration without zero-copy buffer locking
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
@@ -84,6 +86,10 @@ const pendingNoteSaves = new Set();
 let catalogueProcess: any = null;
 let catalogueRequestSequence = 0;
 const pendingCatalogueRequests = new Map<string, { resolve: (value: any) => void; reject: (error: Error) => void }>();
+let catalogueCrashTimestamps: number[] = [];
+const MAX_CATALOGUE_CRASHES = 3;
+const CRASH_WINDOW_MS = 30000;
+let catalogueRestartTimer: NodeJS.Timeout | null = null;
 
 const isMac = process.platform === 'darwin';
 const dataDir = () => app.getPath('userData');
@@ -102,8 +108,47 @@ function ensureCatalogueProcess() {
     serviceName: 'DAW Buddy Catalogue',
     stdio: 'pipe'
   });
+
   child.on('message', (message: any) => {
-    if (!message || !message.replyToId) return;
+    if (!message) return;
+
+    if (message.type === 'SCAN_PROGRESS') {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('projects:progress', message.payload);
+      }
+      return;
+    }
+
+    if (message.type === 'WATCH_EVENT') {
+      const payload = message.payload || {};
+      if (payload.event === 'bounce_detected' && payload.bounce) {
+        const bounce = payload.bounce;
+        console.log(
+          `[bounce] ${bounce.label} rendered in "${bounce.project}" (${(bounce.formats || []).join(' + ')})`
+        );
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('bounce:detected', bounce);
+        }
+        const url = settings?.get()?.webhookUrl;
+        if (url) {
+          webhook.sendWebhook(url, bounce).then((result: any) => {
+            if (result && result.error) {
+              console.error('[webhook] Could not notify:', result.error);
+            }
+          });
+        }
+        triggerBackgroundRescan();
+      } else if (payload.event === 'projects_changed') {
+        const paths = payload.paths || [];
+        console.log(
+          `[watcher] Project saved/modified: ${paths.map((p: string) => path.basename(p)).join(', ')}`
+        );
+        triggerBackgroundRescan();
+      }
+      return;
+    }
+
+    if (!message.replyToId) return;
     const pending = pendingCatalogueRequests.get(message.replyToId);
     if (!pending) return;
     pendingCatalogueRequests.delete(message.replyToId);
@@ -113,10 +158,44 @@ function ensureCatalogueProcess() {
       pending.resolve(message.payload);
     }
   });
-  child.on('exit', (_code: number) => {
+
+  child.on('exit', (code: number) => {
     if (catalogueProcess === child) catalogueProcess = null;
     rejectCatalogueRequests('Catalogue utility process exited');
+
+    if (quitting) return;
+
+    const now = Date.now();
+    catalogueCrashTimestamps = catalogueCrashTimestamps.filter((t) => now - t < CRASH_WINDOW_MS);
+    catalogueCrashTimestamps.push(now);
+
+    console.warn(`[catalogue] Service exited with code ${code}. Crashes in last 30s: ${catalogueCrashTimestamps.length}`);
+
+    if (catalogueCrashTimestamps.length > MAX_CATALOGUE_CRASHES) {
+      console.error('[catalogue] Exceeded crash threshold. Supervisor entering degraded state.');
+      recordCrash('service-crash', `Catalogue utility process crashed ${catalogueCrashTimestamps.length} times in 30s (code ${code})`);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('catalogue:degraded', {
+          reason: `Catalogue service exited repeatedly (code ${code})`,
+          crashCount: catalogueCrashTimestamps.length,
+          fallbackAvailable: true,
+          restarting: false
+        });
+      }
+    } else {
+      // Exponential backoff restart: 500ms, 1500ms, 4500ms
+      const backoffMs = Math.min(500 * Math.pow(3, catalogueCrashTimestamps.length - 1), 5000);
+      if (catalogueRestartTimer) clearTimeout(catalogueRestartTimer);
+      catalogueRestartTimer = setTimeout(() => {
+        if (!quitting && !catalogueProcess) {
+          console.log('[catalogue] Auto-restarting isolated catalogue service...');
+          ensureCatalogueProcess();
+          restartWatcher();
+        }
+      }, backoffMs);
+    }
   });
+
   if (child.stderr) child.stderr.on('data', (data: Buffer) => console.error(`[catalogue] ${data.toString().trim()}`));
   catalogueProcess = child;
   return child;
@@ -630,17 +709,32 @@ function triggerBackgroundRescan() {
 
 function restartWatcher() {
   const current = settings.get();
+  if (process.env.NODE_ENV !== 'test') {
+    try {
+      const child = ensureCatalogueProcess();
+      child.postMessage({
+        id: `watch-${++catalogueRequestSequence}`,
+        type: 'WATCH_ROOTS',
+        generationId: catalogueRequestSequence,
+        payload: { roots: current.roots }
+      });
+      return;
+    } catch (err: any) {
+      console.error('[watcher] Could not delegate watch to utility process; using fallback:', err.message);
+    }
+  }
+
   startWatching(
     current.roots,
-    (bounce) => {
+    (bounce: any) => {
       // One notification per render, however many formats it arrived in.
       console.log(
-        `[bounce] ${bounce.label} rendered in "${bounce.project}" (${bounce.formats.join(' + ')})`
+        `[bounce] ${bounce.label} rendered in "${bounce.project}" (${(bounce.formats || []).join(' + ')})`
       );
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('bounce:detected', bounce);
       }
-      const url = settings.get().webhookUrl;
+      const url = settings?.get()?.webhookUrl;
       if (url) {
         webhook.sendWebhook(url, bounce).then((result: any) => {
           if (result && result.error) {
@@ -650,9 +744,9 @@ function restartWatcher() {
       }
       triggerBackgroundRescan();
     },
-    (changedSessionFiles) => {
+    (changedSessionFiles: string[]) => {
       console.log(
-        `[watcher] Project saved/modified: ${changedSessionFiles.map((p) => path.basename(p)).join(', ')}`
+        `[watcher] Project saved/modified: ${changedSessionFiles.map((p: string) => path.basename(p)).join(', ')}`
       );
       triggerBackgroundRescan();
     },
@@ -1776,9 +1870,24 @@ ipcMain.handle('silence:process', async (event, paths, options) => {
   const results = [];
   for (let i = 0; i < paths.length; i += 1) {
     const sourceRoot = guardApproved(paths[i]);
-    results.push(
-      await silence.removeSilence(paths[i], outputRoot, { ...options, sourceRoot })
-    );
+    const jobRes = await audioJobService.submitJob({
+      jobId: `silence-${Date.now()}-${i}`,
+      type: 'TRIM_SILENCE',
+      generationId: i + 1,
+      payload: {
+        inputPath: paths[i],
+        outputPath: outputRoot,
+        thresholdDb: options?.thresholdDb,
+        sourceRoot
+      }
+    });
+
+    if (jobRes.type === 'JOB_COMPLETED') {
+      results.push(jobRes.payload);
+    } else {
+      results.push({ success: false, path: paths[i], error: jobRes.error });
+    }
+
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('silence:progress', {
         done: i + 1,
@@ -1971,9 +2080,24 @@ ipcMain.handle('finish:process', async (event, paths, options) => {
   const results = [];
   for (let i = 0; i < paths.length; i += 1) {
     const sourceRoot = guardApproved(paths[i]);
-    results.push(
-      await finisher.processFile(paths[i], outputRoot, { ...options, sourceRoot })
-    );
+    const jobRes = await audioJobService.submitJob({
+      jobId: `finish-${Date.now()}-${i}`,
+      type: 'FINISH_AUDIO',
+      generationId: i + 1,
+      payload: {
+        inputPath: paths[i],
+        outputPath: outputRoot,
+        targetLufs: options?.targetLufs,
+        peakLimit: options?.peakLimit
+      }
+    });
+
+    if (jobRes.type === 'JOB_COMPLETED') {
+      results.push(jobRes.payload);
+    } else {
+      results.push({ success: false, path: paths[i], error: jobRes.error });
+    }
+
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('finish:progress', {
         done: i + 1,

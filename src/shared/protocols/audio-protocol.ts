@@ -13,15 +13,8 @@ export type AudioJobType =
   | 'TRIM_SILENCE'
   | 'CONVERT_AUDIO'
   | 'FINISH_AUDIO'
+  | 'VOCAL_SPLIT'
   | 'CANCEL_JOB';
-
-export interface AudioJobRequest<T = any> {
-  jobId: string;
-  type: AudioJobType;
-  generationId: number;
-  priority?: number; // 0 = highest, 10 = lowest (default 5)
-  payload: T;
-}
 
 export interface AnalyzeWaveformPayload {
   filePath: string;
@@ -37,6 +30,7 @@ export interface TrimSilencePayload {
   inputPath: string;
   outputPath: string;
   thresholdDb?: number;
+  sourceRoot?: string;
 }
 
 export interface ConvertAudioPayload {
@@ -55,6 +49,19 @@ export interface FinishAudioPayload {
   peakLimit?: number;
 }
 
+export interface VocalSplitPayload {
+  inputPath: string;
+  options?: any;
+}
+
+export interface AudioJobRequest<T = any> {
+  jobId: string;
+  type: AudioJobType;
+  generationId: number;
+  priority?: number; // 0 = highest, 10 = lowest (default 5)
+  payload: T;
+}
+
 export type AudioJobEventType =
   | 'JOB_STARTED'
   | 'JOB_PROGRESS'
@@ -62,17 +69,17 @@ export type AudioJobEventType =
   | 'JOB_FAILED'
   | 'JOB_CANCELLED';
 
+export interface AudioJobProgressPayload {
+  percent: number;
+  phase: string;
+  processedBytes?: number;
+  totalBytes?: number;
+}
+
 export interface AudioJobEvent<T = any> {
   jobId: string;
   type: AudioJobEventType;
   generationId: number;
   payload?: T;
   error?: string;
-}
-
-export interface AudioJobProgressPayload {
-  percent: number;
-  phase: string;
-  processedBytes?: number;
-  totalBytes?: number;
 }

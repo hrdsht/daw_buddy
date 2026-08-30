@@ -9,12 +9,17 @@
 
 import {
   AudioJobEvent,
-  AudioJobRequest
+  AudioJobRequest,
+  ConvertAudioPayload,
+  FinishAudioPayload,
+  TrimSilencePayload,
+  VocalSplitPayload
 } from '../shared/protocols/audio-protocol';
 
 const { convertAudioFile } = require('../main/lib/convert');
 const { fitSilence } = require('../main/lib/finisher');
 const { trimAudioSilence } = require('../main/lib/trim');
+const vocalSplit = require('../main/lib/vocalSplit');
 
 interface QueuedJob {
   request: AudioJobRequest;
@@ -50,8 +55,8 @@ export class AudioJobService {
     });
   }
 
-  public submitJob(
-    request: AudioJobRequest,
+  public submitJob<T = any>(
+    request: AudioJobRequest<T>,
     onProgress?: (percent: number, phase: string) => void
   ): Promise<AudioJobEvent> {
     return new Promise((resolve, reject) => {
@@ -63,7 +68,7 @@ export class AudioJobService {
       });
 
       // Sort queue by priority (lower number = higher priority)
-      this.queue.sort((a, b) => (a.request.priority || 5) - (b.request.priority || 5));
+      this.queue.sort((a, b) => (a.request.priority ?? 5) - (b.request.priority ?? 5));
 
       this.processNext();
     });
@@ -144,7 +149,7 @@ export class AudioJobService {
   ): Promise<any> {
     switch (req.type) {
       case 'CONVERT_AUDIO': {
-        const p = req.payload;
+        const p = req.payload as ConvertAudioPayload;
         progress(10, 'Initializing audio convert');
         const res = await convertAudioFile(p.inputPath, p.outputPath, {
           format: p.targetFormat,
@@ -158,23 +163,32 @@ export class AudioJobService {
       }
 
       case 'TRIM_SILENCE': {
-        const p = req.payload;
+        const p = req.payload as TrimSilencePayload;
         progress(20, 'Analyzing audio waveform for silence');
         const res = await trimAudioSilence(p.inputPath, p.outputPath, {
-          thresholdDb: p.thresholdDb || -50
+          thresholdDb: p.thresholdDb || -50,
+          sourceRoot: p.sourceRoot
         });
         progress(100, 'Trim complete');
         return res;
       }
 
       case 'FINISH_AUDIO': {
-        const p = req.payload;
+        const p = req.payload as FinishAudioPayload;
         progress(25, 'Calculating peak normalization & loudness');
         const res = await fitSilence(p.inputPath, p.outputPath, {
           targetLufs: p.targetLufs || -14,
           peakLimit: p.peakLimit || -0.3
         });
         progress(100, 'Audio finishing complete');
+        return res;
+      }
+
+      case 'VOCAL_SPLIT': {
+        const p = req.payload as VocalSplitPayload;
+        progress(20, 'Analyzing vocal transients & pauses');
+        const res = await vocalSplit.splitVocal(p.inputPath, p.options);
+        progress(100, 'Vocal split complete');
         return res;
       }
 
