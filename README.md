@@ -5,7 +5,7 @@
 [![Tests](https://img.shields.io/badge/tests-31%20passing-brightgreen.svg)](https://github.com/hrdsht/daw_buddy/actions)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue.svg)](https://github.com/hrdsht/daw_buddy/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/hrdsht/daw_buddy/blob/main/LICENSE)
-[![Version](https://img.shields.io/badge/version-v0.5.1--beta.4-orange.svg)](https://github.com/hrdsht/daw_buddy/releases)
+[![Version](https://img.shields.io/badge/version-v0.5.1--beta.7-orange.svg)](https://github.com/hrdsht/daw_buddy/releases)
 [![Gumroad](https://img.shields.io/badge/Gumroad-Get%20Free%20Download-ff90e8.svg?logo=gumroad&logoColor=white)](https://7675947827359.gumroad.com/l/daw_buddy)
 [![Website](https://img.shields.io/badge/Webpage-dawbuddy.ba55ick.com-2dd4bf.svg)](https://dawbuddy.ba55ick.com)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-ba55ick-FFDD00.svg?style=flat&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/ba55ick)
@@ -113,7 +113,7 @@ Then run it:
 
   If it mentions FUSE, run `./DAW.Buddy-*.AppImage --appimage-extract-and-run`, or just install the `.deb` / `.rpm` instead.
 
-> Installers are **unsigned** for now, so that one-time OS warning is expected. Code signing is planned — see `docs/proposals/0008-code-signing.md`.
+> Installers are **unsigned** for now, so that one-time OS warning is expected. Code signing is planned — see `docs/proposals/0003-code-signing.md`.
 
 > [!NOTE]
 > **📢 Help Test macOS & Linux Builds!**

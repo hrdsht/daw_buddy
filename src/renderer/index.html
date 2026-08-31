@@ -12,15 +12,7 @@
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
       rel="stylesheet"
-      media="print"
-      onload="this.media='all'"
     />
-    <noscript>
-      <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
-        rel="stylesheet"
-      />
-    </noscript>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
@@ -378,10 +370,10 @@
           />
 
           <div style="display: flex; justify-content: space-between; font-size: 10.5px; color: var(--dim); user-select: none; margin-top: 2px;">
-            <span style="cursor: pointer;" onclick="document.getElementById('animScaleRangeSlider').value='0'; document.getElementById('animScaleRangeSlider').dispatchEvent(new Event('input'))">0x (Off)</span>
-            <span style="cursor: pointer;" onclick="document.getElementById('animScaleRangeSlider').value='1'; document.getElementById('animScaleRangeSlider').dispatchEvent(new Event('input'))">0.25x</span>
-            <span style="cursor: pointer;" onclick="document.getElementById('animScaleRangeSlider').value='2'; document.getElementById('animScaleRangeSlider').dispatchEvent(new Event('input'))">0.50x</span>
-            <span style="cursor: pointer;" onclick="document.getElementById('animScaleRangeSlider').value='3'; document.getElementById('animScaleRangeSlider').dispatchEvent(new Event('input'))">1.0x (Full)</span>
+            <span class="anim-scale-preset" style="cursor: pointer;" data-step="0">0x (Off)</span>
+            <span class="anim-scale-preset" style="cursor: pointer;" data-step="1">0.25x</span>
+            <span class="anim-scale-preset" style="cursor: pointer;" data-step="2">0.50x</span>
+            <span class="anim-scale-preset" style="cursor: pointer;" data-step="3">1.0x (Full)</span>
           </div>
         </div>
 

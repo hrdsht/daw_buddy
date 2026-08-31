@@ -150,5 +150,17 @@ export function initSettingsSheet(ctx: SettingsSheetContext) {
     });
   }
 
+  // Animation scale step presets (CSP safe)
+  const animScaleRangeSlider = $('animScaleRangeSlider') as HTMLInputElement | null;
+  document.querySelectorAll('.anim-scale-preset').forEach((presetEl) => {
+    presetEl.addEventListener('click', () => {
+      const step = presetEl.getAttribute('data-step');
+      if (step !== null && animScaleRangeSlider) {
+        animScaleRangeSlider.value = step;
+        animScaleRangeSlider.dispatchEvent(new Event('input'));
+      }
+    });
+  });
+
   return { openSheet, closeSheet };
 }

@@ -57,7 +57,7 @@ people/agents bumped the version independently, without thinking. Stop that.
    hand** — that's what let versions race.
 
 8. **Releases stay `--prerelease` until the app is code-signed** (macOS
-   Gatekeeper / Windows SmartScreen). See `docs/proposals/0008-code-signing.md`.
+   Gatekeeper / Windows SmartScreen). See `docs/proposals/0003-code-signing.md`.
 
 9. **Keep `CHANGELOG.md` current.** Note user-facing changes under
    `[Unreleased]` as you go; on release, move them under the new version.

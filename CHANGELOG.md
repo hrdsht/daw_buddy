@@ -5,6 +5,21 @@ All notable changes to DAW Buddy. Format follows
 [semantic versioning](https://semver.org/). Per-release detail (every merged PR)
 is auto-generated on each GitHub Release; this file is the curated summary.
 
+## [0.5.1-beta.7] — 2026-08-31
+
+### Fixed & Enhanced
+- **Audio Job Service Runtime Routing & Exports**:
+  - Repaired module import destructuring in `audio-service.ts` to correctly bind `removeSilence` from `silence.ts`, `processFile` from `finisher.ts`, and `renderJob` from `convert.ts`.
+  - Fixed options forwarding across IPC in `main.ts` so user parameters (`thresholdDb`, `normalize`, `targetPeakDb`, `trimToBars`, `bpm`, `bars`, etc.) properly reach DSP worker engines.
+- **Workload Isolation Validation**:
+  - Expanded `workload-isolation.test.js` with comprehensive synthesized PCM audio test cases verifying end-to-end execution, output file generation, and typed job event lifecycles.
+- **CSP Inline Event Handler Violations**:
+  - Eliminated inline `onclick` event handlers from animation speed scale preset buttons in `index.html` and removed `onload` from stylesheet tags, moving handlers to standard event listeners in `settings-sheet.ts`.
+- **Documentation & Release Metadata**:
+  - Corrected code signing proposal links (`0008` → `0003-code-signing.md`) in `README.md` and `RULES.md`.
+  - Updated Proposal 0005 status to `Accepted`.
+  - Synced changelog comparison targets.
+
 ## [0.5.1-beta.6] — 2026-08-30
 
 ### Fixed & Enhanced
@@ -237,7 +252,18 @@ First public (pre-release) build.
 - Bounce watcher with optional Discord/Slack/Zapier webhooks.
 - Cross-platform installers built automatically per release.
 
-[Unreleased]: https://github.com/hrdsht/daw_buddy/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/hrdsht/daw_buddy/compare/v0.5.1-beta.7...HEAD
+[0.5.1-beta.7]: https://github.com/hrdsht/daw_buddy/releases/tag/v0.5.1-beta.7
+[0.5.1-beta.6]: https://github.com/hrdsht/daw_buddy/releases/tag/v0.5.1-beta.6
+[0.5.1-beta.5]: https://github.com/hrdsht/daw_buddy/releases/tag/v0.5.1-beta.5
+[0.5.1-beta.4]: https://github.com/hrdsht/daw_buddy/releases/tag/v0.5.1-beta.4
+[0.5.1-beta.3]: https://github.com/hrdsht/daw_buddy/releases/tag/v0.5.1-beta.3
+[0.5.1-beta.2]: https://github.com/hrdsht/daw_buddy/releases/tag/v0.5.1-beta.2
+[0.5.1-beta.1]: https://github.com/hrdsht/daw_buddy/releases/tag/v0.5.1-beta.1
+[0.5.0-beta.2]: https://github.com/hrdsht/daw_buddy/releases/tag/v0.5.0-beta.2
+[0.5.0-beta]: https://github.com/hrdsht/daw_buddy/releases/tag/v0.5.0-beta
+[0.4.9-beta]: https://github.com/hrdsht/daw_buddy/releases/tag/v0.4.9-beta
+[0.4.8-beta]: https://github.com/hrdsht/daw_buddy/releases/tag/v0.4.8-beta
 [0.4.2]: https://github.com/hrdsht/daw_buddy/releases/tag/v0.4.2
 [0.2.0]: https://github.com/hrdsht/daw_buddy/releases/tag/v0.2.0
 [0.1.0]: https://github.com/hrdsht/daw_buddy/releases/tag/v0.1.0

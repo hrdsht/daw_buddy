@@ -31,6 +31,11 @@ export interface TrimSilencePayload {
   outputPath: string;
   thresholdDb?: number;
   sourceRoot?: string;
+  detection?: string;
+  where?: string;
+  headMs?: number;
+  tailMs?: number;
+  [key: string]: any;
 }
 
 export interface ConvertAudioPayload {
@@ -40,13 +45,22 @@ export interface ConvertAudioPayload {
   bitrate?: number;
   sampleRate?: number;
   splitSilence?: boolean;
+  [key: string]: any;
 }
 
 export interface FinishAudioPayload {
   inputPath: string;
   outputPath: string;
+  sourceRoot?: string;
+  normalize?: boolean;
+  trimToBars?: boolean;
+  targetPeakDb?: number;
+  bpm?: number;
+  bars?: number;
+  beatsPerBar?: number;
   targetLufs?: number;
   peakLimit?: number;
+  [key: string]: any;
 }
 
 export interface VocalSplitPayload {

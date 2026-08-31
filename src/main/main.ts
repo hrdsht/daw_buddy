@@ -1875,6 +1875,7 @@ ipcMain.handle('silence:process', async (event, paths, options) => {
       type: 'TRIM_SILENCE',
       generationId: i + 1,
       payload: {
+        ...(options || {}),
         inputPath: paths[i],
         outputPath: outputRoot,
         thresholdDb: options?.thresholdDb,
@@ -2085,8 +2086,10 @@ ipcMain.handle('finish:process', async (event, paths, options) => {
       type: 'FINISH_AUDIO',
       generationId: i + 1,
       payload: {
+        ...(options || {}),
         inputPath: paths[i],
         outputPath: outputRoot,
+        sourceRoot,
         targetLufs: options?.targetLufs,
         peakLimit: options?.peakLimit
       }

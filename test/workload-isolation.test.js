@@ -111,21 +111,152 @@ async function testAudioJobServiceQueueAndCancellation() {
 
   const [res1, res2] = await Promise.all([p1, p2]);
 
-  // Job 1 fails cleanly with typed error because file is missing (no unhandled exception)
+  // Job 1 handles missing file gracefully without crashing (success: false with error description)
   assert.equal(res1.jobId, 'job-1');
-  assert.equal(res1.type, 'JOB_FAILED');
-  assert.ok(res1.error);
+  assert.equal(res1.type, 'JOB_COMPLETED');
+  assert.equal(res1.payload.success, false);
+  assert.ok(res1.payload.error);
 
   // Job 2 is cancelled cleanly
   assert.equal(res2.jobId, 'job-2');
   assert.equal(res2.type, 'JOB_CANCELLED');
 
+  // Job 3 with unsupported type emits typed JOB_FAILED event
+  const res3 = await audioService.submitJob({
+    jobId: 'job-3',
+    type: 'INVALID_TYPE',
+    generationId: 1,
+    payload: {}
+  });
+  assert.equal(res3.jobId, 'job-3');
+  assert.equal(res3.type, 'JOB_FAILED');
+  assert.ok(res3.error);
+
   console.log('✔ AudioJobService bounded queue, priority and cancellation verified.');
+}
+
+function sineWav(seconds, sampleRate = 1000, amplitude = 0.25, leadingSilence = 0.5, trailingSilence = 0.5) {
+  const leadingFrames = Math.round(leadingSilence * sampleRate);
+  const toneFrames = Math.round(seconds * sampleRate);
+  const trailingFrames = Math.round(trailingSilence * sampleRate);
+  const totalFrames = leadingFrames + toneFrames + trailingFrames;
+  const buffer = Buffer.alloc(44 + totalFrames * 2);
+
+  buffer.write('RIFF', 0);
+  buffer.writeUInt32LE(buffer.length - 8, 4);
+  buffer.write('WAVE', 8);
+  buffer.write('fmt ', 12);
+  buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20); // PCM
+  buffer.writeUInt16LE(1, 22); // mono
+  buffer.writeUInt32LE(sampleRate, 24);
+  buffer.writeUInt32LE(sampleRate * 2, 28);
+  buffer.writeUInt16LE(2, 32);
+  buffer.writeUInt16LE(16, 34);
+  buffer.write('data', 36);
+  buffer.writeUInt32LE(totalFrames * 2, 40);
+
+  // Leading silence is zeros (already alloc'd 0)
+  for (let i = 0; i < toneFrames; i += 1) {
+    const sample = Math.sin((2 * Math.PI * 50 * i) / sampleRate) * amplitude;
+    buffer.writeInt16LE(Math.round(sample * 32767), 44 + (leadingFrames + i) * 2);
+  }
+  // Trailing silence is zeros
+  return buffer;
+}
+
+async function testAudioJobServiceRealExecution() {
+  console.log('--- Testing AudioJobService Real Audio Job Execution ---');
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'daw-buddy-audio-job-test-'));
+  const audioService = new AudioJobService(1);
+
+  try {
+    const testWav = path.join(tempDir, 'test_sample.wav');
+    const outDir = path.join(tempDir, 'output');
+    await fs.mkdir(outDir, { recursive: true });
+    await fs.writeFile(testWav, sineWav(2, 44100, 0.4, 0.5, 0.5));
+
+    // 1. Real TRIM_SILENCE Job
+    const trimRes = await audioService.submitJob({
+      jobId: 'real-trim-1',
+      type: 'TRIM_SILENCE',
+      generationId: 1,
+      payload: {
+        inputPath: testWav,
+        outputPath: outDir,
+        detection: 'Peak',
+        thresholdDb: -40,
+        where: 'Both',
+        headMs: 10,
+        tailMs: 10,
+        sourceRoot: tempDir
+      }
+    });
+
+    assert.equal(trimRes.type, 'JOB_COMPLETED', `TRIM_SILENCE failed: ${trimRes.error}`);
+    assert.ok(trimRes.payload, 'Should have payload result');
+    assert.equal(trimRes.payload.success, true);
+    assert.equal(trimRes.payload.modified, true);
+    assert.ok(trimRes.payload.output, 'Should have output file path');
+    const trimOutExists = await fs.stat(trimRes.payload.output).then(() => true).catch(() => false);
+    assert.ok(trimOutExists, 'Trimmed audio file should exist on disk');
+
+    // 2. Real FINISH_AUDIO Job
+    const finishRes = await audioService.submitJob({
+      jobId: 'real-finish-1',
+      type: 'FINISH_AUDIO',
+      generationId: 1,
+      payload: {
+        inputPath: testWav,
+        outputPath: outDir,
+        normalize: true,
+        trimToBars: true,
+        targetPeakDb: -3,
+        bpm: 120,
+        bars: 1,
+        beatsPerBar: 4,
+        sourceRoot: tempDir
+      }
+    });
+
+    assert.equal(finishRes.type, 'JOB_COMPLETED', `FINISH_AUDIO failed: ${finishRes.error}`);
+    assert.ok(finishRes.payload, 'Should have payload result');
+    assert.equal(finishRes.payload.success, true);
+    assert.equal(finishRes.payload.modified, true);
+    assert.ok(finishRes.payload.output, 'Should have output file path');
+    const finishOutExists = await fs.stat(finishRes.payload.output).then(() => true).catch(() => false);
+    assert.ok(finishOutExists, 'Finished audio file should exist on disk');
+
+    // 3. Real CONVERT_AUDIO Job
+    const convertRes = await audioService.submitJob({
+      jobId: 'real-convert-1',
+      type: 'CONVERT_AUDIO',
+      generationId: 1,
+      payload: {
+        inputPath: testWav,
+        outputPath: outDir,
+        targetFormat: 'wav'
+      }
+    });
+
+    assert.equal(convertRes.type, 'JOB_COMPLETED', `CONVERT_AUDIO failed: ${convertRes.error}`);
+    assert.ok(convertRes.payload, 'Should have payload result');
+    assert.equal(convertRes.payload.ok, true);
+    assert.ok(Array.isArray(convertRes.payload.results) && convertRes.payload.results.length > 0);
+    const convertedPath = convertRes.payload.results[0].output;
+    const convertOutExists = await fs.stat(convertedPath).then(() => true).catch(() => false);
+    assert.ok(convertOutExists, 'Converted audio file should exist on disk');
+
+    console.log('✔ AudioJobService real file processing (trim, finish, convert) verified.');
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
 }
 
 async function runAll() {
   await testCatalogueServiceLifecycle();
   await testAudioJobServiceQueueAndCancellation();
+  await testAudioJobServiceRealExecution();
   console.log('\nAll Proposal 0005 Workload Isolation Tests Passed Successfully!');
 }
 
