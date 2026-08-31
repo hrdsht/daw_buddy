@@ -5,6 +5,14 @@ All notable changes to DAW Buddy. Format follows
 [semantic versioning](https://semver.org/). Per-release detail (every merged PR)
 is auto-generated on each GitHub Release; this file is the curated summary.
 
+## [0.5.1-beta.8] — 2026-08-31
+
+### Fixed
+- **Audio Conversion Option Handling & Fallbacks**:
+  - Repaired `sampleRate` and `channels` undefined key propagation in `audio-service.ts`, ensuring missing fields default to `null` to preserve source rates and channel counts without requiring `ffmpeg`.
+  - Added loose null checks (`== null`) in `convert.ts` for defensive handling of `null`/`undefined` options.
+  - Validated test suite in clean non-ffmpeg environments.
+
 ## [0.5.1-beta.7] — 2026-08-31
 
 ### Fixed & Enhanced
@@ -252,7 +260,8 @@ First public (pre-release) build.
 - Bounce watcher with optional Discord/Slack/Zapier webhooks.
 - Cross-platform installers built automatically per release.
 
-[Unreleased]: https://github.com/hrdsht/daw_buddy/compare/v0.5.1-beta.7...HEAD
+[Unreleased]: https://github.com/hrdsht/daw_buddy/compare/v0.5.1-beta.8...HEAD
+[0.5.1-beta.8]: https://github.com/hrdsht/daw_buddy/releases/tag/v0.5.1-beta.8
 [0.5.1-beta.7]: https://github.com/hrdsht/daw_buddy/releases/tag/v0.5.1-beta.7
 [0.5.1-beta.6]: https://github.com/hrdsht/daw_buddy/releases/tag/v0.5.1-beta.6
 [0.5.1-beta.5]: https://github.com/hrdsht/daw_buddy/releases/tag/v0.5.1-beta.5

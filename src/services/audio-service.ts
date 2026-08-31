@@ -151,17 +151,23 @@ export class AudioJobService {
       case 'CONVERT_AUDIO': {
         const p = req.payload as ConvertAudioPayload;
         progress(10, 'Initializing audio convert');
+        const convertOptions: Record<string, any> = {
+          format: p.targetFormat || p.format || 'wav',
+          enableSplit: p.enableSplit ?? false,
+          sampleRate: p.sampleRate ?? null,
+          channels: p.channels ?? null,
+        };
+        if (p.bitrate !== undefined) convertOptions.bitrate = p.bitrate;
+        if (p.splitSilence !== undefined) convertOptions.splitSilence = p.splitSilence;
+        for (const [k, v] of Object.entries(p)) {
+          if (v !== undefined && convertOptions[k] === undefined && k !== 'inputPath' && k !== 'outputPath') {
+            convertOptions[k] = v;
+          }
+        }
         const res = await convert.renderJob(
           [p.inputPath],
           p.outputPath,
-          {
-            format: p.targetFormat || 'wav',
-            bitrate: p.bitrate,
-            sampleRate: p.sampleRate,
-            splitSilence: p.splitSilence,
-            enableSplit: p.enableSplit ?? false,
-            ...p
-          },
+          convertOptions,
           (done: number, total: number) => {
             const pct = Math.round((done / Math.max(1, total)) * 100);
             progress(pct, 'Encoding audio');

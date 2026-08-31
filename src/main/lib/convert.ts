@@ -191,8 +191,8 @@ async function planJob(files, requested: Record<string, any> = {}) {
   const sourceRate = rates[0];
   const sourceChannels = counts[0];
 
-  if (options.sampleRate === null) options.sampleRate = sourceRate;
-  if (options.channels === null) options.channels = sourceChannels;
+  if (options.sampleRate == null) options.sampleRate = sourceRate;
+  if (options.channels == null) options.channels = sourceChannels;
 
   const warnings = [];
   if (rates.length > 1) {
