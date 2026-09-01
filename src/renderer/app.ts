@@ -11834,11 +11834,21 @@ function renderRandomizerTool(entry: any = null) {
   keyActionsRow.append(dragScaleMidiBtn);
 
   keyCard.append(keyActionsRow);
+  scaleSearchPanel.addEventListener('click', (e) => e.stopPropagation());
+  scaleSearchPanel.addEventListener('mousedown', (e) => e.stopPropagation());
+
   keyCard.addEventListener('click', (e) => {
-    // Only toggle playback if clicked on the card background, not child controls
-    if ((e.target as HTMLElement).tagName !== 'BUTTON') {
-      playScaleAction();
+    const target = e.target as HTMLElement;
+    if (
+      target.closest('.scale-search-panel') ||
+      target.closest('button') ||
+      target.closest('input') ||
+      target.closest('select') ||
+      target.closest('.scale-search-toggle-btn')
+    ) {
+      return;
     }
+    playScaleAction();
   });
   metricsGrid.append(keyCard);
 
@@ -11856,6 +11866,8 @@ function renderRandomizerTool(entry: any = null) {
 
   const timeSigPickerPanel = el('div', 'timesig-picker-panel');
   timeSigPickerPanel.style.display = 'none';
+  timeSigPickerPanel.addEventListener('click', (e) => e.stopPropagation());
+  timeSigPickerPanel.addEventListener('mousedown', (e) => e.stopPropagation());
 
   timeSigPickerPanel.append(el('div', 'timesig-picker-label', 'Custom Time Signature'));
 
@@ -11867,6 +11879,16 @@ function renderRandomizerTool(entry: any = null) {
   numInput.min = '1';
   numInput.max = '16';
   numInput.value = String(curNum || 4);
+  numInput.addEventListener('click', (e) => e.stopPropagation());
+  numInput.addEventListener('mousedown', (e) => e.stopPropagation());
+  numInput.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') {
+      applyTimeSigBtn.click();
+    } else if (e.key === 'Escape') {
+      cancelTimeSigBtn.click();
+    }
+  });
 
   const dividerSpan = el('span', 'timesig-divider', '/');
 
@@ -11878,6 +11900,9 @@ function renderRandomizerTool(entry: any = null) {
     if (d === (curDen || 4)) opt.selected = true;
     denSelect.appendChild(opt);
   });
+  denSelect.addEventListener('click', (e) => e.stopPropagation());
+  denSelect.addEventListener('mousedown', (e) => e.stopPropagation());
+  denSelect.addEventListener('change', (e) => e.stopPropagation());
 
   pickerRow.append(numInput, dividerSpan, denSelect);
   timeSigPickerPanel.append(pickerRow);
@@ -11987,12 +12012,20 @@ function renderRandomizerTool(entry: any = null) {
 
   meterCard.append(meterActionsRow);
   meterCard.addEventListener('click', (e) => {
-    if ((e.target as HTMLElement).tagName !== 'BUTTON') {
-      Player.setMetronomeBpm(state.bpm);
-      Player.setMetronomeSignature(state.timeSignature);
-      Player.setMetronome(!Player.isMetronome());
-      renderRandomizerTool(entry);
+    const target = e.target as HTMLElement;
+    if (
+      target.closest('.timesig-picker-panel') ||
+      target.closest('button') ||
+      target.closest('input') ||
+      target.closest('select') ||
+      target.closest('.timesig-custom-btn')
+    ) {
+      return;
     }
+    Player.setMetronomeBpm(state.bpm);
+    Player.setMetronomeSignature(state.timeSignature);
+    Player.setMetronome(!Player.isMetronome());
+    renderRandomizerTool(entry);
   });
   metricsGrid.append(meterCard);
 

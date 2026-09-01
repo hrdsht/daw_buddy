@@ -5,6 +5,11 @@ All notable changes to DAW Buddy. Format follows
 [semantic versioning](https://semver.org/). Per-release detail (every merged PR)
 is auto-generated on each GitHub Release; this file is the curated summary.
 
+## [0.5.1-beta.9] — 2026-09-01
+
+### Fixed
+- **Custom Time Signature & Scale Picker Interaction**: Fixed an event propagation issue in the randomizer meter card where clicking custom time signature inputs, step buttons, or dropdowns bubbled up and triggered metronome toggle playback and panel closure.
+- **Card Event Isolation**: Added comprehensive click and mousedown event stops and target guards across time signature picker and scale search picker panels.
 ## [0.5.1-beta.8] — 2026-08-31
 
 ### Fixed
@@ -260,7 +265,8 @@ First public (pre-release) build.
 - Bounce watcher with optional Discord/Slack/Zapier webhooks.
 - Cross-platform installers built automatically per release.
 
-[Unreleased]: https://github.com/hrdsht/daw_buddy/compare/v0.5.1-beta.8...HEAD
+[Unreleased]: https://github.com/hrdsht/daw_buddy/compare/v0.5.1-beta.9...HEAD
+[0.5.1-beta.9]: https://github.com/hrdsht/daw_buddy/releases/tag/v0.5.1-beta.9
 [0.5.1-beta.8]: https://github.com/hrdsht/daw_buddy/releases/tag/v0.5.1-beta.8
 [0.5.1-beta.7]: https://github.com/hrdsht/daw_buddy/releases/tag/v0.5.1-beta.7
 [0.5.1-beta.6]: https://github.com/hrdsht/daw_buddy/releases/tag/v0.5.1-beta.6
