@@ -27,6 +27,9 @@ Thumbs.db
 # Local knowledge graph / tools
 graphify-out/
 
+# Local skill scratch (handoffs, local tickets, throwaway prototypes)
+.scratch/
+
 # Standalone product showcase website
 website/
 
