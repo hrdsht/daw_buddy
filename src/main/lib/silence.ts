@@ -25,9 +25,10 @@ const DEFAULTS = {
   windowMs: 50 // RMS averaging window
 };
 
-// PCM integer and IEEE float. Anything else is compressed.
+// PCM integer, IEEE float, and WAVE_FORMAT_EXTENSIBLE.
 const FORMAT_PCM = 1;
 const FORMAT_FLOAT = 3;
+const FORMAT_EXTENSIBLE = 0xfffe;
 
 function dbToLinear(db) {
   return Math.pow(10, db / 20);
@@ -47,7 +48,7 @@ function dbToLinear(db) {
  *   chunk first. Assuming a 44-byte header and writing the size at offset 40
  *   scribbles over that chunk and produces a file most players reject.
  */
-function parseWav(buf) {
+function parseWav(buf, options: { headerOnly?: boolean } = {}) {
   if (
     buf.length < 44 ||
     buf.toString('ascii', 0, 4) !== 'RIFF' ||
@@ -73,10 +74,19 @@ function parseWav(buf) {
     if (chunkId === 'fmt ') {
       if (pos + 8 + 16 > buf.length) return { error: 'Truncated fmt chunk' };
 
-      const audioFormat = buf.readUInt16LE(pos + 8);
+      const rawAudioFormat = buf.readUInt16LE(pos + 8);
       const numChannels = buf.readUInt16LE(pos + 10);
       const sampleRate = buf.readUInt32LE(pos + 12);
       const bitsPerSample = buf.readUInt16LE(pos + 22);
+
+      let audioFormat = rawAudioFormat;
+      if (rawAudioFormat === FORMAT_EXTENSIBLE && pos + 8 + 26 <= buf.length) {
+        // SubFormat GUID first 2 bytes contain the underlying sub-format code (1=PCM, 3=FLOAT)
+        const subFormat = buf.readUInt16LE(pos + 8 + 24);
+        if (subFormat === FORMAT_PCM || subFormat === FORMAT_FLOAT) {
+          audioFormat = subFormat;
+        }
+      }
 
       if (audioFormat !== FORMAT_PCM && audioFormat !== FORMAT_FLOAT) {
         return { error: 'Unsupported format: audio is compressed' };
@@ -104,12 +114,12 @@ function parseWav(buf) {
 
   if (!fmt || dataOffset === -1) return { error: 'Missing format or data chunks' };
 
-  // A truncated file can declare more data than it holds.
+  const declaredDataSize = dataSize;
   const available = buf.length - dataOffset;
-  if (dataSize > available) dataSize = available;
-  if (dataSize <= 0) return { error: 'Data chunk is empty' };
+  if (!options.headerOnly && dataSize > available) dataSize = available;
+  if (dataSize <= 0 && (!options.headerOnly || declaredDataSize <= 0)) return { error: 'Data chunk is empty' };
 
-  return { fmt, dataOffset, dataSize, leading };
+  return { fmt, dataOffset, dataSize: options.headerOnly ? declaredDataSize : dataSize, declaredDataSize, leading };
 }
 
 /**
@@ -527,6 +537,153 @@ async function measure(inputPath) {
   };
 }
 
+/**
+ * Detects whether a WAV file is genuinely empty (0 bytes, header-only, or pure digital silence DAW bounce).
+ * Designed to be fast, multi-probed across the entire duration, with full-sweep verification
+ * before declaring digital silence, completely preventing false positives on stems with silent intros.
+ */
+async function detectEmptyTrack(filePath: string): Promise<{ isEmpty: boolean; emptyReason?: string; sizeBytes: number; peakDb?: number }> {
+  let fd: any = null;
+  try {
+    const stat = await fs.stat(filePath);
+    const sizeBytes = stat.size || 0;
+    if (sizeBytes === 0) {
+      return { isEmpty: true, emptyReason: '0-byte empty file', sizeBytes: 0, peakDb: -Infinity };
+    }
+
+    const ext = path.extname(filePath).toLowerCase();
+    if (ext !== '.wav') {
+      return { isEmpty: false, sizeBytes };
+    }
+
+    if (sizeBytes <= 44) {
+      return { isEmpty: true, emptyReason: 'Empty WAV header (no data)', sizeBytes, peakDb: -Infinity };
+    }
+
+    fd = await fs.open(filePath, 'r');
+    const headerBuf = Buffer.alloc(Math.min(65536, sizeBytes));
+    const { bytesRead } = await fd.read(headerBuf, 0, headerBuf.length, 0);
+    const subBuf = headerBuf.subarray(0, bytesRead);
+
+    const parsed = parseWav(subBuf, { headerOnly: true });
+    if (parsed.error) {
+      if (parsed.error.toLowerCase().includes('empty') || parsed.error.toLowerCase().includes('missing')) {
+        return { isEmpty: true, emptyReason: parsed.error, sizeBytes, peakDb: -Infinity };
+      }
+      return { isEmpty: false, sizeBytes };
+    }
+
+    if (!parsed.fmt || parsed.dataOffset < 0) {
+      return { isEmpty: false, sizeBytes };
+    }
+
+    const { fmt, dataOffset } = parsed;
+    const declaredData = parsed.declaredDataSize !== undefined ? parsed.declaredDataSize : parsed.dataSize;
+    const audioDataSize = Math.min(declaredData, Math.max(0, sizeBytes - dataOffset));
+
+    if (audioDataSize <= 0) {
+      return { isEmpty: true, emptyReason: 'Empty WAV data (0 frames)', sizeBytes, peakDb: -Infinity };
+    }
+
+    const bytesPerSample = Math.max(1, Math.floor(fmt.bitsPerSample / 8));
+    const blockAlign = fmt.blockAlign || (fmt.numChannels * bytesPerSample);
+    const toDb = (v: number) => (v > 0 ? 20 * Math.log10(v) : -Infinity);
+
+    // Stage 1: Fast distributed multi-probing across the entire track timeline (0% to 100%)
+    const numProbes = 48;
+    const probeChunkSize = Math.min(16384, Math.max(4096, blockAlign * 1024));
+    const probeBuf = Buffer.alloc(probeChunkSize);
+    let peak = 0;
+
+    for (let p = 0; p < numProbes; p++) {
+      const fraction = p / (numProbes - 1);
+      const targetPos = dataOffset + Math.floor((Math.max(0, audioDataSize - probeChunkSize)) * fraction);
+      const alignedPos = dataOffset + Math.floor((targetPos - dataOffset) / blockAlign) * blockAlign;
+      if (alignedPos >= sizeBytes) continue;
+
+      const { bytesRead: pRead } = await fd.read(probeBuf, 0, probeChunkSize, alignedPos);
+      const chunk = probeBuf.subarray(0, pRead);
+      for (let offset = 0; offset + bytesPerSample <= chunk.length; offset += blockAlign) {
+        const mag = readMagnitude(chunk, offset, fmt);
+        if (!Number.isNaN(mag) && Number.isFinite(mag) && mag > peak) {
+          peak = mag;
+        }
+      }
+      if (peak > 0.0001) {
+        return { isEmpty: false, sizeBytes, peakDb: toDb(peak) };
+      }
+    }
+
+    // Stage 2: Verification sweep
+    // If all distributed probes showed 0, verify the entire stream to distinguish
+    // between genuine 100% digital silence DAW bounces and sparse audio tracks.
+    const sweepChunkSize = 131072; // 128 KB
+    const sweepBuf = Buffer.alloc(sweepChunkSize);
+    let curPos = dataOffset;
+    const endPos = dataOffset + audioDataSize;
+
+    while (curPos < endPos) {
+      const toRead = Math.min(sweepChunkSize, endPos - curPos);
+      const { bytesRead: sRead } = await fd.read(sweepBuf, 0, toRead, curPos);
+      if (sRead <= 0) break;
+      const chunk = sweepBuf.subarray(0, sRead);
+
+      let hasNonZero = false;
+      const u64Count = Math.floor(chunk.length / 8);
+      const u64 = new BigUint64Array(chunk.buffer, chunk.byteOffset, u64Count);
+      for (let i = 0; i < u64Count; i++) {
+        if (u64[i] !== 0n) {
+          hasNonZero = true;
+          break;
+        }
+      }
+      if (!hasNonZero) {
+        for (let i = u64Count * 8; i < chunk.length; i++) {
+          if (chunk[i] !== 0) {
+            hasNonZero = true;
+            break;
+          }
+        }
+      }
+
+      if (hasNonZero) {
+        for (let offset = 0; offset + bytesPerSample <= chunk.length; offset += blockAlign) {
+          const mag = readMagnitude(chunk, offset, fmt);
+          if (!Number.isNaN(mag) && Number.isFinite(mag) && mag > peak) {
+            peak = mag;
+          }
+        }
+        if (peak > 0.0001) {
+          return { isEmpty: false, sizeBytes, peakDb: toDb(peak) };
+        }
+      }
+
+      curPos += sRead;
+    }
+
+    if (peak === 0) {
+      return {
+        isEmpty: true,
+        emptyReason: 'Digital silence (0.0 peak)',
+        sizeBytes,
+        peakDb: -Infinity
+      };
+    }
+
+    return { isEmpty: false, sizeBytes, peakDb: toDb(peak) };
+  } catch {
+    return { isEmpty: false, sizeBytes: 0 };
+  } finally {
+    if (fd) {
+      try {
+        await fd.close();
+      } catch {
+        /* ignore close error */
+      }
+    }
+  }
+}
+
 module.exports = {
   removeSilence,
   analyse,
@@ -535,5 +692,6 @@ module.exports = {
   buildHeader,
   readMagnitude,
   dbToLinear,
+  detectEmptyTrack,
   DEFAULTS
 };

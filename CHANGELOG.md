@@ -5,6 +5,18 @@ All notable changes to DAW Buddy. Format follows
 [semantic versioning](https://semver.org/). Per-release detail (every merged PR)
 is auto-generated on each GitHub Release; this file is the curated summary.
 
+## [0.5.1-beta.10] — 2026-09-18
+
+### Added
+- **Key & Scale Matcher & Transposer (Audio & MIDI)**:
+  - Detects key, scale, tuning, and full-length chord progressions with Roman numeral analysis from MIDI and audio files.
+  - **MIDI Modal Scale Remapping**: Harmonically remaps chords and notes to any target scale degrees (e.g. transforming an $i - VI - III - VII$ progression in A# minor into G major).
+  - **Chromatic Transposition**: Shifts chords and notes by semitones while preserving interval relationships.
+  - **Audio Pitch Shifting**: Calculates shortest-interval semitone deltas and pitch-shifts samples for instant in-key playback.
+  - **Direct DAW Drag-and-Drop**: Export and drag transposed MIDI files or pitched WAV samples directly into your DAW.
+- **Root Key (Tonic) Selector in Inspiration Tool**:
+  - Added an interactive root note bar (`C` through `B`) in the Randomizer Key & Scale card, allowing independent key selection alongside scale searching.
+
 ## [0.5.1-beta.9] — 2026-09-01
 
 ### Fixed

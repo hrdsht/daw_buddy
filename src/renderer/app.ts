@@ -43,6 +43,11 @@ import {
 } from './world-scales';
 import { showRegionOnboardingModal } from './onboarding';
 import {
+  renderRootKeySelector,
+  renderKeyMatcherComponent,
+  KeyMatcherState
+} from './key-matcher';
+import {
   METRONOME_SOUNDSETS,
   getMetronomeSoundsets,
   getMetronomeSoundset,
@@ -6848,6 +6853,9 @@ async function renderSmartRenameTab(entry: any = null) {
             if (res.isEmpty) {
               item.isEmpty = true;
               item.emptyReason = res.emptyReason || 'Digital silence (0.0 peak)';
+            } else {
+              item.isEmpty = false;
+              item.emptyReason = null;
             }
             if (!item.matched && res.category) {
               item.category = res.category;
@@ -10335,6 +10343,8 @@ function openStandaloneTool(nextView) {
 
 /* ======================= Scale & Raaga Detector Tool ======================= */
 
+let scaleToolMatcherState: KeyMatcherState | null = null;
+
 let scaleToolState: {
   file: { name: string; size: number; isMidi: boolean } | null;
   analyzing: boolean;
@@ -11715,6 +11725,19 @@ function renderRandomizerTool(entry: any = null) {
 
   scaleSearchInput.addEventListener('input', () => populateScaleSearch(scaleSearchInput.value));
   populateScaleSearch('');
+
+  const rootPickerEl = renderRootKeySelector(state.tonic, (newTonic) => {
+    stopScalePlayback();
+    state.tonic = newTonic;
+    state.tonicPc = DSP.NOTES.indexOf(newTonic);
+    const isMaj = state.scaleName === 'major' || state.scaleName === 'lydian' || state.scaleName === 'mixolydian' || (DSP.SCALES[state.scaleName] && DSP.SCALES[state.scaleName][2] === 4);
+    state.camelot = isMaj
+      ? { C: '8B', G: '9B', D: '10B', A: '11B', E: '12B', B: '1B', 'F#': '2B', 'C#': '3B', 'G#': '4B', 'D#': '5B', 'A#': '6B', F: '7B' }[newTonic] || '8B'
+      : { A: '8A', E: '9A', B: '10A', 'F#': '11A', 'C#': '12A', 'G#': '1A', 'D#': '2A', 'A#': '3A', F: '4A', C: '5A', G: '6A', D: '7A' }[newTonic] || '8A';
+    renderRandomizerTool(entry);
+    playSynthNote(state.tonicPc, 4, state.tuningA4 || 440, 0.4);
+  });
+  scaleSearchPanel.append(rootPickerEl);
 
   scaleSearchPanel.append(scaleSearchInput, scaleSearchResults);
 

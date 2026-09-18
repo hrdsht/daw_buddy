@@ -46,7 +46,7 @@ export const WORLD_REGIONS: WorldRegion[] = [
     lng: 78.9629,
     description: 'Indian Classical Raagas, Thaats, Sargam notes (Sa Re Ga Ma Pa Dha Ni), Aarohana & Avarohana phrasing.',
     sampleInstruments: ['Sitar', 'Tanpura', 'Bansuri', 'Tabla', 'Sarangi'],
-    scaleCount: 16
+    scaleCount: 62
   },
   {
     id: 'arabic',
@@ -135,159 +135,2688 @@ export const WORLD_SCALES_DATABASE: WorldScale[] = [
      1. INDIAN CLASSICAL (Raagas & Thaats)
      ========================================================================= */
   {
-    id: 'bhairav',
-    name: 'Raag Bhairav',
-    nativeName: 'राग भैरव',
-    tradition: 'indian',
-    subCategory: 'Bhairav Thaat',
-    degrees: [0, 1, 4, 5, 7, 8, 11],
-    ascendingPhrase: [0, 1, 4, 5, 7, 8, 11, 12],
-    descendingPhrase: [12, 11, 8, 7, 5, 4, 1, 0],
-    phraseNotation: {
-      ascending: 'S r G m P d N Ṡ',
-      descending: 'Ṡ N d P m G r S'
+    "id": "bhairav",
+    "name": "Raag Bhairav",
+    "nativeName": "राग भैरव",
+    "tradition": "indian",
+    "subCategory": "Bhairav Thaat",
+    "degrees": [
+      0,
+      1,
+      4,
+      5,
+      7,
+      8,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      1,
+      4,
+      5,
+      7,
+      8,
+      11,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      11,
+      8,
+      7,
+      5,
+      4,
+      1,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S r G m P d N Ṡ",
+      "descending": "Ṡ N d P m G r S"
     },
-    sargamOrNames: 'S r G m P d N',
-    mood: 'Devotional, Majestic, Awakening & Peaceful',
-    timeOfDay: 'Early Morning (Dawn / Sunrise)',
-    suggestedRhythm: 'Teental (16 beats) / Ektaal (12 beats)',
-    description: 'One of the most foundational morning ragas in Hindustani music, known for its solemn oscillating komal rishabh (♭2) and komal dhaivat (♭6).'
+    "sargamOrNames": "S r G m P d N",
+    "mood": "Devotional, Majestic & Serene",
+    "timeOfDay": "Dawn / Early Morning",
+    "suggestedRhythm": "Teental (16 matras) / Ektaal (12/8)",
+    "description": "Classical Indian raga in Bhairav with sargam (S r G m P d N). Mood: Devotional, Majestic & Serene. Time: Dawn / Early Morning."
   },
   {
-    id: 'bhairavi',
-    name: 'Raag Bhairavi',
-    nativeName: 'राग भैरवी',
-    tradition: 'indian',
-    subCategory: 'Bhairavi Thaat',
-    degrees: [0, 1, 3, 5, 7, 8, 10],
-    ascendingPhrase: [0, 1, 3, 5, 7, 8, 10, 12],
-    descendingPhrase: [12, 10, 8, 7, 5, 3, 1, 0],
-    phraseNotation: {
-      ascending: 'S r g m P d n Ṡ',
-      descending: 'Ṡ n d P m g r S'
+    "id": "ahir_bhairav",
+    "name": "Raag Ahir Bhairav",
+    "nativeName": "राग अहिर भैरव",
+    "tradition": "indian",
+    "subCategory": "Bhairav Thaat",
+    "degrees": [
+      0,
+      1,
+      4,
+      5,
+      7,
+      9,
+      10
+    ],
+    "ascendingPhrase": [
+      0,
+      1,
+      4,
+      5,
+      7,
+      9,
+      10,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      10,
+      9,
+      7,
+      5,
+      4,
+      1,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S r G m P D n Ṡ",
+      "descending": "Ṡ n D P m G r S"
     },
-    sargamOrNames: 'S r g m P d n',
-    mood: 'Emotional, Sweet, Romantic & Concluding',
-    timeOfDay: 'Morning / Concert Finale',
-    suggestedRhythm: 'Keherwa (8 beats) / Dadra (6 beats)',
-    description: 'The queen of Indian melodies. All four notes (re, ga, dha, ni) are flat (komal), creating an deeply emotional and soulful atmosphere.'
+    "sargamOrNames": "S r G m P D n",
+    "mood": "Peaceful, Divine & Uplifting",
+    "timeOfDay": "Morning (1st Prahar)",
+    "suggestedRhythm": "Teental (4/4) / Roopak (7/8)",
+    "description": "Classical Indian raga in Bhairav with sargam (S r G m P D n). Mood: Peaceful, Divine & Uplifting. Time: Morning (1st Prahar)."
   },
   {
-    id: 'yaman',
-    name: 'Raag Yaman / Kalyan',
-    nativeName: 'राग यमन / कल्याण',
-    tradition: 'indian',
-    subCategory: 'Kalyan Thaat',
-    degrees: [0, 2, 4, 6, 7, 9, 11],
-    ascendingPhrase: [11 - 12, 2, 4, 6, 7, 9, 11, 12],
-    descendingPhrase: [12, 11, 9, 7, 6, 4, 2, 0],
-    phraseNotation: {
-      ascending: "'N R G M P D N Ṡ",
-      descending: 'Ṡ N D P M G R S'
+    "id": "bairagi",
+    "name": "Raag Bairagi",
+    "nativeName": "राग बैरागी",
+    "tradition": "indian",
+    "subCategory": "Bhairav Thaat",
+    "degrees": [
+      0,
+      1,
+      5,
+      7,
+      10
+    ],
+    "ascendingPhrase": [
+      0,
+      1,
+      5,
+      7,
+      10,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      10,
+      7,
+      5,
+      1,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S r m P n Ṡ",
+      "descending": "Ṡ n P m r S"
     },
-    sargamOrNames: 'S R G M P D N (Tivra Ma)',
-    mood: 'Joyful, Serene, Expansive & Romantic',
-    timeOfDay: 'Early Evening (Sunset - 9 PM)',
-    suggestedRhythm: 'Teental (16 beats) / Roopak (7 beats)',
-    description: 'Major scale with a sharp fourth (Tivra Ma / #4). Represents the evening twilight with deep warmth and luminous clarity.'
+    "sargamOrNames": "S r m P n",
+    "mood": "Meditative, Renunciant & Pure",
+    "timeOfDay": "Early Morning",
+    "suggestedRhythm": "Teental / Jhaptal (5/4)",
+    "description": "Classical Indian raga in Bhairav with sargam (S r m P n). Mood: Meditative, Renunciant & Pure. Time: Early Morning."
   },
   {
-    id: 'todi',
-    name: 'Raag Todi (Miyan Ki Todi)',
-    nativeName: 'राग तोड़ी',
-    tradition: 'indian',
-    subCategory: 'Todi Thaat',
-    degrees: [0, 1, 3, 6, 7, 8, 11],
-    ascendingPhrase: [0, 1, 3, 6, 7, 8, 11, 12],
-    descendingPhrase: [12, 11, 8, 7, 6, 3, 1, 0],
-    phraseNotation: {
-      ascending: 'S r g M P d N Ṡ',
-      descending: 'Ṡ N d P M g r S'
+    "id": "kalingada",
+    "name": "Raag Kalingada",
+    "nativeName": "राग कलिंगड़ा",
+    "tradition": "indian",
+    "subCategory": "Bhairav Thaat",
+    "degrees": [
+      0,
+      1,
+      4,
+      5,
+      7,
+      8,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      1,
+      4,
+      5,
+      7,
+      8,
+      11,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      11,
+      8,
+      7,
+      5,
+      4,
+      1,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S r G m P d N Ṡ",
+      "descending": "Ṡ N d P m G r S"
     },
-    sargamOrNames: 'S r g M P d N',
-    mood: 'Contemplative, Poignant, Intense & Heroic',
-    timeOfDay: 'Late Morning (8 AM - 11 AM)',
-    suggestedRhythm: 'Jhaptal (10 beats) / Teental',
-    description: 'An iconic raga featuring both flat second (r), flat third (g), sharp fourth (M), flat sixth (d), and natural seventh (N).'
+    "sargamOrNames": "S r G m P d N",
+    "mood": "Light, Melodic & Devotional",
+    "timeOfDay": "Late Morning",
+    "suggestedRhythm": "Dadra (6/8) / Keherwa (4/4)",
+    "description": "Classical Indian raga in Bhairav with sargam (S r G m P d N). Mood: Light, Melodic & Devotional. Time: Late Morning."
   },
   {
-    id: 'marwa',
-    name: 'Raag Marwa',
-    nativeName: 'राग मारवा',
-    tradition: 'indian',
-    subCategory: 'Marwa Thaat',
-    degrees: [0, 1, 4, 6, 9, 11],
-    ascendingPhrase: [0, 1, 4, 6, 9, 11, 12],
-    descendingPhrase: [12, 11, 9, 6, 4, 1, 0],
-    phraseNotation: {
-      ascending: 'S r G M D N Ṡ',
-      descending: 'Ṡ N D M G r S'
+    "id": "nat_bhairav",
+    "name": "Raag Nat Bhairav",
+    "nativeName": "राग नट भैरव",
+    "tradition": "indian",
+    "subCategory": "Bhairav Thaat",
+    "degrees": [
+      0,
+      2,
+      4,
+      5,
+      7,
+      8,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      2,
+      4,
+      5,
+      7,
+      8,
+      11,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      11,
+      8,
+      7,
+      5,
+      4,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S R G m P d N Ṡ",
+      "descending": "Ṡ N d P m G R S"
     },
-    sargamOrNames: 'S r G M D N (No Pa)',
-    mood: 'Anxious, Haunting, Yearning & Unsettling',
-    timeOfDay: 'Sunset (Sandhiprakash)',
-    suggestedRhythm: 'Jhaptal (10 beats) / Teental',
-    description: 'Completely omits the fifth (Pa) while featuring a prominent komal re (♭2) and tivra ma (#4), evoking twilight solitude.'
+    "sargamOrNames": "S R G m P d N",
+    "mood": "Soothing & Contemplative",
+    "timeOfDay": "Morning",
+    "suggestedRhythm": "Teental / Keherwa",
+    "description": "Classical Indian raga in Bhairav with sargam (S R G m P d N). Mood: Soothing & Contemplative. Time: Morning."
   },
   {
-    id: 'charukesi',
-    name: 'Raag Charukesi',
-    nativeName: 'राग चारुकेशी',
-    tradition: 'indian',
-    subCategory: 'Melakarta 26',
-    degrees: [0, 2, 4, 5, 7, 8, 10],
-    ascendingPhrase: [0, 2, 4, 5, 7, 8, 10, 12],
-    descendingPhrase: [12, 10, 8, 7, 5, 4, 2, 0],
-    phraseNotation: {
-      ascending: 'S R G m P d n Ṡ',
-      descending: 'Ṡ n d P m G R S'
+    "id": "jogiya",
+    "name": "Raag Jogiya",
+    "nativeName": "राग जोगिया",
+    "tradition": "indian",
+    "subCategory": "Bhairav Thaat",
+    "degrees": [
+      0,
+      1,
+      5,
+      7,
+      8,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      1,
+      5,
+      7,
+      8,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      11,
+      8,
+      7,
+      5,
+      1,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S r m P d Ṡ",
+      "descending": "Ṡ N d P m r S"
     },
-    sargamOrNames: 'S R G m P d n',
-    mood: 'Heart-melting, Bittersweet & Compassionate',
-    timeOfDay: 'Evening / Anytime',
-    suggestedRhythm: 'Mishra Chapu (7/8) / Keherwa (4/4)',
-    description: 'Major upper tetrachord with minor lower tetrachord (Major with ♭6 and ♭7), celebrated for its poignant emotional pull.'
+    "sargamOrNames": "S r m P d N",
+    "mood": "Pathos, Ascetic Longing & Renunciation",
+    "timeOfDay": "Dawn / 1st Prahar",
+    "suggestedRhythm": "Teental / Keherwa (4/4)",
+    "description": "Classical Indian raga in Bhairav with sargam (S r m P d N). Mood: Pathos, Ascetic Longing & Renunciation. Time: Dawn / 1st Prahar."
   },
   {
-    id: 'shivaranjani',
-    name: 'Raag Shivaranjani',
-    nativeName: 'राग शिवरंजनी',
-    tradition: 'indian',
-    subCategory: 'Pentatonic / Kafi Thaat',
-    degrees: [0, 2, 3, 7, 9],
-    ascendingPhrase: [0, 2, 3, 7, 9, 12],
-    descendingPhrase: [12, 9, 7, 3, 2, 0],
-    phraseNotation: {
-      ascending: 'S R g P D Ṡ',
-      descending: 'Ṡ D P g R S'
+    "id": "gunkali_gunakri",
+    "name": "Raag Gunkali / Gunakri",
+    "nativeName": "राग गुणकली",
+    "tradition": "indian",
+    "subCategory": "Bhairav Thaat",
+    "degrees": [
+      0,
+      1,
+      5,
+      7,
+      8
+    ],
+    "ascendingPhrase": [
+      0,
+      1,
+      5,
+      7,
+      8,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      8,
+      7,
+      5,
+      1,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S r m P d Ṡ",
+      "descending": "Ṡ d P m r S"
     },
-    sargamOrNames: 'S R g P D',
-    mood: 'Tearful, Heartfelt, Melancholic & Devotional',
-    timeOfDay: 'Midnight / Anytime',
-    suggestedRhythm: 'Dadra (6/8) / Keherwa (4/4)',
-    description: 'A deeply expressive 5-note pentatonic scale with a minor 3rd (komal ga) paired with a major 6th (shuddh Dha).'
+    "sargamOrNames": "S r m P d",
+    "mood": "Devotional, Pious & Serene",
+    "timeOfDay": "Early Morning",
+    "suggestedRhythm": "Teental (4/4) / Ektaal (12/8)",
+    "description": "Classical Indian raga in Bhairav with sargam (S r m P d). Mood: Devotional, Pious & Serene. Time: Early Morning."
   },
   {
-    id: 'malkauns',
-    name: 'Raag Malkauns',
-    nativeName: 'राग मालकौंस',
-    tradition: 'indian',
-    subCategory: 'Bhairavi Thaat (Audav)',
-    degrees: [0, 3, 5, 8, 10],
-    ascendingPhrase: [0, 3, 5, 8, 10, 12],
-    descendingPhrase: [12, 10, 8, 5, 3, 0],
-    phraseNotation: {
-      ascending: 'S g m d n Ṡ',
-      descending: 'Ṡ n d m g S'
+    "id": "bibhas_vibhas",
+    "name": "Raag Bibhas / Vibhas",
+    "nativeName": "राग विभास",
+    "tradition": "indian",
+    "subCategory": "Bhairav Thaat",
+    "degrees": [
+      0,
+      1,
+      4,
+      7,
+      8
+    ],
+    "ascendingPhrase": [
+      0,
+      1,
+      4,
+      7,
+      8,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      8,
+      7,
+      4,
+      1,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S r G P d Ṡ",
+      "descending": "Ṡ d P G r S"
     },
-    sargamOrNames: 'S g m d n (No Re/Pa)',
-    mood: 'Meditative, Deep, Mystical & Serious',
-    timeOfDay: 'Late Night (12 AM - 3 AM)',
-    suggestedRhythm: 'Teental (16 beats) / Ektaal (12 beats)',
-    description: 'One of the oldest and most spiritual meditative ragas, using 5 notes: Sa, komal ga, ma, komal dha, and komal ni.'
+    "sargamOrNames": "S r G P d",
+    "mood": "Radiant, Energetic, Majestic & Awakening",
+    "timeOfDay": "Sunrise / 1st Prahar",
+    "suggestedRhythm": "Teental / Jhaptal (5/4)",
+    "description": "Classical Indian raga in Bhairav with sargam (S r G P d). Mood: Radiant, Energetic, Majestic & Awakening. Time: Sunrise / 1st Prahar."
+  },
+  {
+    "id": "ramkali",
+    "name": "Raag Ramkali",
+    "nativeName": "राग रामकली",
+    "tradition": "indian",
+    "subCategory": "Bhairav Thaat",
+    "degrees": [
+      0,
+      1,
+      4,
+      5,
+      6,
+      7,
+      8,
+      10,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      1,
+      4,
+      6,
+      7,
+      8,
+      11,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      11,
+      8,
+      7,
+      6,
+      7,
+      8,
+      10,
+      8,
+      7,
+      5,
+      4,
+      1,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S r G M P d N Ṡ",
+      "descending": "Ṡ N d P M P d n d P m G r S"
+    },
+    "sargamOrNames": "S r G m M P d n N (Both Ma & Ni)",
+    "mood": "Solemn, Majestic & Mystical",
+    "timeOfDay": "Morning (2nd Prahar)",
+    "suggestedRhythm": "Teental / Roopak (7/8)",
+    "description": "Classical Indian raga in Bhairav with sargam (S r G m M P d n N (Both Ma & Ni)). Mood: Solemn, Majestic & Mystical. Time: Morning (2nd Prahar)."
+  },
+  {
+    "id": "yaman_kalyan",
+    "name": "Raag Yaman / Kalyan",
+    "nativeName": "राग यमन / कल्याण",
+    "tradition": "indian",
+    "subCategory": "Kalyan Thaat",
+    "degrees": [
+      0,
+      2,
+      4,
+      6,
+      7,
+      9,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      2,
+      4,
+      6,
+      7,
+      9,
+      11,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      11,
+      9,
+      7,
+      6,
+      4,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S R G M P D N Ṡ",
+      "descending": "Ṡ N D P M G R S"
+    },
+    "sargamOrNames": "S R G M P D N",
+    "mood": "Romantic, Graceful & Blissful",
+    "timeOfDay": "Evening (1st Prahar of Night)",
+    "suggestedRhythm": "Teental (16 matras) / Roopak (7/8)",
+    "description": "Classical Indian raga in Kalyan with sargam (S R G M P D N). Mood: Romantic, Graceful & Blissful. Time: Evening (1st Prahar of Night)."
+  },
+  {
+    "id": "bhoop_bhupali",
+    "name": "Raag Bhoop / Bhupali",
+    "nativeName": "राग भूप / भूपाली (मोहनम)",
+    "tradition": "indian",
+    "subCategory": "Kalyan Thaat",
+    "degrees": [
+      0,
+      2,
+      4,
+      7,
+      9
+    ],
+    "ascendingPhrase": [
+      0,
+      2,
+      4,
+      7,
+      9,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      9,
+      7,
+      4,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S R G P D Ṡ",
+      "descending": "Ṡ D P G R S"
+    },
+    "sargamOrNames": "S R G P D",
+    "mood": "Grand, Peaceful & Soothing",
+    "timeOfDay": "Early Evening",
+    "suggestedRhythm": "Teental / Keherwa",
+    "description": "Classical Indian raga in Kalyan with sargam (S R G P D). Mood: Grand, Peaceful & Soothing. Time: Early Evening."
+  },
+  {
+    "id": "shuddha_kalyan",
+    "name": "Raag Shuddha Kalyan",
+    "nativeName": "राग शुद्ध कल्याण",
+    "tradition": "indian",
+    "subCategory": "Kalyan Thaat",
+    "degrees": [
+      0,
+      2,
+      4,
+      7,
+      9,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      2,
+      4,
+      7,
+      9,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      11,
+      9,
+      7,
+      6,
+      4,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S R G P D Ṡ",
+      "descending": "Ṡ N D P M G R S"
+    },
+    "sargamOrNames": "S R G P D N",
+    "mood": "Serene & Stately",
+    "timeOfDay": "Night (1st Prahar)",
+    "suggestedRhythm": "Teental / Jhaptal (5/4)",
+    "description": "Classical Indian raga in Kalyan with sargam (S R G P D N). Mood: Serene & Stately. Time: Night (1st Prahar)."
+  },
+  {
+    "id": "bihag",
+    "name": "Raag Bihag",
+    "nativeName": "राग बिहाग",
+    "tradition": "indian",
+    "subCategory": "Bilawal Thaat",
+    "degrees": [
+      0,
+      4,
+      5,
+      6,
+      7,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      4,
+      5,
+      7,
+      11,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      11,
+      9,
+      7,
+      6,
+      7,
+      4,
+      5,
+      4,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S G m P N Ṡ",
+      "descending": "Ṡ N D P M P G m G R S"
+    },
+    "sargamOrNames": "S G m M P N",
+    "mood": "Romantic, Expressive & Longing",
+    "timeOfDay": "Late Night (2nd Prahar)",
+    "suggestedRhythm": "Teental / Ektaal (12/8)",
+    "description": "Classical Indian raga in Bilawal with sargam (S G m M P N). Mood: Romantic, Expressive & Longing. Time: Late Night (2nd Prahar)."
+  },
+  {
+    "id": "hansadhwani",
+    "name": "Raag Hansadhwani",
+    "nativeName": "राग हंसध्वनि",
+    "tradition": "indian",
+    "subCategory": "Bilawal Thaat",
+    "degrees": [
+      0,
+      2,
+      4,
+      7,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      2,
+      4,
+      7,
+      11,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      11,
+      7,
+      4,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S R G P N Ṡ",
+      "descending": "Ṡ N P G R S"
+    },
+    "sargamOrNames": "S R G P N",
+    "mood": "Auspicious, Radiant & Joyous",
+    "timeOfDay": "Evening",
+    "suggestedRhythm": "Rupak / Mishra Chapu (7/8) / Keherwa",
+    "description": "Classical Indian raga in Bilawal with sargam (S R G P N). Mood: Auspicious, Radiant & Joyous. Time: Evening."
+  },
+  {
+    "id": "bilawal_alhaiya_bilawal",
+    "name": "Raag Bilawal / Alhaiya Bilawal",
+    "nativeName": "राग बिलावल / अल्हैया बिलावल",
+    "tradition": "indian",
+    "subCategory": "Bilawal Thaat",
+    "degrees": [
+      0,
+      2,
+      4,
+      5,
+      7,
+      9,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      2,
+      4,
+      7,
+      9,
+      11,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      11,
+      9,
+      7,
+      9,
+      10,
+      9,
+      7,
+      5,
+      4,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S R G P D N Ṡ",
+      "descending": "Ṡ N D P D n D P m G R S"
+    },
+    "sargamOrNames": "S R G m P D N",
+    "mood": "Cheerful, Fresh & Vibrant",
+    "timeOfDay": "Late Morning",
+    "suggestedRhythm": "Teental (4/4) / Ektaal (12/8)",
+    "description": "Classical Indian raga in Bilawal with sargam (S R G m P D N). Mood: Cheerful, Fresh & Vibrant. Time: Late Morning."
+  },
+  {
+    "id": "khamaj",
+    "name": "Raag Khamaj",
+    "nativeName": "राग खमाज",
+    "tradition": "indian",
+    "subCategory": "Khamaj Thaat",
+    "degrees": [
+      0,
+      4,
+      5,
+      7,
+      9,
+      10,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      4,
+      5,
+      7,
+      9,
+      11,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      10,
+      9,
+      7,
+      5,
+      4,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S G m P D N Ṡ",
+      "descending": "Ṡ n D P m G R S"
+    },
+    "sargamOrNames": "S G m P D N n",
+    "mood": "Sensuous, Playful & Expressive",
+    "timeOfDay": "Late Evening",
+    "suggestedRhythm": "Dadra (6/8) / Keherwa (4/4)",
+    "description": "Classical Indian raga in Khamaj with sargam (S G m P D N n). Mood: Sensuous, Playful & Expressive. Time: Late Evening."
+  },
+  {
+    "id": "desh",
+    "name": "Raag Desh",
+    "nativeName": "राग देश",
+    "tradition": "indian",
+    "subCategory": "Khamaj Thaat",
+    "degrees": [
+      0,
+      2,
+      5,
+      7,
+      10,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      2,
+      5,
+      7,
+      11,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      10,
+      9,
+      7,
+      5,
+      4,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S R m P N Ṡ",
+      "descending": "Ṡ n D P m G R S"
+    },
+    "sargamOrNames": "S R m P N n",
+    "mood": "Patriotic, Romantic & Sweet",
+    "timeOfDay": "Second Prahar of Night (Monsoon)",
+    "suggestedRhythm": "Dadra (6/8) / Rupak (7/8)",
+    "description": "Classical Indian raga in Khamaj with sargam (S R m P N n). Mood: Patriotic, Romantic & Sweet. Time: Second Prahar of Night (Monsoon)."
+  },
+  {
+    "id": "rageshri",
+    "name": "Raag Rageshri",
+    "nativeName": "राग रागेश्री",
+    "tradition": "indian",
+    "subCategory": "Khamaj Thaat",
+    "degrees": [
+      0,
+      2,
+      4,
+      5,
+      9,
+      10
+    ],
+    "ascendingPhrase": [
+      0,
+      2,
+      4,
+      5,
+      9,
+      10,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      10,
+      9,
+      5,
+      4,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S R G m D n Ṡ",
+      "descending": "Ṡ n D m G R S"
+    },
+    "sargamOrNames": "S R G m D n",
+    "mood": "Romantic, Deep & Tender",
+    "timeOfDay": "Night (2nd Prahar)",
+    "suggestedRhythm": "Teental / Jhaptal (5/4)",
+    "description": "Classical Indian raga in Khamaj with sargam (S R G m D n). Mood: Romantic, Deep & Tender. Time: Night (2nd Prahar)."
+  },
+  {
+    "id": "tilak_kamod",
+    "name": "Raag Tilak Kamod",
+    "nativeName": "राग तिलक कामोद",
+    "tradition": "indian",
+    "subCategory": "Khamaj Thaat",
+    "degrees": [
+      0,
+      2,
+      4,
+      5,
+      7,
+      9,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      2,
+      4,
+      2,
+      7,
+      5,
+      9,
+      7,
+      11,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      11,
+      9,
+      7,
+      9,
+      5,
+      4,
+      2,
+      4,
+      -1,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S R G s R P m D P N Ṡ",
+      "descending": "Ṡ N D P D m G s R G s N S"
+    },
+    "sargamOrNames": "S R G m P D N",
+    "mood": "Playful, Graceful & Delicate",
+    "timeOfDay": "Night (2nd Prahar)",
+    "suggestedRhythm": "Teental / Keherwa / Roopak",
+    "description": "Classical Indian raga in Khamaj with sargam (S R G m P D N). Mood: Playful, Graceful & Delicate. Time: Night (2nd Prahar)."
+  },
+  {
+    "id": "jaijaivanti",
+    "name": "Raag Jaijaivanti",
+    "nativeName": "राग जयजयवंती",
+    "tradition": "indian",
+    "subCategory": "Khamaj Thaat",
+    "degrees": [
+      0,
+      2,
+      3,
+      4,
+      5,
+      7,
+      9,
+      10,
+      11
+    ],
+    "ascendingPhrase": [
+      2,
+      3,
+      2,
+      0,
+      2,
+      4,
+      5,
+      7,
+      11,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      10,
+      9,
+      7,
+      9,
+      5,
+      4,
+      2,
+      3,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "R g R S R G m P N Ṡ",
+      "descending": "Ṡ n D P D m G R g R S"
+    },
+    "sargamOrNames": "S R g G m P D n N (Both Ga & Ni)",
+    "mood": "Noble, Royal, Romantic & Majestic",
+    "timeOfDay": "Night (1st Prahar)",
+    "suggestedRhythm": "Teental / Roopak (7/8)",
+    "description": "Classical Indian raga in Khamaj with sargam (S R g G m P D n N (Both Ga & Ni)). Mood: Noble, Royal, Romantic & Majestic. Time: Night (1st Prahar)."
+  },
+  {
+    "id": "kafi",
+    "name": "Raag Kafi",
+    "nativeName": "राग काफी",
+    "tradition": "indian",
+    "subCategory": "Kafi Thaat",
+    "degrees": [
+      0,
+      2,
+      3,
+      5,
+      7,
+      9,
+      10
+    ],
+    "ascendingPhrase": [
+      0,
+      2,
+      3,
+      5,
+      7,
+      9,
+      10,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      10,
+      9,
+      7,
+      5,
+      3,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S R g m P D n Ṡ",
+      "descending": "Ṡ n D P m g R S"
+    },
+    "sargamOrNames": "S R g m P D n",
+    "mood": "Joyful, Passionate & Folk-Rooted",
+    "timeOfDay": "Midnight (Spring/Holi)",
+    "suggestedRhythm": "Dadra (6/8) / Keherwa (4/4) / Dhamar",
+    "description": "Classical Indian raga in Kafi with sargam (S R g m P D n). Mood: Joyful, Passionate & Folk-Rooted. Time: Midnight (Spring/Holi)."
+  },
+  {
+    "id": "bhimpalasi",
+    "name": "Raag Bhimpalasi",
+    "nativeName": "राग भीमपलासी",
+    "tradition": "indian",
+    "subCategory": "Kafi Thaat",
+    "degrees": [
+      0,
+      3,
+      5,
+      7,
+      10,
+      2,
+      9
+    ],
+    "ascendingPhrase": [
+      0,
+      3,
+      5,
+      7,
+      10,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      10,
+      9,
+      7,
+      5,
+      3,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S g m P n Ṡ",
+      "descending": "Ṡ n D P m g R S"
+    },
+    "sargamOrNames": "S g m P n (R D in avroha)",
+    "mood": "Tender, Poignant & Longing",
+    "timeOfDay": "Late Afternoon",
+    "suggestedRhythm": "Jhaptal (10 matras, 5/4) / Teental",
+    "description": "Classical Indian raga in Kafi with sargam (S g m P n (R D in avroha)). Mood: Tender, Poignant & Longing. Time: Late Afternoon."
+  },
+  {
+    "id": "bageshri",
+    "name": "Raag Bageshri",
+    "nativeName": "राग बागेश्री",
+    "tradition": "indian",
+    "subCategory": "Kafi Thaat",
+    "degrees": [
+      0,
+      2,
+      3,
+      5,
+      9,
+      10
+    ],
+    "ascendingPhrase": [
+      0,
+      3,
+      5,
+      9,
+      10,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      10,
+      9,
+      5,
+      3,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S g m D n Ṡ",
+      "descending": "Ṡ n D m g R S"
+    },
+    "sargamOrNames": "S R g m D n",
+    "mood": "Romantic, Introspective & Sweet",
+    "timeOfDay": "Midnight",
+    "suggestedRhythm": "Jhaptal (5/4) / Teental (4/4)",
+    "description": "Classical Indian raga in Kafi with sargam (S R g m D n). Mood: Romantic, Introspective & Sweet. Time: Midnight."
+  },
+  {
+    "id": "brindavani_sarang",
+    "name": "Raag Brindavani Sarang",
+    "nativeName": "राग बृंदावनी सारंग",
+    "tradition": "indian",
+    "subCategory": "Kafi Thaat",
+    "degrees": [
+      0,
+      2,
+      5,
+      7,
+      10,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      2,
+      5,
+      7,
+      11,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      10,
+      7,
+      5,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S R m P N Ṡ",
+      "descending": "Ṡ n P m R S"
+    },
+    "sargamOrNames": "S R m P N (n in avroha)",
+    "mood": "Refreshing, Sunny & Sparkling",
+    "timeOfDay": "Afternoon",
+    "suggestedRhythm": "Keherwa / Teental / Ektaal",
+    "description": "Classical Indian raga in Kafi with sargam (S R m P N (n in avroha)). Mood: Refreshing, Sunny & Sparkling. Time: Afternoon."
+  },
+  {
+    "id": "shuddha_sarang",
+    "name": "Raag Shuddha Sarang",
+    "nativeName": "राग शुद्ध सारंग",
+    "tradition": "indian",
+    "subCategory": "Kafi Thaat",
+    "degrees": [
+      0,
+      2,
+      5,
+      6,
+      7,
+      9,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      2,
+      5,
+      7,
+      11,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      11,
+      9,
+      7,
+      6,
+      5,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S R m P N Ṡ",
+      "descending": "Ṡ N D P M m R S"
+    },
+    "sargamOrNames": "S R m M P D N (Both Ma)",
+    "mood": "Bright, Peaceful & Sublime",
+    "timeOfDay": "Afternoon (12 PM - 3 PM)",
+    "suggestedRhythm": "Teental / Jhaptal (5/4)",
+    "description": "Classical Indian raga in Kafi with sargam (S R m M P D N (Both Ma)). Mood: Bright, Peaceful & Sublime. Time: Afternoon (12 PM - 3 PM)."
+  },
+  {
+    "id": "megh_megh_malhar",
+    "name": "Raag Megh / Megh Malhar",
+    "nativeName": "राग मेघ मल्हार",
+    "tradition": "indian",
+    "subCategory": "Kafi Thaat",
+    "degrees": [
+      0,
+      2,
+      5,
+      7,
+      10
+    ],
+    "ascendingPhrase": [
+      0,
+      2,
+      5,
+      7,
+      10,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      10,
+      7,
+      5,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S R m P n Ṡ",
+      "descending": "Ṡ n P m R S"
+    },
+    "sargamOrNames": "S R m P n",
+    "mood": "Thunderous, Majestic & Soulful",
+    "timeOfDay": "Monsoon / Rainy Season / Anytime",
+    "suggestedRhythm": "Teental (4/4) / Ektaal (12/8)",
+    "description": "Classical Indian raga in Kafi with sargam (S R m P n). Mood: Thunderous, Majestic & Soulful. Time: Monsoon / Rainy Season / Anytime."
+  },
+  {
+    "id": "miyan_malhar",
+    "name": "Raag Miyan Malhar",
+    "nativeName": "राग मियाँ मल्हार",
+    "tradition": "indian",
+    "subCategory": "Kafi Thaat",
+    "degrees": [
+      0,
+      2,
+      3,
+      5,
+      6,
+      7,
+      9,
+      10,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      2,
+      3,
+      5,
+      2,
+      7,
+      5,
+      7,
+      10,
+      9,
+      11,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      10,
+      9,
+      7,
+      5,
+      3,
+      6,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S R g m R P m P n D N Ṡ",
+      "descending": "Ṡ n D P m g M R S"
+    },
+    "sargamOrNames": "S R g m P D n N (Rain Raga of Tansen)",
+    "mood": "Majestic, Emotional & Torrential",
+    "timeOfDay": "Midnight (Monsoon Season)",
+    "suggestedRhythm": "Teental / Ektaal (12/8)",
+    "description": "Classical Indian raga in Kafi with sargam (S R g m P D n N (Rain Raga of Tansen)). Mood: Majestic, Emotional & Torrential. Time: Midnight (Monsoon Season)."
+  },
+  {
+    "id": "asavari",
+    "name": "Raag Asavari",
+    "nativeName": "राग असावरी",
+    "tradition": "indian",
+    "subCategory": "Asavari Thaat",
+    "degrees": [
+      0,
+      2,
+      3,
+      5,
+      7,
+      8,
+      10
+    ],
+    "ascendingPhrase": [
+      0,
+      2,
+      5,
+      7,
+      8,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      10,
+      8,
+      7,
+      5,
+      3,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S R m P d Ṡ",
+      "descending": "Ṡ n d P m g R S"
+    },
+    "sargamOrNames": "S R g m P d n",
+    "mood": "Melancholic, Yearning & Tender",
+    "timeOfDay": "Morning (2nd Prahar)",
+    "suggestedRhythm": "Teental / Roopak (7/8)",
+    "description": "Classical Indian raga in Asavari with sargam (S R g m P d n). Mood: Melancholic, Yearning & Tender. Time: Morning (2nd Prahar)."
+  },
+  {
+    "id": "darbari_kanada",
+    "name": "Raag Darbari Kanada",
+    "nativeName": "राग दरबारी कान्हड़ा",
+    "tradition": "indian",
+    "subCategory": "Asavari Thaat",
+    "degrees": [
+      0,
+      2,
+      3,
+      5,
+      7,
+      8,
+      10
+    ],
+    "ascendingPhrase": [
+      0,
+      2,
+      3,
+      5,
+      7,
+      8,
+      10,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      8,
+      10,
+      7,
+      5,
+      7,
+      3,
+      5,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S R g m P d n Ṡ",
+      "descending": "Ṡ d n P m P g m R S"
+    },
+    "sargamOrNames": "S R g m P d n",
+    "mood": "Majestic, Royal, Profound & Slow",
+    "timeOfDay": "Deep Midnight",
+    "suggestedRhythm": "Ektaal (12 matras, 12/8) / Teental Vilambit",
+    "description": "Classical Indian raga in Asavari with sargam (S R g m P d n). Mood: Majestic, Royal, Profound & Slow. Time: Deep Midnight."
+  },
+  {
+    "id": "jaunpuri",
+    "name": "Raag Jaunpuri",
+    "nativeName": "राग जौनपुरी",
+    "tradition": "indian",
+    "subCategory": "Asavari Thaat",
+    "degrees": [
+      0,
+      2,
+      3,
+      5,
+      7,
+      8,
+      10
+    ],
+    "ascendingPhrase": [
+      0,
+      2,
+      5,
+      7,
+      8,
+      10,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      10,
+      8,
+      7,
+      5,
+      3,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S R m P d n Ṡ",
+      "descending": "Ṡ n d P m g R S"
+    },
+    "sargamOrNames": "S R g m P d n",
+    "mood": "Plaintive, Expressive & Melodic",
+    "timeOfDay": "Late Morning",
+    "suggestedRhythm": "Teental / Roopak (7/8)",
+    "description": "Classical Indian raga in Asavari with sargam (S R g m P d n). Mood: Plaintive, Expressive & Melodic. Time: Late Morning."
+  },
+  {
+    "id": "adana",
+    "name": "Raag Adana",
+    "nativeName": "राग अड़ाना",
+    "tradition": "indian",
+    "subCategory": "Asavari Thaat",
+    "degrees": [
+      0,
+      2,
+      3,
+      5,
+      7,
+      8,
+      10
+    ],
+    "ascendingPhrase": [
+      0,
+      2,
+      5,
+      7,
+      8,
+      10,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      8,
+      10,
+      7,
+      5,
+      7,
+      3,
+      5,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S R m P d n Ṡ",
+      "descending": "Ṡ d n P m P g m R S"
+    },
+    "sargamOrNames": "S R g m P d n",
+    "mood": "Heroic, Energetic & High-Spirited",
+    "timeOfDay": "Late Night (3rd Prahar)",
+    "suggestedRhythm": "Teental Drut (Fast)",
+    "description": "Classical Indian raga in Asavari with sargam (S R g m P d n). Mood: Heroic, Energetic & High-Spirited. Time: Late Night (3rd Prahar)."
+  },
+  {
+    "id": "bhairavi",
+    "name": "Raag Bhairavi",
+    "nativeName": "राग भैरवी",
+    "tradition": "indian",
+    "subCategory": "Bhairavi Thaat",
+    "degrees": [
+      0,
+      1,
+      3,
+      5,
+      7,
+      8,
+      10
+    ],
+    "ascendingPhrase": [
+      0,
+      1,
+      3,
+      5,
+      7,
+      8,
+      10,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      10,
+      8,
+      7,
+      5,
+      3,
+      1,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S r g m P d n Ṡ",
+      "descending": "Ṡ n d P m g r S"
+    },
+    "sargamOrNames": "S r g m P d n",
+    "mood": "Universal, Devotional & Cathartic",
+    "timeOfDay": "Morning (Concert Finale / Anytime)",
+    "suggestedRhythm": "Dadra (6/8) / Keherwa (4/4) / Deepchandi (7/4)",
+    "description": "Classical Indian raga in Bhairavi with sargam (S r g m P d n). Mood: Universal, Devotional & Cathartic. Time: Morning (Concert Finale / Anytime)."
+  },
+  {
+    "id": "malkauns",
+    "name": "Raag Malkauns",
+    "nativeName": "राग मालकौंस",
+    "tradition": "indian",
+    "subCategory": "Bhairavi Thaat",
+    "degrees": [
+      0,
+      3,
+      5,
+      8,
+      10
+    ],
+    "ascendingPhrase": [
+      0,
+      3,
+      5,
+      8,
+      10,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      10,
+      8,
+      5,
+      3,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S g m d n Ṡ",
+      "descending": "Ṡ n d m g S"
+    },
+    "sargamOrNames": "S g m d n",
+    "mood": "Intense, Meditative & Hypnotic",
+    "timeOfDay": "Late Night (3rd Prahar)",
+    "suggestedRhythm": "Jhaptal (10 matras, 5/4) / Teental",
+    "description": "Classical Indian raga in Bhairavi with sargam (S g m d n). Mood: Intense, Meditative & Hypnotic. Time: Late Night (3rd Prahar)."
+  },
+  {
+    "id": "miyan_ki_todi",
+    "name": "Raag Miyan Ki Todi",
+    "nativeName": "राग मियाँ की तोड़ी",
+    "tradition": "indian",
+    "subCategory": "Todi Thaat",
+    "degrees": [
+      0,
+      1,
+      3,
+      6,
+      7,
+      8,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      1,
+      3,
+      6,
+      8,
+      11,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      11,
+      8,
+      7,
+      6,
+      3,
+      1,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S r g M d N Ṡ",
+      "descending": "Ṡ N d P M g r S"
+    },
+    "sargamOrNames": "S r g M P d N",
+    "mood": "Pathos, Devotion & Deep Meditation",
+    "timeOfDay": "Late Morning (2nd Prahar)",
+    "suggestedRhythm": "Ektaal (12/8) / Jhaptal (5/4)",
+    "description": "Classical Indian raga in Todi with sargam (S r g M P d N). Mood: Pathos, Devotion & Deep Meditation. Time: Late Morning (2nd Prahar)."
+  },
+  {
+    "id": "gurjari_todi",
+    "name": "Raag Gurjari Todi",
+    "nativeName": "राग गूजरी तोड़ी",
+    "tradition": "indian",
+    "subCategory": "Todi Thaat",
+    "degrees": [
+      0,
+      1,
+      3,
+      6,
+      8,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      1,
+      3,
+      6,
+      8,
+      11,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      11,
+      8,
+      6,
+      3,
+      1,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S r g M d N Ṡ",
+      "descending": "Ṡ N d M g r S"
+    },
+    "sargamOrNames": "S r g M d N",
+    "mood": "Deeply Moving & Melancholic",
+    "timeOfDay": "Late Morning",
+    "suggestedRhythm": "Ektaal (12/8) / Teental",
+    "description": "Classical Indian raga in Todi with sargam (S r g M d N). Mood: Deeply Moving & Melancholic. Time: Late Morning."
+  },
+  {
+    "id": "bilaskhani_todi",
+    "name": "Raag Bilaskhani Todi",
+    "nativeName": "राग बिलासखानी तोड़ी",
+    "tradition": "indian",
+    "subCategory": "Bhairavi Thaat",
+    "degrees": [
+      0,
+      1,
+      3,
+      5,
+      7,
+      8,
+      10
+    ],
+    "ascendingPhrase": [
+      0,
+      1,
+      3,
+      7,
+      8,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      13,
+      10,
+      8,
+      7,
+      8,
+      5,
+      3,
+      1,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S r g P d Ṡ",
+      "descending": "Ṡ r n d P d m g r S"
+    },
+    "sargamOrNames": "S r g m P d n",
+    "mood": "Mournful, Heart-rending & Spiritual",
+    "timeOfDay": "Late Morning (2nd Prahar)",
+    "suggestedRhythm": "Teental / Roopak (7/8)",
+    "description": "Classical Indian raga in Bhairavi with sargam (S r g m P d n). Mood: Mournful, Heart-rending & Spiritual. Time: Late Morning (2nd Prahar)."
+  },
+  {
+    "id": "poorvi",
+    "name": "Raag Poorvi",
+    "nativeName": "राग पूर्वी",
+    "tradition": "indian",
+    "subCategory": "Poorvi Thaat",
+    "degrees": [
+      0,
+      1,
+      4,
+      5,
+      6,
+      7,
+      8,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      1,
+      4,
+      6,
+      7,
+      8,
+      11,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      11,
+      8,
+      7,
+      6,
+      4,
+      5,
+      4,
+      1,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S r G M P d N Ṡ",
+      "descending": "Ṡ N d P M G m G r S"
+    },
+    "sargamOrNames": "S r G m M P d N",
+    "mood": "Twilight, Mysterious & Mystical",
+    "timeOfDay": "Sunset (Sandhiprakash)",
+    "suggestedRhythm": "Teental / Roopak (7/8)",
+    "description": "Classical Indian raga in Poorvi with sargam (S r G m M P d N). Mood: Twilight, Mysterious & Mystical. Time: Sunset (Sandhiprakash)."
+  },
+  {
+    "id": "puriya_dhanashree",
+    "name": "Raag Puriya Dhanashree",
+    "nativeName": "राग पूरिया धनाश्री",
+    "tradition": "indian",
+    "subCategory": "Poorvi Thaat",
+    "degrees": [
+      0,
+      1,
+      4,
+      6,
+      7,
+      8,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      1,
+      4,
+      6,
+      7,
+      8,
+      11,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      11,
+      8,
+      7,
+      6,
+      4,
+      1,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S r G M P d N Ṡ",
+      "descending": "Ṡ N d P M G r S"
+    },
+    "sargamOrNames": "S r G M P d N",
+    "mood": "Romantic, Serious & Poignant",
+    "timeOfDay": "Late Afternoon / Dusk",
+    "suggestedRhythm": "Teental / Roopak (7/8)",
+    "description": "Classical Indian raga in Poorvi with sargam (S r G M P d N). Mood: Romantic, Serious & Poignant. Time: Late Afternoon / Dusk."
+  },
+  {
+    "id": "shree",
+    "name": "Raag Shree",
+    "nativeName": "राग श्री",
+    "tradition": "indian",
+    "subCategory": "Poorvi Thaat",
+    "degrees": [
+      0,
+      1,
+      4,
+      6,
+      7,
+      8,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      1,
+      6,
+      7,
+      11,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      11,
+      8,
+      7,
+      6,
+      4,
+      1,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S r M P N Ṡ",
+      "descending": "Ṡ N d P M G r S"
+    },
+    "sargamOrNames": "S r G M P d N",
+    "mood": "Austere, Regal, Solemn & Grand",
+    "timeOfDay": "Sunset (Sandhiprakash)",
+    "suggestedRhythm": "Teental / Jhaptal (5/4)",
+    "description": "Classical Indian raga in Poorvi with sargam (S r G M P d N). Mood: Austere, Regal, Solemn & Grand. Time: Sunset (Sandhiprakash)."
+  },
+  {
+    "id": "marwa",
+    "name": "Raag Marwa",
+    "nativeName": "राग मारवा",
+    "tradition": "indian",
+    "subCategory": "Marwa Thaat",
+    "degrees": [
+      0,
+      1,
+      4,
+      6,
+      9,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      1,
+      4,
+      6,
+      9,
+      11,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      11,
+      9,
+      6,
+      4,
+      1,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S r G M D N Ṡ",
+      "descending": "Ṡ N D M G r S"
+    },
+    "sargamOrNames": "S r G M D N",
+    "mood": "Anxious, Haunting, Yearning & Unique",
+    "timeOfDay": "Sunset (Sandhiprakash)",
+    "suggestedRhythm": "Jhaptal (5/4) / Teental",
+    "description": "Classical Indian raga in Marwa with sargam (S r G M D N). Mood: Anxious, Haunting, Yearning & Unique. Time: Sunset (Sandhiprakash)."
+  },
+  {
+    "id": "puriya",
+    "name": "Raag Puriya",
+    "nativeName": "राग पूरिया",
+    "tradition": "indian",
+    "subCategory": "Marwa Thaat",
+    "degrees": [
+      0,
+      1,
+      4,
+      6,
+      9,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      1,
+      4,
+      6,
+      9,
+      11,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      11,
+      9,
+      6,
+      4,
+      1,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S r G M D N Ṡ",
+      "descending": "Ṡ N D M G r S"
+    },
+    "sargamOrNames": "S r G M D N",
+    "mood": "Peaceful, Introspective & Deeply Meditative",
+    "timeOfDay": "Twilight / Night (1st Prahar)",
+    "suggestedRhythm": "Teental / Ektaal (12/8)",
+    "description": "Classical Indian raga in Marwa with sargam (S r G M D N). Mood: Peaceful, Introspective & Deeply Meditative. Time: Twilight / Night (1st Prahar)."
+  },
+  {
+    "id": "sohani",
+    "name": "Raag Sohani",
+    "nativeName": "राग सोहनी",
+    "tradition": "indian",
+    "subCategory": "Marwa Thaat",
+    "degrees": [
+      0,
+      1,
+      4,
+      6,
+      9,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      4,
+      6,
+      9,
+      11,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      11,
+      9,
+      6,
+      4,
+      1,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S G M D N Ṡ",
+      "descending": "Ṡ N D M G r S"
+    },
+    "sargamOrNames": "S r G M D N",
+    "mood": "Bright, Ascendant, Romantic & Delightful",
+    "timeOfDay": "Late Night / Pre-Dawn (4th Prahar)",
+    "suggestedRhythm": "Teental Drut / Roopak (7/8)",
+    "description": "Classical Indian raga in Marwa with sargam (S r G M D N). Mood: Bright, Ascendant, Romantic & Delightful. Time: Late Night / Pre-Dawn (4th Prahar)."
+  },
+  {
+    "id": "charukesi",
+    "name": "Raag Charukesi",
+    "nativeName": "राग चारुकेशी",
+    "tradition": "indian",
+    "subCategory": "Charukesi Thaat",
+    "degrees": [
+      0,
+      2,
+      4,
+      5,
+      7,
+      8,
+      10
+    ],
+    "ascendingPhrase": [
+      0,
+      2,
+      4,
+      5,
+      7,
+      8,
+      10,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      10,
+      8,
+      7,
+      5,
+      4,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S R G m P d n Ṡ",
+      "descending": "Ṡ n d P m G R S"
+    },
+    "sargamOrNames": "S R G m P d n",
+    "mood": "Emotional, Melting, Sweet & Soulful",
+    "timeOfDay": "Anytime / Evening",
+    "suggestedRhythm": "Mishra Chapu / Rupak (7/8) / Keherwa (4/4)",
+    "description": "Classical Indian raga in Charukesi with sargam (S R G m P d n). Mood: Emotional, Melting, Sweet & Soulful. Time: Anytime / Evening."
+  },
+  {
+    "id": "shivaranjani",
+    "name": "Raag Shivaranjani",
+    "nativeName": "राग शिवरंजनी",
+    "tradition": "indian",
+    "subCategory": "Kafi Thaat",
+    "degrees": [
+      0,
+      2,
+      3,
+      7,
+      9
+    ],
+    "ascendingPhrase": [
+      0,
+      2,
+      3,
+      7,
+      9,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      9,
+      7,
+      3,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S R g P D Ṡ",
+      "descending": "Ṡ D P g R S"
+    },
+    "sargamOrNames": "S R g P D",
+    "mood": "Tearful, Heartfelt, Romantic & Tragic",
+    "timeOfDay": "Midnight / Anytime",
+    "suggestedRhythm": "Dadra (6/8) / Keherwa (4/4)",
+    "description": "Classical Indian raga in Kafi with sargam (S R g P D). Mood: Tearful, Heartfelt, Romantic & Tragic. Time: Midnight / Anytime."
+  },
+  {
+    "id": "mishra_shivaranjani",
+    "name": "Raag Mishra Shivaranjani",
+    "nativeName": "राग मिश्र शिवरंजनी",
+    "tradition": "indian",
+    "subCategory": "Kafi Thaat",
+    "degrees": [
+      0,
+      2,
+      3,
+      4,
+      7,
+      9
+    ],
+    "ascendingPhrase": [
+      0,
+      2,
+      3,
+      4,
+      7,
+      9,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      9,
+      7,
+      4,
+      3,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S R g G P D Ṡ",
+      "descending": "Ṡ D P G g R S"
+    },
+    "sargamOrNames": "S R g G P D (Both Ga)",
+    "mood": "Deeply Moving & Melodramatic",
+    "timeOfDay": "Midnight",
+    "suggestedRhythm": "Dadra (6/8) / Keherwa",
+    "description": "Classical Indian raga in Kafi with sargam (S R g G P D (Both Ga)). Mood: Deeply Moving & Melodramatic. Time: Midnight."
+  },
+  {
+    "id": "kirwani",
+    "name": "Raag Kirwani",
+    "nativeName": "राग किरवाणी",
+    "tradition": "indian",
+    "subCategory": "Kalyan / Melakarta",
+    "degrees": [
+      0,
+      2,
+      3,
+      5,
+      7,
+      8,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      2,
+      3,
+      5,
+      7,
+      8,
+      11,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      11,
+      8,
+      7,
+      5,
+      3,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S R g m P d N Ṡ",
+      "descending": "Ṡ N d P m g R S"
+    },
+    "sargamOrNames": "S R g m P d N",
+    "mood": "Melancholic yet Elegant",
+    "timeOfDay": "Night (1st Prahar)",
+    "suggestedRhythm": "Keherwa (4/4) / Dadra (6/8) / Rupak (7/8)",
+    "description": "Classical Indian raga in Kalyan / Melakarta with sargam (S R g m P d N). Mood: Melancholic yet Elegant. Time: Night (1st Prahar)."
+  },
+  {
+    "id": "madhuvanti",
+    "name": "Raag Madhuvanti",
+    "nativeName": "राग मधुवंती",
+    "tradition": "indian",
+    "subCategory": "Todi Thaat",
+    "degrees": [
+      0,
+      2,
+      3,
+      6,
+      7,
+      9,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      3,
+      6,
+      7,
+      11,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      11,
+      9,
+      7,
+      6,
+      3,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S g M P N Ṡ",
+      "descending": "Ṡ N D P M g R S"
+    },
+    "sargamOrNames": "S R g M P D N",
+    "mood": "Sweet, Longing & Romantic",
+    "timeOfDay": "Late Afternoon / Dusk",
+    "suggestedRhythm": "Teental (4/4) / Jhaptal (5/4)",
+    "description": "Classical Indian raga in Todi with sargam (S R g M P D N). Mood: Sweet, Longing & Romantic. Time: Late Afternoon / Dusk."
+  },
+  {
+    "id": "jog",
+    "name": "Raag Jog",
+    "nativeName": "राग जोग",
+    "tradition": "indian",
+    "subCategory": "Kafi Thaat",
+    "degrees": [
+      0,
+      3,
+      4,
+      5,
+      7,
+      10
+    ],
+    "ascendingPhrase": [
+      0,
+      4,
+      5,
+      7,
+      10,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      10,
+      7,
+      5,
+      4,
+      5,
+      3,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S G m P n Ṡ",
+      "descending": "Ṡ n P m G m g S"
+    },
+    "sargamOrNames": "S g G m P n",
+    "mood": "Enchanting, Intoxicating & Soulful",
+    "timeOfDay": "Late Night",
+    "suggestedRhythm": "Jhaptal (5/4) / Teental (4/4)",
+    "description": "Classical Indian raga in Kafi with sargam (S g G m P n). Mood: Enchanting, Intoxicating & Soulful. Time: Late Night."
+  },
+  {
+    "id": "chandrakauns",
+    "name": "Raag Chandrakauns",
+    "nativeName": "राग चंद्रकौंस",
+    "tradition": "indian",
+    "subCategory": "Kafi Thaat",
+    "degrees": [
+      0,
+      3,
+      5,
+      8,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      3,
+      5,
+      8,
+      11,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      11,
+      8,
+      5,
+      3,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S g m d N Ṡ",
+      "descending": "Ṡ N d m g S"
+    },
+    "sargamOrNames": "S g m d N (Shuddha Ni Malkauns)",
+    "mood": "Mystical Moonlight, Meditative & Solemn",
+    "timeOfDay": "Midnight (3rd Prahar)",
+    "suggestedRhythm": "Jhaptal (5/4) / Teental (4/4)",
+    "description": "Classical Indian raga in Kafi with sargam (S g m d N (Shuddha Ni Malkauns)). Mood: Mystical Moonlight, Meditative & Solemn. Time: Midnight (3rd Prahar)."
+  },
+  {
+    "id": "kalavati",
+    "name": "Raag Kalavati",
+    "nativeName": "राग कलावती",
+    "tradition": "indian",
+    "subCategory": "Khamaj Thaat",
+    "degrees": [
+      0,
+      4,
+      7,
+      9,
+      10
+    ],
+    "ascendingPhrase": [
+      0,
+      4,
+      7,
+      9,
+      10,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      10,
+      9,
+      7,
+      4,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S G P D n Ṡ",
+      "descending": "Ṡ n D P G S"
+    },
+    "sargamOrNames": "S G P D n",
+    "mood": "Lilting, Joyful, Sparkling & Festive",
+    "timeOfDay": "Night (2nd Prahar)",
+    "suggestedRhythm": "Dadra (6/8) / Keherwa (4/4)",
+    "description": "Classical Indian raga in Khamaj with sargam (S G P D n). Mood: Lilting, Joyful, Sparkling & Festive. Time: Night (2nd Prahar)."
+  },
+  {
+    "id": "pahadi",
+    "name": "Raag Pahadi",
+    "nativeName": "राग पहाड़ी",
+    "tradition": "indian",
+    "subCategory": "Bilawal Thaat",
+    "degrees": [
+      0,
+      2,
+      4,
+      5,
+      7,
+      9,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      2,
+      4,
+      7,
+      9,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      11,
+      9,
+      7,
+      5,
+      4,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S R G P D Ṡ",
+      "descending": "Ṡ N D P m G R S"
+    },
+    "sargamOrNames": "S R G m P D N (Folk of Himalayas)",
+    "mood": "Pastoral, Sweet, Nostalgic & Serene",
+    "timeOfDay": "Evening / Anytime",
+    "suggestedRhythm": "Keherwa (4/4) / Dadra (6/8)",
+    "description": "Classical Indian raga in Bilawal with sargam (S R G m P D N (Folk of Himalayas)). Mood: Pastoral, Sweet, Nostalgic & Serene. Time: Evening / Anytime."
+  },
+  {
+    "id": "pilu_mishra_pilu",
+    "name": "Raag Pilu / Mishra Pilu",
+    "nativeName": "राग पीलू / मिश्र पीलू",
+    "tradition": "indian",
+    "subCategory": "Kafi Thaat",
+    "degrees": [
+      0,
+      2,
+      3,
+      4,
+      5,
+      7,
+      8,
+      9,
+      10,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      3,
+      5,
+      7,
+      11,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      10,
+      8,
+      7,
+      5,
+      3,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S g m P N Ṡ",
+      "descending": "Ṡ n d P m g R S"
+    },
+    "sargamOrNames": "S R g G m P d D n N (Light Classical)",
+    "mood": "Romantic, Playful, Thumri & Bittersweet",
+    "timeOfDay": "Afternoon / Evening",
+    "suggestedRhythm": "Dadra (6/8) / Keherwa (4/4)",
+    "description": "Classical Indian raga in Kafi with sargam (S R g G m P d D n N (Light Classical)). Mood: Romantic, Playful, Thumri & Bittersweet. Time: Afternoon / Evening."
+  },
+  {
+    "id": "hemant",
+    "name": "Raag Hemant",
+    "nativeName": "राग हेमंत",
+    "tradition": "indian",
+    "subCategory": "Bilawal Thaat",
+    "degrees": [
+      0,
+      2,
+      3,
+      4,
+      5,
+      7,
+      9,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      -1,
+      -3,
+      -1,
+      0,
+      3,
+      5,
+      9,
+      11,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      11,
+      9,
+      7,
+      5,
+      4,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S N D N S g m D N Ṡ",
+      "descending": "Ṡ N D P m G R S"
+    },
+    "sargamOrNames": "S R g G m P D N (Allauddin Khan)",
+    "mood": "Reflective, Soothing, Serene & Poetic",
+    "timeOfDay": "Late Evening / Winter",
+    "suggestedRhythm": "Teental / Roopak (7/8)",
+    "description": "Classical Indian raga in Bilawal with sargam (S R g G m P D N (Allauddin Khan)). Mood: Reflective, Soothing, Serene & Poetic. Time: Late Evening / Winter."
+  },
+  {
+    "id": "gorakh_kalyan",
+    "name": "Raag Gorakh Kalyan",
+    "nativeName": "राग गोरख कल्याण",
+    "tradition": "indian",
+    "subCategory": "Kafi Thaat",
+    "degrees": [
+      0,
+      2,
+      5,
+      9,
+      10
+    ],
+    "ascendingPhrase": [
+      0,
+      2,
+      5,
+      9,
+      10,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      10,
+      9,
+      5,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S R m D n Ṡ",
+      "descending": "Ṡ n D m R S"
+    },
+    "sargamOrNames": "S R m D n",
+    "mood": "Tranquil, Renunciant & Soulful",
+    "timeOfDay": "Night (2nd Prahar)",
+    "suggestedRhythm": "Teental / Jhaptal (5/4)",
+    "description": "Classical Indian raga in Kafi with sargam (S R m D n). Mood: Tranquil, Renunciant & Soulful. Time: Night (2nd Prahar)."
+  },
+  {
+    "id": "mayamalavagowla",
+    "name": "Raag Mayamalavagowla",
+    "nativeName": "राग मायामालवगौल (15th Melakarta)",
+    "tradition": "indian",
+    "subCategory": "Bhairav / Melakarta 15",
+    "degrees": [
+      0,
+      1,
+      4,
+      5,
+      7,
+      8,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      1,
+      4,
+      5,
+      7,
+      8,
+      11,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      11,
+      8,
+      7,
+      5,
+      4,
+      1,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S r G m P d N Ṡ",
+      "descending": "Ṡ N d P m G r S"
+    },
+    "sargamOrNames": "S r G m P d N (15th Melakarta)",
+    "mood": "Auspicious, Disciplined & Spiritual",
+    "timeOfDay": "Morning / Anytime",
+    "suggestedRhythm": "Adi Tala (8 matras / 4/4) / Roopak",
+    "description": "Classical Indian raga in Bhairav / Melakarta 15 with sargam (S r G m P d N (15th Melakarta)). Mood: Auspicious, Disciplined & Spiritual. Time: Morning / Anytime."
+  },
+  {
+    "id": "shanmukhapriya",
+    "name": "Raag Shanmukhapriya",
+    "nativeName": "राग षण्मुखप्रिया (56th Melakarta)",
+    "tradition": "indian",
+    "subCategory": "Melakarta 56",
+    "degrees": [
+      0,
+      2,
+      3,
+      6,
+      7,
+      8,
+      10
+    ],
+    "ascendingPhrase": [
+      0,
+      2,
+      3,
+      6,
+      7,
+      8,
+      10,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      10,
+      8,
+      7,
+      6,
+      3,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S R g M P d n Ṡ",
+      "descending": "Ṡ n d P M g R S"
+    },
+    "sargamOrNames": "S R g M P d n (56th Melakarta)",
+    "mood": "Philosophical, Deep, Intellectual & Moving",
+    "timeOfDay": "Evening",
+    "suggestedRhythm": "Mishra Chapu (7/8) / Adi Tala (4/4)",
+    "description": "Classical Indian raga in Melakarta 56 with sargam (S R g M P d n (56th Melakarta)). Mood: Philosophical, Deep, Intellectual & Moving. Time: Evening."
+  },
+  {
+    "id": "simhendramadhyamam",
+    "name": "Raag Simhendramadhyamam",
+    "nativeName": "राग सिंहेंद्रमध्यमम् (57th Melakarta)",
+    "tradition": "indian",
+    "subCategory": "Melakarta 57",
+    "degrees": [
+      0,
+      2,
+      3,
+      6,
+      7,
+      8,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      2,
+      3,
+      6,
+      7,
+      8,
+      11,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      11,
+      8,
+      7,
+      6,
+      3,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S R g M P d N Ṡ",
+      "descending": "Ṡ N d P M g R S"
+    },
+    "sargamOrNames": "S R g M P d N (57th Melakarta)",
+    "mood": "Dramatic, Majestic, Intense & Grand",
+    "timeOfDay": "Night (1st Prahar)",
+    "suggestedRhythm": "Adi Tala (4/4) / Rupak",
+    "description": "Classical Indian raga in Melakarta 57 with sargam (S R g M P d N (57th Melakarta)). Mood: Dramatic, Majestic, Intense & Grand. Time: Night (1st Prahar)."
+  },
+  {
+    "id": "hamsanandi",
+    "name": "Raag Hamsanandi",
+    "nativeName": "राग हंसनंदी (53rd Melakarta)",
+    "tradition": "indian",
+    "subCategory": "Marwa / Melakarta 53",
+    "degrees": [
+      0,
+      1,
+      4,
+      6,
+      9,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      1,
+      4,
+      6,
+      9,
+      11,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      11,
+      9,
+      6,
+      4,
+      1,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S r G M D N Ṡ",
+      "descending": "Ṡ N D M G r S"
+    },
+    "sargamOrNames": "S r G M D N",
+    "mood": "Celebratory, Luminous, Festive & Blissful",
+    "timeOfDay": "Sunset / Evening",
+    "suggestedRhythm": "Adi Tala (4/4) / Keherwa",
+    "description": "Classical Indian raga in Marwa / Melakarta 53 with sargam (S r G M D N). Mood: Celebratory, Luminous, Festive & Blissful. Time: Sunset / Evening."
+  },
+  {
+    "id": "abhogi",
+    "name": "Raag Abhogi",
+    "nativeName": "राग आभोगी (22nd Melakarta)",
+    "tradition": "indian",
+    "subCategory": "Kafi / Melakarta 22",
+    "degrees": [
+      0,
+      2,
+      3,
+      5,
+      9
+    ],
+    "ascendingPhrase": [
+      0,
+      2,
+      3,
+      5,
+      9,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      9,
+      5,
+      3,
+      2,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S R g m D Ṡ",
+      "descending": "Ṡ D m g R S"
+    },
+    "sargamOrNames": "S R g m D",
+    "mood": "Vibrant, Cheerful, Crisp & Energetic",
+    "timeOfDay": "Evening",
+    "suggestedRhythm": "Adi Tala (4/4) / Rupak (7/8)",
+    "description": "Classical Indian raga in Kafi / Melakarta 22 with sargam (S R g m D). Mood: Vibrant, Cheerful, Crisp & Energetic. Time: Evening."
+  },
+  {
+    "id": "amritavarshini",
+    "name": "Raag Amritavarshini",
+    "nativeName": "राग अमृतवर्षिणी (66th Melakarta)",
+    "tradition": "indian",
+    "subCategory": "Kalyan / Melakarta 66",
+    "degrees": [
+      0,
+      4,
+      6,
+      7,
+      11
+    ],
+    "ascendingPhrase": [
+      0,
+      4,
+      6,
+      7,
+      11,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      11,
+      7,
+      6,
+      4,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S G M P N Ṡ",
+      "descending": "Ṡ N P M G S"
+    },
+    "sargamOrNames": "S G M P N (Rain Invoking)",
+    "mood": "Exquisite, Sparkling & Rain-Invoking",
+    "timeOfDay": "Anytime / Rainy Season",
+    "suggestedRhythm": "Mishra Chapu (7/8) / Adi Tala (4/4)",
+    "description": "Classical Indian raga in Kalyan / Melakarta 66 with sargam (S G M P N (Rain Invoking)). Mood: Exquisite, Sparkling & Rain-Invoking. Time: Anytime / Rainy Season."
+  },
+  {
+    "id": "valachi_valaji",
+    "name": "Raag Valachi / Valaji",
+    "nativeName": "राग वलचि / वलजी",
+    "tradition": "indian",
+    "subCategory": "Khamaj / Melakarta 28",
+    "degrees": [
+      0,
+      4,
+      7,
+      9,
+      10
+    ],
+    "ascendingPhrase": [
+      0,
+      4,
+      7,
+      9,
+      10,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      10,
+      9,
+      7,
+      4,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S G P D n Ṡ",
+      "descending": "Ṡ n D P G S"
+    },
+    "sargamOrNames": "S G P D n",
+    "mood": "Sweet, Harmonious, Graceful & Radiant",
+    "timeOfDay": "Late Evening",
+    "suggestedRhythm": "Adi Tala (4/4) / Rupak",
+    "description": "Classical Indian raga in Khamaj / Melakarta 28 with sargam (S G P D n). Mood: Sweet, Harmonious, Graceful & Radiant. Time: Late Evening."
+  },
+  {
+    "id": "revati",
+    "name": "Raag Revati",
+    "nativeName": "राग रेवती (8th Melakarta)",
+    "tradition": "indian",
+    "subCategory": "Bhairavi / Melakarta 8",
+    "degrees": [
+      0,
+      1,
+      5,
+      7,
+      10
+    ],
+    "ascendingPhrase": [
+      0,
+      1,
+      5,
+      7,
+      10,
+      12
+    ],
+    "descendingPhrase": [
+      12,
+      10,
+      7,
+      5,
+      1,
+      0
+    ],
+    "phraseNotation": {
+      "ascending": "S r m P n Ṡ",
+      "descending": "Ṡ n P m r S"
+    },
+    "sargamOrNames": "S r m P n",
+    "mood": "Spiritual, Uplifting, Pure & Meditative",
+    "timeOfDay": "Night (Anytime)",
+    "suggestedRhythm": "Adi Tala / Keherwa",
+    "description": "Classical Indian raga in Bhairavi / Melakarta 8 with sargam (S r m P n). Mood: Spiritual, Uplifting, Pure & Meditative. Time: Night (Anytime)."
   },
 
-  /* =========================================================================
+/* =========================================================================
      2. ARABIC & EGYPTIAN / MIDDLE EASTERN (Maqamat)
      ========================================================================= */
   {

@@ -254,14 +254,14 @@ const DICTIONARY = {
 
   /* ============================================================== */
   vox: {
-    lead: ['vox', 'vocal', 'vocals', 'leadvox', 'lead vocal', 'mainvox', 'vcl'],
+    lead: ['vox', 'vocal', 'vocals', 'leadvox', 'lead vocal', 'mainvox', 'vcl', 'melodyne'],
     backing: ['backing', 'bgv', 'backingvocal', 'harmony', 'harmonies', 'doubles'],
     chop: ['vocalchop', 'vocal chop', 'chop', 'chops'],
-    adlib: ['adlib', 'adlibs', 'ad lib'],
+    adlib: ['adlib', 'adlibs', 'ad lib', 'adlip', 'adlips'],
     choir: ['choir', 'chorus', 'gospel', 'aah', 'ooh'],
     spoken: ['spoken', 'dialogue', 'speech', 'vo', 'voiceover', 'narration'],
     rap: ['rap', 'verse', 'hook', 'topline'],
-    generic: ['voice', 'vocalist', 'singer']
+    generic: ['voice', 'vocalist', 'singer', 'acapella', 'accapella', 'autotune']
   },
 
   /* ============================================================== */

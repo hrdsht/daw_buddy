@@ -123,9 +123,9 @@ test('Chroma Matching across World Traditions', () => {
   assert.equal(westernMatches[0].id, 'harmonic_minor');
 
   // Test All traditions
-  const allMatches = findMatchingWorldScales(gongChroma, 0, 'all', 6);
+  const allMatches = findMatchingWorldScales(gongChroma, 0, 'all', 12);
   assert.ok(allMatches.length > 0);
-  assert.ok(allMatches.some((m) => m.tradition === 'chinese' || m.tradition === 'celtic' || m.tradition === 'western'));
+  assert.ok(allMatches.some((m) => m.tradition === 'chinese' || m.tradition === 'celtic' || m.tradition === 'western' || m.tradition === 'indian'));
 });
 
 test('World Scale MIDI Generation', () => {

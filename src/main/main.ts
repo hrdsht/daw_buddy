@@ -1503,81 +1503,7 @@ ipcMain.handle('tools:quickSaveAudio', async (event, { fileName, data, subfolder
 
 /* ------------------------- smart renamer -------------------------- */
 
-async function detectEmptyTrack(filePath: string): Promise<{ isEmpty: boolean; emptyReason?: string; sizeBytes: number; peakDb?: number }> {
-  try {
-    const stat = await fsp.stat(filePath);
-    const sizeBytes = stat.size || 0;
-    if (sizeBytes === 0) {
-      return { isEmpty: true, emptyReason: '0-byte empty file', sizeBytes: 0, peakDb: -Infinity };
-    }
-
-    const ext = path.extname(filePath).toLowerCase();
-    if (ext === '.wav') {
-      if (sizeBytes <= 44) {
-        return { isEmpty: true, emptyReason: 'Empty WAV header (no data)', sizeBytes, peakDb: -Infinity };
-      }
-
-      // Fast streaming probe: read only header + tiny sample chunks instead of multi-gigabyte files
-      let fd: any = null;
-      try {
-        fd = await fsp.open(filePath, 'r');
-        const headerBuf = Buffer.alloc(8192);
-        const { bytesRead } = await fd.read(headerBuf, 0, 8192, 0);
-        const subBuf = headerBuf.subarray(0, bytesRead);
-        const parsed = silence.parseWav(subBuf);
-        if (parsed.error) {
-          if (parsed.error.toLowerCase().includes('empty') || parsed.error.toLowerCase().includes('missing')) {
-            return { isEmpty: true, emptyReason: parsed.error, sizeBytes, peakDb: -Infinity };
-          }
-        } else if (parsed.dataSize === 0) {
-          return { isEmpty: true, emptyReason: 'Empty WAV data (0 frames)', sizeBytes, peakDb: -Infinity };
-        } else if (parsed.fmt) {
-          const { fmt, dataOffset, dataSize } = parsed;
-          const bytesPerSample = Math.max(1, Math.floor(fmt.bitsPerSample / 8));
-          const blockAlign = fmt.blockAlign || (fmt.numChannels * bytesPerSample);
-          
-          let peak = 0;
-          const probePositions = [
-            dataOffset,
-            Math.floor(dataOffset + dataSize / 2),
-            Math.max(dataOffset, dataOffset + dataSize - 4096)
-          ];
-          const probeBuf = Buffer.alloc(4096);
-          
-          for (const pos of probePositions) {
-            if (pos >= sizeBytes) continue;
-            const readRes = await fd.read(probeBuf, 0, 4096, pos);
-            const chunk = probeBuf.subarray(0, readRes.bytesRead);
-            for (let offset = 0; offset + bytesPerSample <= chunk.length; offset += blockAlign) {
-              const mag = silence.readMagnitude(chunk, offset, fmt);
-              if (mag > peak) {
-                peak = mag;
-              }
-            }
-            if (peak > 0.0001) break;
-          }
-
-          if (peak === 0) {
-            return {
-              isEmpty: true,
-              emptyReason: 'Digital silence (0.0 peak)',
-              sizeBytes,
-              peakDb: -Infinity
-            };
-          }
-          const toDb = (v: number) => (v > 0 ? 20 * Math.log10(v) : -Infinity);
-          return { isEmpty: false, sizeBytes, peakDb: toDb(peak) };
-        }
-      } finally {
-        if (fd) await fd.close();
-      }
-    }
-
-    return { isEmpty: false, sizeBytes };
-  } catch (err: any) {
-    return { isEmpty: false, sizeBytes: 0 };
-  }
-}
+const detectEmptyTrack = silence.detectEmptyTrack;
 
 ipcMain.handle('tools:smartClassify', async (event, folder, fileList) => {
   guardApproved(folder);
@@ -1722,6 +1648,8 @@ ipcMain.handle('tools:smartAudioFeatures', async (event, filePath) => {
 
     return {
       ok: true,
+      isEmpty: false,
+      emptyReason: null,
       features: feats,
       category: guessedCat,
       subtype: guessedSub,
