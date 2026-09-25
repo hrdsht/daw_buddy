@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      {
+        "command": ".agents/skills/impeccable/scripts/impeccable hook-before-edit",
+        "matcher": "Write|StrReplace|EditNotebook"
+      }
+    ]
+  }
+}
