@@ -10458,28 +10458,87 @@ button.is-loading {
 }
 
 .bpm-input-wrap {
-  flex: 1.4;
+  flex: 1.5;
   display: flex;
   justify-content: center;
+  align-items: center;
+}
+
+.bpm-scroll-display {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 3px 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--amber);
+  user-select: none;
+  min-width: 68px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.bpm-scroll-display:hover {
+  border-color: var(--amber);
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.2);
+}
+
+.bpm-scroll-display:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 1px;
+}
+
+.bpm-scroll-part {
+  display: inline-block;
+  padding: 1px 3px;
+  border-radius: 3px;
+  cursor: ns-resize;
+  transition: background 0.12s, color 0.12s, transform 0.08s;
+}
+
+.bpm-scroll-part:hover {
+  background: rgba(245, 158, 11, 0.22);
+  color: #fff;
+  text-shadow: 0 0 6px rgba(245, 158, 11, 0.8);
+}
+
+.bpm-scroll-part:active {
+  transform: scale(0.94);
+}
+
+.bpm-scroll-sep {
+  opacity: 0.8;
+  padding: 0 1px;
+  font-weight: 700;
+  cursor: ns-resize;
+}
+
+.bpm-scroll-sep:hover {
+  color: #fff;
 }
 
 .bpm-direct-input {
-  width: 62px;
+  width: 68px;
   font-family: var(--mono);
   font-size: 12px;
   font-weight: 700;
   text-align: center;
   padding: 4px 2px;
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: 1px solid var(--amber);
   border-radius: 4px;
   color: var(--amber);
   outline: none;
+  box-shadow: 0 0 6px var(--accent-glow);
 }
 
 .bpm-direct-input:focus {
   border-color: var(--amber);
-  box-shadow: 0 0 6px var(--accent-glow);
+  box-shadow: 0 0 8px var(--accent-glow);
 }
 
 /* Tools Grid */

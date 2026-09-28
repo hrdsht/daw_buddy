@@ -169,9 +169,31 @@ function testWSOLATimeStretchAndPhaseInversion() {
   assert.ok(summary.includes('Marker Count: 3'));
 }
 
+function test110BpmEstimation() {
+  const sampleRate = 22050;
+  const beatSec = 60 / 110; // ~0.54545s
+  const onsets = [];
+  // 16 bars of 110 BPM groove with syncopated 8th note kicks and snares
+  for (let bar = 0; bar < 16; bar++) {
+    const barStart = bar * 4 * beatSec;
+    onsets.push(barStart); // beat 1
+    onsets.push(barStart + beatSec); // beat 2
+    onsets.push(barStart + 1.5 * beatSec); // beat 2.5 (syncopated 8th note)
+    onsets.push(barStart + 3 * beatSec); // beat 4
+  }
+
+  const est = estimateAnchorBpm(onsets, sampleRate, 32);
+  assert.equal(
+    est.roundedBpm,
+    110,
+    `Expected 110 BPM, but got ${est.roundedBpm} BPM (detected ${est.detectedBpm})`
+  );
+}
+
 function runAll() {
   testStemClassification();
   testOnsetDetectionAndAnchorBpm();
+  test110BpmEstimation();
   testDriftMapGeneration();
   testWSOLATimeStretchAndPhaseInversion();
   console.log('✔ All Suno Stem Quantizer DSP and TSM tests passed!');

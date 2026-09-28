@@ -1492,13 +1492,25 @@ ipcMain.handle('tools:saveAudio', async (event, { defaultName, data, format, sub
   return result.filePath;
 });
 
-ipcMain.handle('tools:quickSaveAudio', async (event, { fileName, data, subfolder = 'Slowed + Reverb' }: any) => {
-  const toolFolder = await ensureToolOutputFolder(subfolder);
-  if (!toolFolder) throw new Error('No output folder configured');
-  const targetPath = path.join(toolFolder, fileName);
-  await fsp.writeFile(targetPath, Buffer.from(data));
-  return targetPath;
-});
+ipcMain.handle(
+  'tools:quickSaveAudio',
+  async (event, { fileName, data, subfolder = 'Slowed + Reverb', targetDir, exactPath }: any) => {
+    let targetPath: string;
+    if (exactPath) {
+      targetPath = exactPath;
+      await fsp.mkdir(path.dirname(targetPath), { recursive: true });
+    } else if (targetDir) {
+      await fsp.mkdir(targetDir, { recursive: true });
+      targetPath = path.join(targetDir, fileName);
+    } else {
+      const toolFolder = await ensureToolOutputFolder(subfolder);
+      if (!toolFolder) throw new Error('No output folder configured');
+      targetPath = path.join(toolFolder, fileName);
+    }
+    await fsp.writeFile(targetPath, Buffer.from(data));
+    return targetPath;
+  }
+);
 
 
 /* ------------------------- smart renamer -------------------------- */
@@ -1711,6 +1723,10 @@ ipcMain.handle('output:getToolFolder', async (event, subfolderName: string) => {
 });
 
 ipcMain.handle('output:openFolder', async (event, subfolderName?: string) => {
+  if (subfolderName && path.isAbsolute(subfolderName) && fs.existsSync(subfolderName)) {
+    await shell.openPath(subfolderName);
+    return true;
+  }
   const root = await ensureOutputFolder();
   if (!root) return false;
   const target = subfolderName ? path.join(root, subfolderName) : root;

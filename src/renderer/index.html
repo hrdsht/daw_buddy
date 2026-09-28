@@ -205,7 +205,12 @@
             <div class="bpm-nudge-group">
               <button type="button" class="bpm-pill-action" data-nudge="-5" title="Subtract 5 BPM">-5</button>
               <button type="button" class="bpm-pill-action" data-nudge="-1" title="Subtract 1 BPM">-1</button>
-              <div class="bpm-input-wrap">
+              <div class="bpm-input-wrap" id="bpmScrollBox" title="Scroll wheel: hover integer (±1) or decimal (±0.1, clamped .0-.9)">
+                <div class="bpm-scroll-display" id="bpmScrollDisplay" tabindex="0" role="spinbutton" aria-label="BPM Value · Scroll integer or decimal, or click to type">
+                  <span id="bpmScrollInt" class="bpm-scroll-part bpm-scroll-int" title="Scroll wheel over integer to ±1 BPM">120</span>
+                  <span id="bpmScrollDot" class="bpm-scroll-sep" title="Scroll wheel over decimal to ±0.1 BPM">.</span>
+                  <span id="bpmScrollDec" class="bpm-scroll-part bpm-scroll-dec" title="Scroll wheel over decimal to ±0.1 BPM (clamped .0 to .9)">0</span>
+                </div>
                 <input
                   id="bpmDirectInput"
                   class="bpm-direct-input"
@@ -216,6 +221,7 @@
                   value="120"
                   aria-label="Target BPM"
                   title="Direct numeric BPM"
+                  style="display: none;"
                 />
               </div>
               <button type="button" class="bpm-pill-action" data-nudge="1" title="Add 1 BPM">+1</button>

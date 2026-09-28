@@ -74,8 +74,19 @@ contextBridge.exposeInMainWorld('api', {
   saveMidi: (defaultName, data) => ipcRenderer.invoke('tools:saveMidi', { defaultName, data }),
   saveAudio: (defaultName: string, data: number[] | Uint8Array, format: 'wav' | 'mp3', subfolder?: string) =>
     ipcRenderer.invoke('tools:saveAudio', { defaultName, data, format, subfolder }),
-  quickSaveAudio: (fileName: string, data: number[] | Uint8Array, subfolder?: string) =>
-    ipcRenderer.invoke('tools:quickSaveAudio', { fileName, data, subfolder }),
+  quickSaveAudio: (
+    fileName: string,
+    data: number[] | Uint8Array,
+    subfolder?: string,
+    options?: { targetDir?: string; exactPath?: string }
+  ) =>
+    ipcRenderer.invoke('tools:quickSaveAudio', {
+      fileName,
+      data,
+      subfolder,
+      targetDir: options?.targetDir,
+      exactPath: options?.exactPath
+    }),
 
   outputGet: () => ipcRenderer.invoke('output:get'),
   outputEnsure: () => ipcRenderer.invoke('output:ensure'),

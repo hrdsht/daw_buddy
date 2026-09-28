@@ -123,6 +123,24 @@ export function formatHz(hz: number): string {
   if (hz >= 100) return hz.toFixed(1) + ' Hz';
   return hz.toFixed(2) + ' Hz';
 }
+ 
+/**
+ * Increments or decrements either the integer or decimal portion of a BPM value.
+ * Scrolling over the decimal portion is clamped between 0 and 9 and will NEVER carry over to the integer.
+ * e.g. 104.9 + 0.1 decimal step stays at 104.9 (does not roll over to 105).
+ */
+export function stepBpmDigit(bpm: number, target: 'int' | 'dec', delta: number): number {
+  const safeBpm = isNaN(bpm) ? 120 : bpm;
+  const intPart = Math.floor(safeBpm);
+  const currentDec = Math.round((safeBpm - intPart) * 10);
+  if (target === 'int') {
+    const newInt = Math.max(20, Math.min(400, intPart + delta));
+    return Math.round((newInt + currentDec / 10) * 10) / 10;
+  } else {
+    const newDec = Math.max(0, Math.min(9, currentDec + delta));
+    return Math.round((intPart + newDec / 10) * 10) / 10;
+  }
+}
 
 /**
  * Full calculation bundle for a specific setting.
@@ -317,6 +335,10 @@ export class BpmToolController {
   private samples48k: HTMLElement | null = null;
   private samples96k: HTMLElement | null = null;
   private matrixBody: HTMLElement | null = null;
+  private scrollDisplay: HTMLElement | null = null;
+  private scrollInt: HTMLElement | null = null;
+  private scrollDot: HTMLElement | null = null;
+  private scrollDec: HTMLElement | null = null;
 
   constructor(options: BpmToolOptions = {}) {
     this.options = options;
@@ -338,6 +360,10 @@ export class BpmToolController {
     this.pulseDot = document.getElementById('bpmPulseDot');
     this.tapBtn = document.getElementById('bpmTapBtn') as HTMLButtonElement;
     this.tapCounter = document.getElementById('bpmTapCounter');
+    this.scrollDisplay = document.getElementById('bpmScrollDisplay');
+    this.scrollInt = document.getElementById('bpmScrollInt');
+    this.scrollDot = document.getElementById('bpmScrollDot');
+    this.scrollDec = document.getElementById('bpmScrollDec');
     this.directInput = document.getElementById('bpmDirectInput') as HTMLInputElement;
     this.halfBtn = document.getElementById('bpmHalfBtn') as HTMLButtonElement;
     this.doubleBtn = document.getElementById('bpmDoubleBtn') as HTMLButtonElement;
@@ -405,6 +431,69 @@ export class BpmToolController {
         this.updateDelayUI();
       }
     });
+
+    // Wheel over integer (±1 BPM)
+    const onWheelInt = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const dir = e.deltaY < 0 ? 1 : -1;
+      this.stepInteger(dir);
+    };
+    this.scrollInt?.addEventListener('wheel', onWheelInt as EventListener, { passive: false });
+    this.intDisplay?.addEventListener('wheel', onWheelInt as EventListener, { passive: false });
+
+    // Wheel over decimal (±0.1 BPM, strictly clamped .0 to .9, no carry-over to integer)
+    const onWheelDec = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const dir = e.deltaY < 0 ? 1 : -1;
+      this.stepDecimal(dir);
+    };
+    this.scrollDec?.addEventListener('wheel', onWheelDec as EventListener, { passive: false });
+    this.scrollDot?.addEventListener('wheel', onWheelDec as EventListener, { passive: false });
+    this.decDisplay?.addEventListener('wheel', onWheelDec as EventListener, { passive: false });
+
+    // Click on scrollDisplay to switch to typing directly
+    this.scrollDisplay?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (this.scrollDisplay && this.directInput) {
+        this.scrollDisplay.style.display = 'none';
+        this.directInput.style.display = 'inline-block';
+        this.directInput.focus();
+        this.directInput.select();
+      }
+    });
+
+    this.directInput?.addEventListener('blur', () => {
+      if (this.scrollDisplay && this.directInput) {
+        this.directInput.style.display = 'none';
+        this.scrollDisplay.style.display = 'inline-flex';
+      }
+    });
+
+    this.directInput?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === 'Escape') {
+        this.directInput?.blur();
+      }
+    });
+
+    // Wheel support directly on input as well
+    this.directInput?.addEventListener(
+      'wheel',
+      (e: WheelEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const rect = this.directInput!.getBoundingClientRect();
+        const isDecimalSide = e.clientX - rect.left > rect.width * 0.58;
+        const dir = e.deltaY < 0 ? 1 : -1;
+        if (isDecimalSide) {
+          this.stepDecimal(dir);
+        } else {
+          this.stepInteger(dir);
+        }
+      },
+      { passive: false }
+    );
 
     // Half / Double
     this.halfBtn?.addEventListener('click', () => {
@@ -602,6 +691,14 @@ export class BpmToolController {
     this.startPulse();
   }
 
+  public stepInteger(deltaInt: number): void {
+    this.setBpm(stepBpmDigit(this.currentBpm, 'int', deltaInt));
+  }
+
+  public stepDecimal(deltaDec: number): void {
+    this.setBpm(stepBpmDigit(this.currentBpm, 'dec', deltaDec));
+  }
+
   public getBpm(): number {
     return this.currentBpm;
   }
@@ -651,10 +748,13 @@ export class BpmToolController {
 
   private updateBpmDisplay(): void {
     const intPart = Math.floor(this.currentBpm);
-    const decPart = (this.currentBpm % 1).toFixed(1).replace(/^0/, '');
+    const decDigit = Math.round((this.currentBpm - intPart) * 10);
+    const decPart = `.${decDigit}`;
 
     if (this.intDisplay) this.intDisplay.textContent = String(intPart);
     if (this.decDisplay) this.decDisplay.textContent = decPart;
+    if (this.scrollInt) this.scrollInt.textContent = String(intPart);
+    if (this.scrollDec) this.scrollDec.textContent = String(decDigit);
     if (this.directInput) this.directInput.value = this.currentBpm.toFixed(1);
     if (this.badge) this.badge.textContent = String(Math.round(this.currentBpm));
   }

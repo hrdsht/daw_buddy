@@ -192,12 +192,12 @@ export function estimateAnchorBpm(
   const downbeatSec = initialOnsets[0];
 
   // Calculate Inter-Onset Intervals (IOIs)
+  // Support 8th notes and 16th notes up to 220 BPM (min 0.14s) up to 2 bars (2.5s)
   const iois: number[] = [];
   for (let i = 0; i < initialOnsets.length - 1; i++) {
     for (let j = i + 1; j < Math.min(i + 8, initialOnsets.length); j++) {
       const dt = initialOnsets[j] - initialOnsets[i];
-      if (dt >= 0.28 && dt <= 2.2) {
-        // Corresponds to 27 - 214 BPM beat/bar subdivisions
+      if (dt >= 0.14 && dt <= 2.5) {
         iois.push(dt);
       }
     }
@@ -207,27 +207,52 @@ export function estimateAnchorBpm(
     return { detectedBpm: 120, roundedBpm: 120, downbeatSec, confidence: 0.1 };
   }
 
-  // Test candidate BPMs in 0.5 BPM steps from 70 to 175 BPM
+  // Test candidate BPMs from 65 to 185 BPM
   let bestBpm = 120;
   let bestScore = -1;
 
-  for (let bpm = 70; bpm <= 175; bpm += 0.5) {
+  for (let bpm = 65; bpm <= 185; bpm += 0.5) {
     const beatSec = 60 / bpm;
+    const tol = Math.max(0.024, 0.065 * beatSec);
     let score = 0;
 
     for (const dt of iois) {
-      // Check proximity to 1 beat, 0.5 beat (8th note), 2 beats (half note), 4 beats (bar)
       const err1 = Math.abs(dt - beatSec);
       const errHalf = Math.abs(dt - beatSec * 0.5);
       const err2 = Math.abs(dt - beatSec * 2);
       const err4 = Math.abs(dt - beatSec * 4);
 
-      const minErr = Math.min(err1, errHalf, err2, err4);
-      if (minErr < 0.04) {
-        // High score for exact match
-        score += 1.0 - minErr / 0.04;
+      if (err1 < tol) {
+        score += (1.0 - err1 / tol) * 1.5;
+      } else if (errHalf < tol) {
+        score += (1.0 - errHalf / tol) * 1.1;
+      } else if (err2 < tol) {
+        score += (1.0 - err2 / tol) * 0.85;
+      } else if (err4 < tol) {
+        score += (1.0 - err4 / tol) * 0.6;
       }
     }
+
+    // Grid pulse alignment bonus (checks direct alignment of beats with initial onsets)
+    const testBeats = Math.min(24, Math.floor((maxDurationSec - downbeatSec) / beatSec));
+    let hitCount = 0;
+    if (testBeats > 0) {
+      for (let b = 0; b < testBeats; b++) {
+        const expectedTime = downbeatSec + b * beatSec;
+        for (const o of initialOnsets) {
+          if (Math.abs(o - expectedTime) < 0.045) {
+            hitCount++;
+            break;
+          }
+        }
+      }
+      const gridDensity = hitCount / testBeats;
+      score += gridDensity * (iois.length * 0.35);
+    }
+
+    // Gentle musical tempo prior (peaks around 115 BPM, prevents 2:3 sub-harmonic traps like 73 vs 110)
+    const tempoPrior = Math.exp(-Math.pow(Math.log(bpm / 118), 2) / (2 * 0.44 * 0.44));
+    score *= 0.65 + 0.35 * tempoPrior;
 
     if (score > bestScore) {
       bestScore = score;
@@ -235,8 +260,36 @@ export function estimateAnchorBpm(
     }
   }
 
-  // Compute confidence (ratio of best score to total intervals)
-  const confidence = Math.min(1.0, Math.max(0.1, bestScore / (iois.length * 0.4)));
+  // Harmonic check: if candidate is around a subharmonic (e.g. 70-85 BPM),
+  // test whether 1.5x (hemiola/dotted) or 2.0x has strong direct metric alignment
+  const candidateMultipliers = [1.5, 2.0];
+  for (const mult of candidateMultipliers) {
+    const higherBpm = bestBpm * mult;
+    if (higherBpm >= 90 && higherBpm <= 165) {
+      const beatSec = 60 / higherBpm;
+      const testBeats = Math.min(24, Math.floor((maxDurationSec - downbeatSec) / beatSec));
+      if (testBeats > 0) {
+        let hits = 0;
+        for (let b = 0; b < testBeats; b++) {
+          const expectedTime = downbeatSec + b * beatSec;
+          for (const o of initialOnsets) {
+            if (Math.abs(o - expectedTime) < 0.04) {
+              hits++;
+              break;
+            }
+          }
+        }
+        // If higher BPM matches >= 65% of all beat grid points, it's the primary pulse!
+        if (hits / testBeats >= 0.65 && hits >= 10) {
+          bestBpm = higherBpm;
+          break;
+        }
+      }
+    }
+  }
+
+  // Compute confidence
+  const confidence = Math.min(1.0, Math.max(0.1, bestScore / (iois.length * 0.5)));
   const roundedBpm = Math.round(bestBpm);
 
   return {

@@ -5,6 +5,20 @@ All notable changes to DAW Buddy. Format follows
 [semantic versioning](https://semver.org/). Per-release detail (every merged PR)
 is auto-generated on each GitHub Release; this file is the curated summary.
 
+## [0.5.1-beta.12] — 2026-09-28
+
+### Added
+- **Scrollable BPM Numeric Controls**:
+  - Independent mouse wheel scrolling for the integer and decimal BPM displays in the BPM & Delay Calculator tool.
+  - Scrolling on the integer portion increments/decrements by $\pm1$ BPM.
+  - Scrolling on the decimal portion increments/decrements by $\pm0.1$ BPM with strict boundary clamping ($\text{.}0$–$\text{.}9$) so decimal increments do not roll over or mutate the integer value.
+- **Suno Stem Quantizer Output Destination Options**:
+  - Choose between saving to the default subfolder (`BpmLocked_Stems/`), choosing a custom output directory via native dialog, or overwriting original source files.
+  - Safe confirmation modal safeguard before overwriting source files.
+- **Quantizer Tempo Reactivity & Subharmonic Resolution**:
+  - Render button and UI drift analytics now react immediately to manual BPM inputs, wheel adjustments, and tempo multiplier shortcuts (`Snap`, `÷2`, `×2`, `×1.5`, `÷1.5`, `Tap`).
+  - Improved anchor tempo detection and pulse grid alignment, eliminating 2:3 subharmonic false detections (e.g., 73 BPM instead of 110 BPM).
+
 ## [0.5.1-beta.11] — 2026-09-28
 
 ### Added

@@ -11,8 +11,32 @@ const {
   getDelayDetails,
   getQuickDelayTable,
   TapTempoEngine,
+  stepBpmDigit,
   SUPPORTED_DENOMINATORS
 } = require('../src/renderer/bpm-tool');
+
+function testBpmDigitScrolling() {
+  // Test integer scrolling
+  // 104.2 scrolled up over integer -> 105.2
+  assert.equal(stepBpmDigit(104.2, 'int', 1), 105.2);
+  // 104.2 scrolled down over integer -> 103.2
+  assert.equal(stepBpmDigit(104.2, 'int', -1), 103.2);
+
+  // Test decimal scrolling
+  // 104.2 scrolled up over decimal -> 104.3
+  assert.equal(stepBpmDigit(104.2, 'dec', 1), 104.3);
+  // 104.2 scrolled down over decimal -> 104.1
+  assert.equal(stepBpmDigit(104.2, 'dec', -1), 104.1);
+
+  // CRITICAL REQUIREMENT: "after .9 it shouldnt increase the 104 to 105"
+  // 104.9 scrolled up over decimal MUST stay 104.9 (must not roll over to 105)
+  assert.equal(stepBpmDigit(104.9, 'dec', 1), 104.9);
+  assert.equal(stepBpmDigit(104.9, 'dec', 5), 104.9);
+
+  // Decimal scrolling down at .0 MUST stay at .0 (must not decrease 104 to 103.9)
+  assert.equal(stepBpmDigit(104.0, 'dec', -1), 104.0);
+  assert.equal(stepBpmDigit(104.0, 'dec', -5), 104.0);
+}
 
 function testDelayCalculations() {
   // At 120 BPM:
@@ -131,6 +155,7 @@ function testQuickDelayTable() {
 }
 
 function runAll() {
+  testBpmDigitScrolling();
   testDelayCalculations();
   testFrequencyAndSamples();
   testTapTempo();
