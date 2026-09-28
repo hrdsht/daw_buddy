@@ -57,6 +57,20 @@
               </ul>
             </div>
           </div>
+          <div class="bpm-tool-anchor">
+            <button
+              id="bpmToolBtn"
+              class="pill bpm-pill"
+              type="button"
+              title="BPM Tap Tempo &amp; Delay Calculator · Click to open"
+              aria-haspopup="dialog"
+              aria-expanded="false"
+            >
+              <span class="bpm-pill-icon" aria-hidden="true">⏱</span>
+              <span class="bpm-pill-label">BPM</span>
+              <span id="bpmPillBadge" class="bpm-pill-badge">120</span>
+            </button>
+          </div>
           <div class="topbar__right">
             <div id="sortMount" class="sortmount"></div>
             <button id="miniToggle" class="pill" title="Open floating Mini Player">
@@ -137,6 +151,246 @@
         </div>
       </footer>
     </div>
+
+    <!-- ================= BPM TAP & DELAY CALCULATOR MODAL ================= -->
+    <section
+      id="bpmToolPanel"
+      class="bpm-panel"
+      role="dialog"
+      aria-label="BPM Tap Tempo &amp; Delay Calculator"
+      hidden
+    >
+      <header class="bpm-panel__head">
+        <div class="bpm-panel__head-titles">
+          <div class="bpm-panel__title-row">
+            <span class="bpm-panel__badge">TEMPO LAB</span>
+            <strong>BPM &amp; Delay Calculator</strong>
+          </div>
+          <span class="bpm-panel__subtitle">Tap to find tempo · Millisecond &amp; Frequency sync · Note divisions</span>
+        </div>
+        <div class="bpm-panel__head-actions">
+          <button id="bpmPanelResetBtn" class="bpm-btn-ghost" type="button" title="Reset to 120 BPM">Reset</button>
+          <button id="bpmPanelCloseBtn" class="bpm-btn-close" type="button" title="Close (Escape)" aria-label="Close">✕</button>
+        </div>
+      </header>
+
+      <!-- Main Segmented Layout: Tap Tempo / BPM Controls & Delay Calculator -->
+      <div class="bpm-panel__body">
+        
+        <!-- SECTION 1: TAP TO FIND BPM & TEMPO CONTROLS -->
+        <div class="bpm-deck">
+          <div class="bpm-deck__hero">
+            <div class="bpm-deck__display">
+              <div class="bpm-readout-wrap">
+                <span id="bpmDisplayInteger" class="bpm-readout-int">120</span>
+                <span id="bpmDisplayDecimal" class="bpm-readout-dec">.0</span>
+                <span class="bpm-readout-unit">BPM</span>
+              </div>
+              <div id="bpmStatusMsg" class="bpm-status-msg">Click TAP or press Space / T</div>
+            </div>
+
+            <div class="bpm-pulse-indicator" id="bpmPulseDot" title="Beat pulse indicator"></div>
+          </div>
+
+          <!-- Big Tactile Tap Pad -->
+          <button id="bpmTapBtn" class="bpm-tap-pad" type="button">
+            <span class="bpm-tap-pad__ripple" aria-hidden="true"></span>
+            <span class="bpm-tap-pad__icon">👆</span>
+            <span class="bpm-tap-pad__text">TAP TEMPO</span>
+            <span id="bpmTapCounter" class="bpm-tap-pad__sub">Tap rhythmically</span>
+          </button>
+
+          <!-- Stepper & Multiplier Quick Bar -->
+          <div class="bpm-controls-row">
+            <div class="bpm-nudge-group">
+              <button type="button" class="bpm-pill-action" data-nudge="-5" title="Subtract 5 BPM">-5</button>
+              <button type="button" class="bpm-pill-action" data-nudge="-1" title="Subtract 1 BPM">-1</button>
+              <div class="bpm-input-wrap">
+                <input
+                  id="bpmDirectInput"
+                  class="bpm-direct-input"
+                  type="number"
+                  min="20"
+                  max="400"
+                  step="0.1"
+                  value="120"
+                  aria-label="Target BPM"
+                  title="Direct numeric BPM"
+                />
+              </div>
+              <button type="button" class="bpm-pill-action" data-nudge="1" title="Add 1 BPM">+1</button>
+              <button type="button" class="bpm-pill-action" data-nudge="5" title="Add 5 BPM">+5</button>
+            </div>
+          </div>
+
+          <div class="bpm-tools-grid">
+            <button id="bpmHalfBtn" type="button" class="bpm-util-btn" title="Half-time tempo (/2)">
+              <span>½</span> Half
+            </button>
+            <button id="bpmDoubleBtn" type="button" class="bpm-util-btn" title="Double-time tempo (×2)">
+              <span>2×</span> Double
+            </button>
+            <button id="bpmCopyBpmBtn" type="button" class="bpm-util-btn" title="Copy BPM to clipboard">
+              <span id="bpmCopyBpmIcon">📋</span> Copy BPM
+            </button>
+            <button id="bpmSearchFilterBtn" type="button" class="bpm-util-btn" title="Search this BPM in projects (e.g. bpm:120)">
+              <span>🔍</span> In Search
+            </button>
+          </div>
+
+          <div id="bpmProjectSyncWrap" class="bpm-project-sync" style="display: none;">
+            <button id="bpmSyncProjectBtn" type="button" class="bpm-sync-project-btn">
+              <span>🎵</span> Use Project BPM: <strong id="bpmProjectSyncVal">128</strong>
+            </button>
+          </div>
+        </div>
+
+        <!-- SECTION 2: DELAY BPM CALCULATOR -->
+        <div class="delay-deck">
+          <div class="delay-deck__header">
+            <span class="delay-deck__tag">DELAY TIME CALCULATOR</span>
+            <div class="delay-deck__mode-pills" id="delayModifierPills">
+              <button type="button" class="delay-mod-pill is-active" data-modifier="straight" title="Normal note division">Straight</button>
+              <button type="button" class="delay-mod-pill" data-modifier="dotted" title="Dotted note (1.5× delay time)">Dotted</button>
+              <button type="button" class="delay-mod-pill" data-modifier="triplet" title="Triplet note (2/3× delay time)">Triplet</button>
+            </div>
+          </div>
+
+          <!-- Fraction Selector: Selectable Numerator & Selectable Denominator -->
+          <div class="delay-fraction-bar">
+            <!-- Numerator Selection -->
+            <div class="delay-selector-block">
+              <label for="delayNumeratorSelect" class="delay-selector-label">Numerator (Beats)</label>
+              <div class="delay-num-select-wrap">
+                <select id="delayNumeratorSelect" class="delay-select">
+                  <option value="1" selected>1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                  <option value="5">5</option>
+                  <option value="6">6</option>
+                  <option value="7">7</option>
+                  <option value="8">8</option>
+                  <option value="12">12</option>
+                  <option value="16">16</option>
+                  <option value="24">24</option>
+                  <option value="32">32</option>
+                  <option value="64">64</option>
+                </select>
+                <div class="delay-num-quick-pills" id="delayNumeratorQuickPills">
+                  <button type="button" class="delay-quick-btn is-active" data-num="1">1</button>
+                  <button type="button" class="delay-quick-btn" data-num="2">2</button>
+                  <button type="button" class="delay-quick-btn" data-num="3">3</button>
+                  <button type="button" class="delay-quick-btn" data-num="4">4</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="delay-fraction-divider">/</div>
+
+            <!-- Denominator Selection -->
+            <div class="delay-selector-block">
+              <label for="delayDenominatorSelect" class="delay-selector-label">Denominator (Note Value)</label>
+              <div class="delay-denom-select-wrap">
+                <select id="delayDenominatorSelect" class="delay-select">
+                  <option value="1">1/1 (Whole note)</option>
+                  <option value="2">1/2 (Half note)</option>
+                  <option value="4" selected>1/4 (Quarter note)</option>
+                  <option value="8">1/8 (Eighth note)</option>
+                  <option value="16">1/16 (16th note)</option>
+                  <option value="32">1/32 (32nd note)</option>
+                  <option value="64">1/64 (64th note)</option>
+                  <option value="128">1/128 (128th note)</option>
+                  <option value="256">1/256 (256th note)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Denominator Click Bar (1/1, 1/2, 1/4, 1/8, 1/16, 1/32, 1/64, 1/128, 1/256) -->
+          <div class="delay-denom-quick-bar" id="delayDenomQuickBar">
+            <button type="button" class="delay-denom-btn" data-denom="1">1/1</button>
+            <button type="button" class="delay-denom-btn" data-denom="2">1/2</button>
+            <button type="button" class="delay-denom-btn is-active" data-denom="4">1/4</button>
+            <button type="button" class="delay-denom-btn" data-denom="8">1/8</button>
+            <button type="button" class="delay-denom-btn" data-denom="16">1/16</button>
+            <button type="button" class="delay-denom-btn" data-denom="32">1/32</button>
+            <button type="button" class="delay-denom-btn" data-denom="64">1/64</button>
+            <button type="button" class="delay-denom-btn" data-denom="128">1/128</button>
+            <button type="button" class="delay-denom-btn" data-denom="256">1/256</button>
+          </div>
+
+          <!-- The Result Card (Hero Output) -->
+          <div class="delay-result-card" id="delayResultCard" title="Click to copy milliseconds">
+            <div class="delay-result-card__main">
+              <div class="delay-result-card__header">
+                <span id="delayFractionBadge" class="delay-badge">1/4 Straight</span>
+                <span class="delay-copy-hint" id="delayCopyHint">Click card to copy ms</span>
+              </div>
+              <div class="delay-result-readout">
+                <span id="delayResultMs" class="delay-ms-val">500.00</span>
+                <span class="delay-ms-unit">ms</span>
+              </div>
+              <div class="delay-result-subline">
+                <span id="delayResultSec">0.5000 s</span>
+                <span class="delay-dot-sep">·</span>
+                <span id="delayResultHz">2.00 Hz</span>
+              </div>
+            </div>
+
+            <!-- Copy Action Button -->
+            <button id="delayCopyMsBtn" type="button" class="delay-copy-btn" title="Copy delay milliseconds">
+              <span id="delayCopyIcon">📋</span> Copy ms
+            </button>
+          </div>
+
+          <!-- Sample Accurate Readouts -->
+          <div class="delay-samples-strip">
+            <div class="delay-sample-item">
+              <span class="delay-sample-rate">44.1 kHz</span>
+              <span id="delaySamples44k" class="delay-sample-count">22,050 spls</span>
+            </div>
+            <div class="delay-sample-item">
+              <span class="delay-sample-rate">48.0 kHz</span>
+              <span id="delaySamples48k" class="delay-sample-count">24,000 spls</span>
+            </div>
+            <div class="delay-sample-item">
+              <span class="delay-sample-rate">96.0 kHz</span>
+              <span id="delaySamples96k" class="delay-sample-count">48,000 spls</span>
+            </div>
+          </div>
+
+          <!-- Delay Cheat Sheet Matrix -->
+          <div class="delay-matrix-section">
+            <div class="delay-matrix-header">
+              <span>Quick Note Delay Reference Matrix (Click any to set &amp; copy)</span>
+            </div>
+            <div class="delay-matrix-table-wrap">
+              <table class="delay-matrix-table" id="delayMatrixTable">
+                <thead>
+                  <tr>
+                    <th>Note</th>
+                    <th>Straight</th>
+                    <th>Dotted</th>
+                    <th>Triplet</th>
+                    <th>Rate</th>
+                  </tr>
+                </thead>
+                <tbody id="delayMatrixBody">
+                  <!-- Dynamically populated rows from 1/1 to 1/256 -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+      <footer class="bpm-panel__foot">
+        <span class="bpm-foot-tip">Tip: Press <kbd>T</kbd> or <kbd>Space</kbd> to tap tempo · Press <kbd>Esc</kbd> to close</span>
+      </footer>
+    </section>
 
     <section
       id="clipPanel"

@@ -41,6 +41,10 @@ website/
 CLAUDE.md
 memory.md
 NEW-CONVERSATION-PROMPT.md
+PRODUCT.md
+.claude/
+.impeccable/
+.stitch/
 
 # Unlazy task tracking & state
 GATES.md

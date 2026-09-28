@@ -5,6 +5,23 @@ All notable changes to DAW Buddy. Format follows
 [semantic versioning](https://semver.org/). Per-release detail (every merged PR)
 is auto-generated on each GitHub Release; this file is the curated summary.
 
+## [0.5.1-beta.11] — 2026-09-28
+
+### Added
+- **Top Bar BPM Tool & Delay Calculator**:
+  - Convenient, always-accessible BPM button beside the search bar with active project / player BPM synchronization.
+  - Interactive Tap Tempo Engine with rolling average interval calculation and instant `bpm:<val>` search filtering.
+  - Comprehensive Delay / Reverb Pre-delay BPM Calculator supporting fractions from 1/1 down to 1/256, modifiers (Straight, Dotted, Triplet), millisecond timing, Hz equivalent, sample duration at standard sample rates (44.1k, 48k, 88.2k, 96k, 192k), and a quick-lookup timing matrix.
+- **Suno AI Stem BPM Lock & Drift Quantizer (Proposal 0006)**:
+  - Dedicated standalone studio tool addressing cumulative tempo drift in generative AI stems (Suno, Udio).
+  - Automatic multi-stem role classification (`drums`, `bass`, `vocals`, `instruments`, `other`) with designated Timing Master.
+  - Drum transient onset detection and anchor tempo estimation (bars 1–16) with downbeat alignment.
+  - Continuous drift mapping ($\Delta t$ tracking against an ideal metronomic grid) with 5-tap moving median filter to reject ghost note and fill jitter.
+  - Phase-locked WSOLA (Waveform Similarity Overlap-Add) time-stretching engine: 100% pitch-invariant, transient-preserving with zero FFT phase smearing.
+  - Shared master grain timeline across all sibling stems guaranteeing 100% inter-stem phase coherence and zero flamming.
+  - Interactive high-DPI drift canvas visualizer showing bar grid and color-coded drift curve.
+  - Non-destructive export to `BpmLocked_Stems/` in 16-bit, 24-bit, or 32-bit Float WAV format with optional Ableton Live `.asd` warp marker summaries.
+
 ## [0.5.1-beta.10] — 2026-09-18
 
 ### Added
@@ -277,7 +294,9 @@ First public (pre-release) build.
 - Bounce watcher with optional Discord/Slack/Zapier webhooks.
 - Cross-platform installers built automatically per release.
 
-[Unreleased]: https://github.com/hrdsht/daw_buddy/compare/v0.5.1-beta.9...HEAD
+[Unreleased]: https://github.com/hrdsht/daw_buddy/compare/v0.5.1-beta.11...HEAD
+[0.5.1-beta.11]: https://github.com/hrdsht/daw_buddy/releases/tag/v0.5.1-beta.11
+[0.5.1-beta.10]: https://github.com/hrdsht/daw_buddy/releases/tag/v0.5.1-beta.10
 [0.5.1-beta.9]: https://github.com/hrdsht/daw_buddy/releases/tag/v0.5.1-beta.9
 [0.5.1-beta.8]: https://github.com/hrdsht/daw_buddy/releases/tag/v0.5.1-beta.8
 [0.5.1-beta.7]: https://github.com/hrdsht/daw_buddy/releases/tag/v0.5.1-beta.7

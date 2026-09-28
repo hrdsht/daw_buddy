@@ -20,3 +20,4 @@ are tracked one at a time instead of buried in a single lab notebook.
 | [0003](0003-code-signing.md) | Code signing & notarization | Planned |
 | [0004](0004-daily-project-backup-tool.md) | Automated daily project backup & external drive mirroring | Proposed |
 | [0005](0005-runtime-workload-isolation.md) | Isolate UI, catalogue, and audio workloads | Proposed |
+| [0006](0006-suno-stem-bpm-lock-and-drift-quantizer.md) | Suno AI stem BPM lock and drift quantizer | Proposed |

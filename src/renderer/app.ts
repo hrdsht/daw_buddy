@@ -69,6 +69,20 @@ import {
   formatDuration as formatSrDuration,
   formatBytes as formatSrBytes
 } from './slowed-reverb';
+import {
+  classifyStemRole,
+  detectOnsets,
+  estimateAnchorBpm,
+  buildMasterDriftMap,
+  timeStretchWSOLA,
+  generateWarpSummary,
+  StemItem,
+  StemRole,
+  WarpMarker,
+  DriftPoint,
+  MasterDriftMapResult,
+  QuantizerAnalysisResult
+} from './suno-quantizer';
 
 const $ = (id: string): any => document.getElementById(id);
 
@@ -101,6 +115,7 @@ import {
   formatStemOutputName
 } from './dom';
 import { startFeatureWalkthrough, startProjectWalkthrough, startToolWalkthrough } from './tour';
+import { initBpmTool } from './bpm-tool';
 
 // Initialize saved appearance (Default: Minimalist, Dark, Cyan)
 const savedStyle = localStorage.getItem('dawBuddyThemeStyle') || 'minimalist';
@@ -1193,6 +1208,7 @@ function render() {
   if (view === 'thisweek') return renderThisWeek();
   if (view === 'tools') return renderStandaloneTools();
   if (view === 'slowed-reverb') return renderSlowedReverbTool();
+  if (view === 'suno-quantizer') return renderSunoQuantizerTool();
   if (view === 'convert') return renderStandaloneConverter();
   if (view === 'randomizer') return renderRandomizerTool();
   if (view === 'scale-tool') return renderScaleMidiTool();
@@ -1212,6 +1228,7 @@ function render() {
 const TOOL_TITLES: Record<string, string> = {
   tools: 'Tools',
   'slowed-reverb': 'Slowed + Reverb Studio',
+  'suno-quantizer': 'Suno Stem Quantizer & BPM Lock',
   convert: 'Format Converter & Splitter',
   randomizer: 'Music Randomizer',
   'scale-tool': 'Scale & Raaga Detector',
@@ -10336,6 +10353,9 @@ function openStandaloneTool(nextView) {
   if (nextView === 'randomizer') {
     if (!randomizerState) rollRandomIdea('all');
   }
+  if (nextView === 'suno-quantizer') {
+    sunoQuantizerState.statusText = null;
+  }
 
   viewEl.scrollTop = 0;
   render();
@@ -13543,6 +13563,858 @@ function renderSlowedReverbTool() {
   viewEl.append(section);
 }
 
+function renderSunoQuantizerTool() {
+  viewEl.innerHTML = '';
+  const section = el('div', 'section');
+  section.append(
+    headRow(
+      'Suno Stem Quantizer & BPM Lock',
+      'Detect drum tempo, track drift against an ideal grid, and phase-lock Suno/Udio generative stems.',
+      'suno-quantizer'
+    )
+  );
+  buildSunoQuantizerInterface(section);
+  viewEl.append(section);
+}
+
+/* ======================= Suno Stem Quantizer UI State & Logic ======================= */
+
+interface SunoQuantizerUIState {
+  stems: StemItem[];
+  timingMasterId: string | null;
+  analysis: MasterDriftMapResult | null;
+  targetBpm: number;
+  detectedBpm: number;
+  downbeatSec: number;
+  isAnalyzing: boolean;
+  isProcessing: boolean;
+  progressText: string;
+  progressRatio: number;
+  exportFormat: 16 | 24 | 32;
+  exportAsd: boolean;
+  statusText: string | null;
+  statusType: 'info' | 'success' | 'error';
+  lastSavedPaths: string[];
+}
+
+const sunoQuantizerState: SunoQuantizerUIState = {
+  stems: [],
+  timingMasterId: null,
+  analysis: null,
+  targetBpm: 120,
+  detectedBpm: 120,
+  downbeatSec: 0,
+  isAnalyzing: false,
+  isProcessing: false,
+  progressText: '',
+  progressRatio: 0,
+  exportFormat: 16,
+  exportAsd: true,
+  statusText: null,
+  statusType: 'info',
+  lastSavedPaths: []
+};
+
+function createAudioBufferFromChannels(channels: Float32Array[], sampleRate: number): AudioBuffer {
+  const numChannels = channels.length;
+  const length = channels[0]?.length || 0;
+  const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
+  if (AudioCtxClass) {
+    const ctx = new AudioCtxClass();
+    const buf = ctx.createBuffer(numChannels, length, sampleRate);
+    for (let c = 0; c < numChannels; c++) {
+      buf.copyToChannel(channels[c], c);
+    }
+    return buf;
+  }
+  return {
+    numberOfChannels: numChannels,
+    sampleRate,
+    length,
+    duration: length / sampleRate,
+    _data: channels,
+    getChannelData(c: number) {
+      return channels[c];
+    }
+  } as any as AudioBuffer;
+}
+
+function buildSunoQuantizerInterface(container: HTMLElement) {
+  container.innerHTML = '';
+  const root = el('div', 'sq-container');
+
+  // Hero Explanation Card
+  const hero = el('div', 'sq-hero');
+  const heroLeft = el('div', 'sq-hero__left');
+  heroLeft.append(el('div', 'sq-hero__title', '🎛️ Suno AI Stem BPM Lock & Drift Quantizer'));
+  heroLeft.append(
+    el(
+      'div',
+      'sq-hero__desc',
+      'Generative music models synthesize audio without a rigid DAW clock, causing stems to drift cumulatively. This tool detects the anchor tempo from drum transients (bars 1–16), tracks drift across every bar, and applies a phase-locked time-stretch across all sibling stems so they fit your DAW project grid perfectly without pitch distortion.'
+    )
+  );
+
+  const heroBadges = el('div', 'sq-hero__badges');
+  heroBadges.append(el('span', 'sq-tag sq-tag--active', '🥁 Transient-Preserving WSOLA'));
+  heroBadges.append(el('span', 'sq-tag sq-tag--active', '🔒 Multi-Stem Phase Lock'));
+  heroBadges.append(el('span', 'sq-tag', '🎵 Zero Pitch Alteration'));
+  heroBadges.append(el('span', 'sq-tag', '📁 Non-Destructive Export'));
+  heroBadges.append(el('span', 'sq-tag', '🎚️ Ableton .asd Warp Map'));
+  heroLeft.append(heroBadges);
+  hero.append(heroLeft);
+
+  // Status Banner
+  const statusBox = el('div', 'sq-status-banner sq-status-banner--info') as HTMLElement;
+  statusBox.style.display = 'none';
+
+  function updateStatus(text?: string, type?: 'info' | 'success' | 'error') {
+    if (text) {
+      sunoQuantizerState.statusText = text;
+      if (type) sunoQuantizerState.statusType = type;
+    }
+    if (!sunoQuantizerState.statusText) {
+      statusBox.style.display = 'none';
+      return;
+    }
+    statusBox.style.display = 'flex';
+    statusBox.className = `sq-status-banner sq-status-banner--${sunoQuantizerState.statusType}`;
+    statusBox.innerHTML = '';
+    statusBox.append(el('span', '', sunoQuantizerState.statusText));
+  }
+
+  // Dropzone
+  const dropzone = el('div', 'sq-dropzone');
+  const dropIcon = el('div', 'sq-dropzone__icon');
+  dropIcon.append(svgIcon('activity', '', 24));
+  dropzone.append(dropIcon);
+  dropzone.append(el('div', 'sq-dropzone__title', 'Drop Suno Stem Files (WAV / MP3) or Click to Browse'));
+  dropzone.append(
+    el(
+      'div',
+      'sq-dropzone__sub',
+      'Drag & drop drums, bass, vocals, and other stems together. You can also pick a stem folder.'
+    )
+  );
+
+  const dropButtons = el('div', 'sq-dropzone__buttons');
+  const browseFilesBtn = el('button', 'pill pill--sm', 'Browse Files...');
+  const browseFolderBtn = el('button', 'pill pill--sm', 'Pick Stem Folder...');
+  dropButtons.append(browseFilesBtn, browseFolderBtn);
+  dropzone.append(dropButtons);
+
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file';
+  fileInput.multiple = true;
+  fileInput.accept = 'audio/*,.wav,.mp3,.flac,.ogg,.m4a,.aif,.aiff';
+  fileInput.style.display = 'none';
+
+  browseFilesBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    fileInput.click();
+  });
+
+  browseFolderBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (window.api && window.api.pickFolder) {
+      try {
+        const folder = await window.api.pickFolder();
+        if (folder && window.api.renameList) {
+          updateStatus(`Scanning folder for stems: ${folder}...`, 'info');
+          const extList = ['.wav', '.mp3', '.flac', '.aif', '.aiff', '.ogg', '.m4a'];
+          const fileNames = await window.api.renameList(folder, extList);
+          if (fileNames && fileNames.length > 0) {
+            updateStatus(`Found ${fileNames.length} audio file(s) in folder. Drag them into the dropzone to process.`, 'info');
+          } else {
+            updateStatus(`No audio files found in selected folder.`, 'info');
+          }
+        }
+      } catch (err: any) {
+        updateStatus(`Folder pick error: ${err.message || err}`, 'error');
+      }
+    } else {
+      fileInput.click();
+    }
+  });
+
+  dropzone.addEventListener('click', () => fileInput.click());
+
+  dropzone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropzone.classList.add('sq-dropzone--over');
+  });
+
+  dropzone.addEventListener('dragleave', () => {
+    dropzone.classList.remove('sq-dropzone--over');
+  });
+
+  dropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropzone.classList.remove('sq-dropzone--over');
+    if (e.dataTransfer && e.dataTransfer.files) {
+      handleFiles(Array.from(e.dataTransfer.files));
+    }
+  });
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files) {
+      handleFiles(Array.from(fileInput.files));
+    }
+  });
+
+  // Stems List Card
+  const stemCard = el('div', 'sq-stem-card') as HTMLElement;
+  const stemHeader = el('div', 'sq-stem-header');
+  const stemHeaderTitle = el('div', 'sq-stem-header__title');
+  stemHeaderTitle.append(svgIcon('sliders', '', 16));
+  const stemCountText = el('span', '', 'Loaded Stems (0)');
+  stemHeaderTitle.append(stemCountText);
+
+  const clearStemsBtn = el('button', 'pill pill--sm', 'Clear All');
+  clearStemsBtn.addEventListener('click', () => {
+    sunoQuantizerState.stems = [];
+    sunoQuantizerState.timingMasterId = null;
+    sunoQuantizerState.analysis = null;
+    sunoQuantizerState.statusText = null;
+    renderAll();
+  });
+  stemHeader.append(stemHeaderTitle, clearStemsBtn);
+  const stemListEl = el('div', 'sq-stem-list');
+  stemCard.append(stemHeader, stemListEl);
+
+  // Analysis & Settings Card
+  const analysisCard = el('div', 'sq-analysis-card') as HTMLElement;
+
+  // Drift Canvas Box
+  const canvasWrap = el('div', 'sq-canvas-wrap') as HTMLElement;
+  const canvasHeader = el('div', 'sq-canvas-header');
+  canvasHeader.append(el('b', '', 'Drift Timeline (Timing Offset Δt vs Ideal Metronomic Grid)'));
+  const legend = el('span', '', '🟩 Ideal 0ms   |   🟦 Suno Actual Drift   |   🔴 Drift >25ms');
+  canvasHeader.append(legend);
+  const canvas = document.createElement('canvas');
+  canvas.className = 'sq-drift-canvas';
+  canvasWrap.append(canvasHeader, canvas);
+
+  // Actions Box
+  const actionsBox = el('div', 'sq-actions-box') as HTMLElement;
+
+  async function handleFiles(files: File[]) {
+    const audioFiles = files.filter((f) => /\.(wav|mp3|flac|ogg|m4a|aif|aiff)$/i.test(f.name));
+    if (audioFiles.length === 0) {
+      updateStatus('Please select audio files (WAV, MP3, FLAC, M4A, etc.)', 'error');
+      return;
+    }
+
+    updateStatus(`Reading and decoding ${audioFiles.length} stem file(s)...`, 'info');
+
+    const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
+    const audioCtx = new AudioCtxClass();
+
+    for (const f of audioFiles) {
+      const existing = sunoQuantizerState.stems.find((s) => s.name === f.name);
+      if (existing) continue;
+
+      const role = classifyStemRole(f.name);
+      const id = 'stem_' + Math.random().toString(36).substring(2, 9);
+      const item: StemItem = {
+        id,
+        name: f.name,
+        size: f.size,
+        path: (f as any).path,
+        role,
+        isTimingMaster: false,
+        status: 'analyzing'
+      };
+
+      sunoQuantizerState.stems.push(item);
+
+      // Asynchronously decode audio
+      try {
+        const arrayBuf = await f.arrayBuffer();
+        const decoded = await audioCtx.decodeAudioData(arrayBuf.slice(0));
+        item.buffer = decoded;
+        item.status = 'idle';
+      } catch (err: any) {
+        item.status = 'error';
+        item.error = err.message || 'Decode failed';
+      }
+    }
+
+    // Designate timing master: prioritize first drum stem, or first stem
+    if (!sunoQuantizerState.timingMasterId || !sunoQuantizerState.stems.some((s) => s.id === sunoQuantizerState.timingMasterId)) {
+      const drumStem = sunoQuantizerState.stems.find((s) => s.role === 'drums');
+      const master = drumStem || sunoQuantizerState.stems[0];
+      if (master) {
+        sunoQuantizerState.timingMasterId = master.id;
+        master.isTimingMaster = true;
+      }
+    }
+
+    // Automatically analyze timing master once decoded
+    await analyzeTimingMaster();
+    renderAll();
+  }
+
+  async function analyzeTimingMaster() {
+    const master = sunoQuantizerState.stems.find((s) => s.id === sunoQuantizerState.timingMasterId);
+    if (!master || !master.buffer) return;
+
+    sunoQuantizerState.isAnalyzing = true;
+    updateStatus(`Analyzing drum transients on ${master.name}...`, 'info');
+
+    try {
+      const chan = master.buffer.getChannelData(0);
+      const sampleRate = master.buffer.sampleRate;
+      const onsets = detectOnsets(chan, sampleRate);
+
+      const est = estimateAnchorBpm(onsets, sampleRate, 32);
+      sunoQuantizerState.detectedBpm = est.detectedBpm;
+      sunoQuantizerState.targetBpm = est.roundedBpm;
+      sunoQuantizerState.downbeatSec = est.downbeatSec;
+
+      const driftResult = buildMasterDriftMap(
+        onsets,
+        sunoQuantizerState.targetBpm,
+        est.downbeatSec,
+        master.buffer.duration
+      );
+      sunoQuantizerState.analysis = driftResult;
+
+      updateStatus(
+        `✅ Analyzed ${master.name}: Detected ${est.detectedBpm} BPM (snapped to ${sunoQuantizerState.targetBpm} BPM). Max cumulative drift: ±${driftResult.maxDriftMs} ms across ${driftResult.barCount} bars.`,
+        'success'
+      );
+    } catch (err: any) {
+      updateStatus(`Analysis error: ${err.message || err}`, 'error');
+    } finally {
+      sunoQuantizerState.isAnalyzing = false;
+    }
+  }
+
+  function drawDriftCanvas() {
+    if (!sunoQuantizerState.analysis || !sunoQuantizerState.analysis.driftTimeline.length) return;
+    const timeline = sunoQuantizerState.analysis.driftTimeline;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const width = canvas.clientWidth || 800;
+    const height = 160;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    ctx.scale(dpr, dpr);
+
+    // Background
+    ctx.fillStyle = '#090c0a';
+    ctx.fillRect(0, 0, width, height);
+
+    const centerY = height / 2;
+    const maxScaleMs = Math.max(50, sunoQuantizerState.analysis.maxDriftMs * 1.25);
+
+    // Grid lines for ±25ms, ±50ms
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.07)';
+    ctx.setLineDash([4, 4]);
+
+    [-50, -25, 25, 50].forEach((ms) => {
+      const y = centerY - (ms / maxScaleMs) * (centerY - 20);
+      if (y >= 10 && y <= height - 10) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+        ctx.stroke();
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.font = '9px monospace';
+        ctx.fillText(`${ms > 0 ? '+' : ''}${ms}ms`, 8, y - 3);
+      }
+    });
+
+    // Zero-line (ideal grid)
+    ctx.setLineDash([]);
+    ctx.strokeStyle = 'rgba(74, 222, 128, 0.4)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(0, centerY);
+    ctx.lineTo(width, centerY);
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(74, 222, 128, 0.7)';
+    ctx.font = '10px monospace';
+    ctx.fillText('0 ms (Ideal Metronome Grid)', width - 165, centerY - 4);
+
+    // Vertical bar lines
+    const totalPoints = timeline.length;
+    for (let i = 0; i < totalPoints; i++) {
+      const pt = timeline[i];
+      const x = (i / Math.max(1, totalPoints - 1)) * (width - 40) + 20;
+
+      if (pt.beat === 1) {
+        ctx.strokeStyle = pt.bar % 4 === 1 ? 'rgba(255, 255, 255, 0.18)' : 'rgba(255, 255, 255, 0.06)';
+        ctx.beginPath();
+        ctx.moveTo(x, 15);
+        ctx.lineTo(x, height - 15);
+        ctx.stroke();
+
+        if (pt.bar % 4 === 1 || pt.bar === 1) {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+          ctx.font = '9px monospace';
+          ctx.fillText(`Bar ${pt.bar}`, x + 3, 24);
+        }
+      }
+    }
+
+    // Drift Curve
+    ctx.beginPath();
+    for (let i = 0; i < totalPoints; i++) {
+      const pt = timeline[i];
+      const x = (i / Math.max(1, totalPoints - 1)) * (width - 40) + 20;
+      const y = centerY - (pt.driftMs / maxScaleMs) * (centerY - 20);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = '#00f0ff';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    // Beat dots
+    for (let i = 0; i < totalPoints; i++) {
+      const pt = timeline[i];
+      const x = (i / Math.max(1, totalPoints - 1)) * (width - 40) + 20;
+      const y = centerY - (pt.driftMs / maxScaleMs) * (centerY - 20);
+
+      const abs = Math.abs(pt.driftMs);
+      ctx.fillStyle = abs < 10 ? '#4ade80' : abs < 25 ? '#facc15' : '#f87171';
+      ctx.beginPath();
+      ctx.arc(x, y, pt.beat === 1 ? 3.5 : 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  async function quantizeAllStems() {
+    if (!sunoQuantizerState.stems.length || !sunoQuantizerState.analysis) return;
+    const masterStem = sunoQuantizerState.stems.find((s) => s.id === sunoQuantizerState.timingMasterId);
+    if (!masterStem || !masterStem.buffer) {
+      updateStatus('Timing master drum stem buffer is not ready.', 'error');
+      return;
+    }
+
+    sunoQuantizerState.isProcessing = true;
+    sunoQuantizerState.progressRatio = 0;
+    sunoQuantizerState.progressText = 'Starting phase-locked stem quantization...';
+    renderAll();
+
+    try {
+      // 1. Re-calculate master drift map with active targetBpm and downbeatSec
+      const masterChan = masterStem.buffer.getChannelData(0);
+      const onsets = detectOnsets(masterChan, masterStem.buffer.sampleRate);
+      const driftMap = buildMasterDriftMap(
+        onsets,
+        sunoQuantizerState.targetBpm,
+        sunoQuantizerState.downbeatSec,
+        masterStem.buffer.duration
+      );
+
+      // 2. Quantize Timing Master first to establish master grain offsets
+      sunoQuantizerState.progressText = `Quantizing Timing Master (1/${sunoQuantizerState.stems.length}): ${masterStem.name}...`;
+      renderAll();
+
+      const masterChannels: Float32Array[] = [];
+      for (let c = 0; c < masterStem.buffer.numberOfChannels; c++) {
+        masterChannels.push(masterStem.buffer.getChannelData(c));
+      }
+
+      const masterRes = timeStretchWSOLA(
+        masterChannels,
+        masterStem.buffer.sampleRate,
+        driftMap.markers,
+        {},
+        (ratio) => {
+          sunoQuantizerState.progressRatio = (0 + ratio) / sunoQuantizerState.stems.length;
+        }
+      );
+      const masterGrains = masterRes.grainOffsets;
+      masterStem.renderedBuffer = createAudioBufferFromChannels(masterRes.outputChannels, masterStem.buffer.sampleRate);
+      masterStem.status = 'done';
+
+      // 3. Quantize all sibling stems using identical master grain offsets
+      let idx = 1;
+      for (const stem of sunoQuantizerState.stems) {
+        if (stem.id === masterStem.id || !stem.buffer) continue;
+        idx++;
+        sunoQuantizerState.progressText = `Quantizing (${idx}/${sunoQuantizerState.stems.length}): ${stem.name} (Phase-Locked)...`;
+        renderAll();
+
+        const channels: Float32Array[] = [];
+        for (let c = 0; c < stem.buffer.numberOfChannels; c++) {
+          channels.push(stem.buffer.getChannelData(c));
+        }
+
+        const res = timeStretchWSOLA(
+          channels,
+          stem.buffer.sampleRate,
+          driftMap.markers,
+          { precomputedGrains: masterGrains },
+          (ratio) => {
+            sunoQuantizerState.progressRatio = (idx - 1 + ratio) / sunoQuantizerState.stems.length;
+          }
+        );
+        stem.renderedBuffer = createAudioBufferFromChannels(res.outputChannels, stem.buffer.sampleRate);
+        stem.status = 'done';
+      }
+
+      // 4. Export all stems into BpmLocked_Stems
+      sunoQuantizerState.progressText = 'Encoding and exporting WAV stems into BpmLocked_Stems...';
+      renderAll();
+
+      sunoQuantizerState.lastSavedPaths = [];
+
+      for (const stem of sunoQuantizerState.stems) {
+        if (!stem.renderedBuffer) continue;
+        const bitDepth = sunoQuantizerState.exportFormat;
+        const wavBytes = encodeWavBuffer(stem.renderedBuffer as AudioBuffer, bitDepth);
+        const baseName = stem.name.replace(/\.[^/.]+$/, '');
+        const outName = `${baseName}_quantized_${sunoQuantizerState.targetBpm}bpm.wav`;
+
+        if (window.api && window.api.quickSaveAudio) {
+          const savedPath = await window.api.quickSaveAudio(outName, wavBytes, 'BpmLocked_Stems');
+          if (savedPath) sunoQuantizerState.lastSavedPaths.push(savedPath);
+
+          if (sunoQuantizerState.exportAsd) {
+            const asdText = generateWarpSummary(driftMap.markers, sunoQuantizerState.targetBpm);
+            const asdBytes = new TextEncoder().encode(asdText);
+            await window.api.quickSaveAudio(`${outName}.asd.txt`, asdBytes, 'BpmLocked_Stems');
+          }
+        } else {
+          // Browser download fallback
+          const blob = new Blob([wavBytes as any], { type: 'audio/wav' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = outName;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+      }
+
+      sunoQuantizerState.progressRatio = 1.0;
+      updateStatus(
+        `🎉 Successfully quantized and phase-locked all ${sunoQuantizerState.stems.length} stems to ${sunoQuantizerState.targetBpm} BPM! Saved to BpmLocked_Stems/.`,
+        'success'
+      );
+      toast('Suno Stems Quantized', `${sunoQuantizerState.stems.length} stems locked to ${sunoQuantizerState.targetBpm} BPM`);
+    } catch (err: any) {
+      updateStatus(`Quantization failed: ${err.message || err}`, 'error');
+    } finally {
+      sunoQuantizerState.isProcessing = false;
+      renderAll();
+    }
+  }
+
+  function renderAll() {
+    updateStatus();
+
+    // Stem count and display
+    stemCountText.textContent = `Loaded Stems (${sunoQuantizerState.stems.length})`;
+    stemCard.style.display = sunoQuantizerState.stems.length > 0 ? 'flex' : 'none';
+
+    stemListEl.innerHTML = '';
+    sunoQuantizerState.stems.forEach((stem) => {
+      const row = el('div', `sq-stem-row ${stem.id === sunoQuantizerState.timingMasterId ? 'sq-stem-row--master' : ''}`);
+
+      const left = el('div', 'sq-stem-row__left');
+      const roleIcons: Record<StemRole, string> = {
+        drums: '🥁',
+        bass: '🎸',
+        vocals: '🎤',
+        instruments: '🎹',
+        other: '🎛️'
+      };
+      left.append(el('div', 'sq-stem-role-icon', roleIcons[stem.role] || '🎵'));
+
+      const info = el('div', 'sq-stem-info');
+      info.append(el('div', 'sq-stem-name', stem.name));
+      const durStr = stem.buffer ? `${formatSrDuration(stem.buffer.duration)} · ` : '';
+      const sRateStr = stem.buffer ? `${stem.buffer.sampleRate}Hz · ` : '';
+      info.append(el('div', 'sq-stem-meta', `${durStr}${sRateStr}${formatSrBytes(stem.size)}`));
+      left.append(info);
+      row.append(left);
+
+      const right = el('div', 'sq-stem-row__right');
+
+      // Role selector
+      const roleSelect = document.createElement('select');
+      roleSelect.className = 'pill pill--sm';
+      (['drums', 'bass', 'vocals', 'instruments', 'other'] as StemRole[]).forEach((r) => {
+        const opt = document.createElement('option');
+        opt.value = r;
+        opt.textContent = r.charAt(0).toUpperCase() + r.slice(1);
+        opt.selected = stem.role === r;
+        roleSelect.append(opt);
+      });
+      roleSelect.addEventListener('change', () => {
+        stem.role = roleSelect.value as StemRole;
+        renderAll();
+      });
+      right.append(roleSelect);
+
+      // Master selector button
+      if (stem.id === sunoQuantizerState.timingMasterId) {
+        right.append(el('span', 'sq-master-badge', '👑 Timing Master'));
+      } else {
+        const setMasterBtn = el('button', 'sq-set-master-btn', 'Set as Master');
+        setMasterBtn.addEventListener('click', async () => {
+          sunoQuantizerState.stems.forEach((s) => (s.isTimingMaster = false));
+          stem.isTimingMaster = true;
+          sunoQuantizerState.timingMasterId = stem.id;
+          await analyzeTimingMaster();
+          renderAll();
+        });
+        right.append(setMasterBtn);
+      }
+
+      // Remove button
+      const removeBtn = el('button', 'pill pill--sm', '✕');
+      removeBtn.addEventListener('click', () => {
+        sunoQuantizerState.stems = sunoQuantizerState.stems.filter((s) => s.id !== stem.id);
+        if (sunoQuantizerState.timingMasterId === stem.id) {
+          sunoQuantizerState.timingMasterId = sunoQuantizerState.stems[0]?.id || null;
+          if (sunoQuantizerState.timingMasterId) {
+            analyzeTimingMaster();
+          } else {
+            sunoQuantizerState.analysis = null;
+          }
+        }
+        renderAll();
+      });
+      right.append(removeBtn);
+
+      stemListEl.append(row);
+    });
+
+    // Analysis Card
+    if (sunoQuantizerState.analysis && sunoQuantizerState.stems.length > 0) {
+      analysisCard.style.display = 'flex';
+      analysisCard.innerHTML = '';
+
+      const metricsGrid = el('div', 'sq-metrics-grid');
+
+      // Detected BPM
+      const m1 = el('div', 'sq-metric-box');
+      m1.append(el('div', 'sq-metric-box__label', 'Detected Anchor Tempo'));
+      m1.append(el('div', 'sq-metric-box__val sq-metric-box__val--amber', `${sunoQuantizerState.detectedBpm} BPM`));
+      metricsGrid.append(m1);
+
+      // Max Drift
+      const m2 = el('div', 'sq-metric-box');
+      m2.append(el('div', 'sq-metric-box__label', 'Max Cumulative Drift'));
+      m2.append(el('div', 'sq-metric-box__val', `±${sunoQuantizerState.analysis.maxDriftMs} ms`));
+      metricsGrid.append(m2);
+
+      // Avg Drift
+      const m3 = el('div', 'sq-metric-box');
+      m3.append(el('div', 'sq-metric-box__label', 'Avg Beat Drift'));
+      m3.append(el('div', 'sq-metric-box__val', `${sunoQuantizerState.analysis.avgDriftMs} ms`));
+      metricsGrid.append(m3);
+
+      // Total Bars
+      const m4 = el('div', 'sq-metric-box');
+      m4.append(el('div', 'sq-metric-box__label', 'Total Song Length'));
+      m4.append(el('div', 'sq-metric-box__val', `${sunoQuantizerState.analysis.barCount} Bars`));
+      metricsGrid.append(m4);
+
+      analysisCard.append(metricsGrid);
+
+      // Controls Grid
+      const controlsGrid = el('div', 'sq-controls-grid');
+
+      // Target BPM
+      const c1 = el('div', 'sq-control-group');
+      c1.append(el('label', '', 'Target Locked BPM:'));
+      const bpmRow = el('div', 'sq-bpm-input-row');
+      const bpmInput = document.createElement('input');
+      bpmInput.type = 'number';
+      bpmInput.step = '0.1';
+      bpmInput.min = '40';
+      bpmInput.max = '240';
+      bpmInput.className = 'sq-bpm-input';
+      bpmInput.value = String(sunoQuantizerState.targetBpm);
+      bpmInput.addEventListener('change', () => {
+        const val = parseFloat(bpmInput.value);
+        if (val > 30 && val < 300) {
+          sunoQuantizerState.targetBpm = Math.round(val * 10) / 10;
+          const master = sunoQuantizerState.stems.find((s) => s.id === sunoQuantizerState.timingMasterId);
+          if (master && master.buffer) {
+            const chan = master.buffer.getChannelData(0);
+            const onsets = detectOnsets(chan, master.buffer.sampleRate);
+            sunoQuantizerState.analysis = buildMasterDriftMap(
+              onsets,
+              sunoQuantizerState.targetBpm,
+              sunoQuantizerState.downbeatSec,
+              master.buffer.duration
+            );
+            drawDriftCanvas();
+          }
+        }
+      });
+      bpmRow.append(bpmInput);
+
+      const snapBtn = el('button', 'pill pill--sm', `Snap (${Math.round(sunoQuantizerState.detectedBpm)})`);
+      snapBtn.addEventListener('click', () => {
+        bpmInput.value = String(Math.round(sunoQuantizerState.detectedBpm));
+        bpmInput.dispatchEvent(new Event('change'));
+      });
+      bpmRow.append(snapBtn);
+
+      // Match Project BPM if available
+      const activeProjBpm = Player.getCurrent()?.bpm || (openProject ? bpmFor(openProject) : null);
+      if (activeProjBpm && activeProjBpm > 0) {
+        const matchProjBtn = el('button', 'pill pill--sm', `Match Project (${activeProjBpm})`);
+        matchProjBtn.addEventListener('click', () => {
+          bpmInput.value = String(activeProjBpm);
+          bpmInput.dispatchEvent(new Event('change'));
+        });
+        bpmRow.append(matchProjBtn);
+      }
+      c1.append(bpmRow);
+      controlsGrid.append(c1);
+
+      // Downbeat Offset
+      const c2 = el('div', 'sq-control-group');
+      c2.append(el('label', '', 'Bar 1 Downbeat Offset:'));
+      const downbeatRow = el('div', 'sq-bpm-input-row');
+      const downbeatInput = document.createElement('input');
+      downbeatInput.type = 'number';
+      downbeatInput.step = '0.005';
+      downbeatInput.min = '0';
+      downbeatInput.max = '5';
+      downbeatInput.className = 'sq-bpm-input';
+      downbeatInput.value = String(Math.round(sunoQuantizerState.downbeatSec * 1000) / 1000);
+      downbeatInput.addEventListener('change', () => {
+        sunoQuantizerState.downbeatSec = Math.max(0, parseFloat(downbeatInput.value) || 0);
+        const master = sunoQuantizerState.stems.find((s) => s.id === sunoQuantizerState.timingMasterId);
+        if (master && master.buffer) {
+          const chan = master.buffer.getChannelData(0);
+          const onsets = detectOnsets(chan, master.buffer.sampleRate);
+          sunoQuantizerState.analysis = buildMasterDriftMap(
+            onsets,
+            sunoQuantizerState.targetBpm,
+            sunoQuantizerState.downbeatSec,
+            master.buffer.duration
+          );
+          drawDriftCanvas();
+        }
+      });
+      downbeatRow.append(downbeatInput);
+      downbeatRow.append(el('span', 'sq-stem-meta', 'seconds'));
+      c2.append(downbeatRow);
+      controlsGrid.append(c2);
+
+      analysisCard.append(controlsGrid);
+      canvasWrap.style.display = 'flex';
+      setTimeout(drawDriftCanvas, 50);
+    } else {
+      analysisCard.style.display = 'none';
+      canvasWrap.style.display = 'none';
+    }
+
+    // Actions Box
+    if (sunoQuantizerState.stems.length > 0 && sunoQuantizerState.analysis) {
+      actionsBox.style.display = 'flex';
+      actionsBox.innerHTML = '';
+
+      const topRow = el('div', 'sq-actions-top');
+      const optionsRow = el('div', 'sq-options-row');
+
+      // Export Format
+      const fmtGroup = el('div', 'sq-option-item');
+      fmtGroup.append(el('span', '', 'WAV Format:'));
+      const fmtSelect = document.createElement('select');
+      fmtSelect.className = 'pill pill--sm';
+      [
+        { val: 16, label: '16-bit PCM (Standard DAW)' },
+        { val: 24, label: '24-bit PCM (Studio HD)' },
+        { val: 32, label: '32-bit Float (Precision)' }
+      ].forEach((opt) => {
+        const o = document.createElement('option');
+        o.value = String(opt.val);
+        o.textContent = opt.label;
+        o.selected = sunoQuantizerState.exportFormat === opt.val;
+        fmtSelect.append(o);
+      });
+      fmtSelect.addEventListener('change', () => {
+        sunoQuantizerState.exportFormat = parseInt(fmtSelect.value, 10) as 16 | 24 | 32;
+      });
+      fmtGroup.append(fmtSelect);
+      optionsRow.append(fmtGroup);
+
+      // Ableton .asd checkbox
+      const asdGroup = el('label', 'sq-option-item');
+      const asdCheck = document.createElement('input');
+      asdCheck.type = 'checkbox';
+      asdCheck.checked = sunoQuantizerState.exportAsd;
+      asdCheck.addEventListener('change', () => {
+        sunoQuantizerState.exportAsd = asdCheck.checked;
+      });
+      asdGroup.append(asdCheck, el('span', '', 'Export Ableton Warp Markers (.asd)'));
+      optionsRow.append(asdGroup);
+
+      topRow.append(optionsRow);
+
+      const processBtn = el(
+        'button',
+        'pill pill--solid sq-process-btn',
+        sunoQuantizerState.isProcessing
+          ? '⏳ Quantizing Stems...'
+          : `✨ Quantize All ${sunoQuantizerState.stems.length} Stems to ${sunoQuantizerState.targetBpm} BPM`
+      ) as HTMLButtonElement;
+      processBtn.disabled = sunoQuantizerState.isProcessing || sunoQuantizerState.isAnalyzing;
+      processBtn.addEventListener('click', quantizeAllStems);
+      topRow.append(processBtn);
+
+      actionsBox.append(topRow);
+
+      // Progress Bar
+      if (sunoQuantizerState.isProcessing) {
+        const pWrap = el('div', 'sq-progress-bar-wrap');
+        const pFill = el('div', 'sq-progress-bar-fill') as HTMLElement;
+        pFill.style.width = `${Math.round(sunoQuantizerState.progressRatio * 100)}%`;
+        pWrap.append(pFill);
+
+        const pText = el('div', 'sq-progress-text', sunoQuantizerState.progressText);
+        actionsBox.append(pWrap, pText);
+      }
+
+      // Result Folder Button
+      if (sunoQuantizerState.lastSavedPaths.length > 0) {
+        const resultRow = el('div', 'sq-status-banner sq-status-banner--success');
+        resultRow.append(
+          el(
+            'span',
+            '',
+            `📁 ${sunoQuantizerState.lastSavedPaths.length} stems exported into BpmLocked_Stems folder.`
+          )
+        );
+        const openFolderBtn = el('button', 'pill pill--sm', 'Open Output Folder');
+        openFolderBtn.addEventListener('click', () => {
+          if (window.api && window.api.outputOpenFolder) {
+            window.api.outputOpenFolder('BpmLocked_Stems');
+          }
+        });
+        resultRow.append(openFolderBtn);
+        actionsBox.append(resultRow);
+      }
+    } else {
+      actionsBox.style.display = 'none';
+    }
+  }
+
+  root.append(hero, statusBox, dropzone, stemCard, analysisCard, canvasWrap, actionsBox);
+  container.append(root);
+
+  renderAll();
+}
+
 function openSlowedReverbModal() {
   const existingOverlay = document.getElementById('slowedReverbModalOverlay');
   if (existingOverlay) existingOverlay.remove();
@@ -13603,6 +14475,12 @@ function renderStandaloneTools() {
       icon: 'activity',
       title: 'Slowed + Reverb Studio',
       text: 'Slow down tracks by speed or pitch and immerse them in lush algorithmic stereo reverb.'
+    },
+    {
+      view: 'suno-quantizer',
+      icon: 'activity',
+      title: 'Suno Stem Quantizer & BPM Lock',
+      text: 'Fix tempo drift in Suno/Udio generative stems. Auto-detects drum BPM, tracks drift, and phase-locks all stems.'
     },
     {
       view: 'convert',
@@ -13702,6 +14580,31 @@ function closeSheet() {
 /* ============================== wiring ============================= */
 
 $('rescan').addEventListener('click', refresh);
+
+/* ---- BPM Tap Tempo & Delay Calculator (topbar tool) --------------- */
+const bpmTool = initBpmTool({
+  onSearchBpm: (bpm: number) => {
+    if (view !== 'list') view = 'list';
+    searchEl.value = `bpm:${bpm}`;
+    searchEl.dispatchEvent(new Event('input', { bubbles: true }));
+    searchEl.focus();
+  },
+  getActiveProjectBpm: () => {
+    if (view === 'project' && openProject) {
+      const b = bpmFor(openProject);
+      if (b) return b;
+    }
+    const current = Player.getCurrent();
+    if (current) {
+      if (current.project && typeof current.project === 'object') {
+        const b = bpmFor(current.project);
+        if (b) return b;
+      }
+      if (typeof current.bpm === 'number' && current.bpm > 0) return current.bpm;
+    }
+    return null;
+  }
+});
 
 /* ---- Search hint bubble (▾ button) --------------------------------- */
 (function () {
