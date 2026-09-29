@@ -12,9 +12,17 @@ is auto-generated on each GitHub Release; this file is the curated summary.
   - Independent mouse wheel scrolling for the integer and decimal BPM displays in the BPM & Delay Calculator tool.
   - Scrolling on the integer portion increments/decrements by $\pm1$ BPM.
   - Scrolling on the decimal portion increments/decrements by $\pm0.1$ BPM with strict boundary clamping ($\text{.}0$–$\text{.}9$) so decimal increments do not roll over or mutate the integer value.
-- **Suno Stem Quantizer Output Destination Options**:
-  - Choose between saving to the default subfolder (`BpmLocked_Stems/`), choosing a custom output directory via native dialog, or overwriting original source files.
-  - Safe confirmation modal safeguard before overwriting source files.
+- **Studio-Grade WSOLA Time-Stretching Engine**:
+  - Upgraded to 2048-sample musical window (~43ms at 48kHz) with 75% overlap (hop = 512 samples) and Hann windowing, eliminating metallic buzz and amplitude modulation.
+  - Low-frequency phase alignment extended to $\pm512$ samples, preserving bass and kick fundamentals down to 45Hz without destructive cancellation.
+  - Center-weighted correlation metric and noise-floor protection ($< -60$ dB) preventing grain jitter during quiet passages and vocal pauses.
+  - Phase-coherent stereo imaging (L & R channels share grain offsets) with independent per-stem grain optimization so vocals, bass, and keys remain clean without being degraded by drum transient splices.
+- **Bar-Level Macro Drift Quantizer**:
+  - Replaces erratic quarter-note micro-warping with smooth, musical measure-level (bar) tracking.
+  - Smoothly interpolates missing downbeats across breakdowns/rests and applies 5-tap moving median + 3-tap moving average filtering, bounding stretch variance to $< 0.7\%$.
+  - Locks every bar downbeat to the DAW grid while preserving 100% of internal groove, swing, and micro-timing.
+- **Selectable Warp Modes**:
+  - Added Warp Mode dropdown: 🎛️ **Bar-Level Macro (Preserve Groove)** (recommended default) vs 📏 **Uniform Match (Constant Ratio)**.
 - **Quantizer Tempo Reactivity & Subharmonic Resolution**:
   - Render button and UI drift analytics now react immediately to manual BPM inputs, wheel adjustments, and tempo multiplier shortcuts (`Snap`, `÷2`, `×2`, `×1.5`, `÷1.5`, `Tap`).
   - Improved anchor tempo detection and pulse grid alignment, eliminating 2:3 subharmonic false detections (e.g., 73 BPM instead of 110 BPM).

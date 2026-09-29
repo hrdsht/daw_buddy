@@ -13594,6 +13594,7 @@ interface SunoQuantizerUIState {
   exportAsd: boolean;
   exportDestination: 'subfolder' | 'custom' | 'overwrite';
   customExportFolder: string | null;
+  quantizeMode: 'bar-macro' | 'uniform';
   statusText: string | null;
   statusType: 'info' | 'success' | 'error';
   lastSavedPaths: string[];
@@ -13614,6 +13615,7 @@ const sunoQuantizerState: SunoQuantizerUIState = {
   exportAsd: true,
   exportDestination: 'subfolder',
   customExportFolder: null,
+  quantizeMode: 'bar-macro',
   statusText: null,
   statusType: 'info',
   lastSavedPaths: []
@@ -13880,7 +13882,8 @@ function buildSunoQuantizerInterface(container: HTMLElement) {
         onsets,
         sunoQuantizerState.targetBpm,
         est.downbeatSec,
-        master.buffer.duration
+        master.buffer.duration,
+        sunoQuantizerState.quantizeMode || 'bar-macro'
       );
       sunoQuantizerState.analysis = driftResult;
 
@@ -14024,17 +14027,18 @@ function buildSunoQuantizerInterface(container: HTMLElement) {
     renderAll();
 
     try {
-      // 1. Re-calculate master drift map with active targetBpm and downbeatSec
+      // 1. Re-calculate master drift map with active targetBpm, downbeatSec, and quantizeMode
       const masterChan = masterStem.buffer.getChannelData(0);
       const onsets = detectOnsets(masterChan, masterStem.buffer.sampleRate);
       const driftMap = buildMasterDriftMap(
         onsets,
         sunoQuantizerState.targetBpm,
         sunoQuantizerState.downbeatSec,
-        masterStem.buffer.duration
+        masterStem.buffer.duration,
+        sunoQuantizerState.quantizeMode || 'bar-macro'
       );
 
-      // 2. Quantize Timing Master first to establish master grain offsets
+      // 2. Quantize Timing Master
       sunoQuantizerState.progressText = `Quantizing Timing Master (1/${sunoQuantizerState.stems.length}): ${masterStem.name}...`;
       renderAll();
 
@@ -14052,16 +14056,15 @@ function buildSunoQuantizerInterface(container: HTMLElement) {
           sunoQuantizerState.progressRatio = (0 + ratio) / sunoQuantizerState.stems.length;
         }
       );
-      const masterGrains = masterRes.grainOffsets;
       masterStem.renderedBuffer = createAudioBufferFromChannels(masterRes.outputChannels, masterStem.buffer.sampleRate);
       masterStem.status = 'done';
 
-      // 3. Quantize all sibling stems using identical master grain offsets
+      // 3. Quantize all sibling stems using identical master timeline (with per-stem grain optimization)
       let idx = 1;
       for (const stem of sunoQuantizerState.stems) {
         if (stem.id === masterStem.id || !stem.buffer) continue;
         idx++;
-        sunoQuantizerState.progressText = `Quantizing (${idx}/${sunoQuantizerState.stems.length}): ${stem.name} (Phase-Locked)...`;
+        sunoQuantizerState.progressText = `Quantizing (${idx}/${sunoQuantizerState.stems.length}): ${stem.name}...`;
         renderAll();
 
         const channels: Float32Array[] = [];
@@ -14073,7 +14076,7 @@ function buildSunoQuantizerInterface(container: HTMLElement) {
           channels,
           stem.buffer.sampleRate,
           driftMap.markers,
-          { precomputedGrains: masterGrains },
+          {}, // Independent per-stem grain optimization maintains pristine audio quality across vocals, bass & keys
           (ratio) => {
             sunoQuantizerState.progressRatio = (idx - 1 + ratio) / sunoQuantizerState.stems.length;
           }
@@ -14292,7 +14295,8 @@ function buildSunoQuantizerInterface(container: HTMLElement) {
             onsets,
             sunoQuantizerState.targetBpm,
             sunoQuantizerState.downbeatSec,
-            master.buffer.duration
+            master.buffer.duration,
+            sunoQuantizerState.quantizeMode || 'bar-macro'
           );
           maxDriftVal.textContent = `±${sunoQuantizerState.analysis.maxDriftMs} ms`;
           avgDriftVal.textContent = `${sunoQuantizerState.analysis.avgDriftMs} ms`;
@@ -14469,6 +14473,40 @@ function buildSunoQuantizerInterface(container: HTMLElement) {
 
       const topRow = el('div', 'sq-actions-top');
       const optionsRow = el('div', 'sq-options-row');
+
+      // Warp Quantize Mode Option
+      const modeGroup = el('div', 'sq-option-item');
+      modeGroup.append(el('span', '', 'Warp Mode:'));
+      const modeSelect = document.createElement('select');
+      modeSelect.className = 'pill pill--sm';
+      [
+        { val: 'bar-macro', label: '🎛️ Bar-Level Macro (Preserve Groove)' },
+        { val: 'uniform', label: '📏 Uniform Match (Constant Ratio)' }
+      ].forEach((opt) => {
+        const o = document.createElement('option');
+        o.value = opt.val;
+        o.textContent = opt.label;
+        o.selected = (sunoQuantizerState.quantizeMode || 'bar-macro') === opt.val;
+        modeSelect.append(o);
+      });
+      modeSelect.addEventListener('change', () => {
+        sunoQuantizerState.quantizeMode = modeSelect.value as 'bar-macro' | 'uniform';
+        const master = sunoQuantizerState.stems.find((s) => s.id === sunoQuantizerState.timingMasterId);
+        if (master && master.buffer) {
+          const chan = master.buffer.getChannelData(0);
+          const onsets = detectOnsets(chan, master.buffer.sampleRate);
+          sunoQuantizerState.analysis = buildMasterDriftMap(
+            onsets,
+            sunoQuantizerState.targetBpm,
+            sunoQuantizerState.downbeatSec,
+            master.buffer.duration,
+            sunoQuantizerState.quantizeMode
+          );
+        }
+        renderAll();
+      });
+      modeGroup.append(modeSelect);
+      optionsRow.append(modeGroup);
 
       // Export Destination Option
       const destGroup = el('div', 'sq-option-item');

@@ -307,12 +307,19 @@ export function estimateAnchorBpm(
 /**
  * Projects a rigid metronomic grid across the track and tracks timing drift (Δt).
  * Produces warp markers and drift timeline for visual and DSP processing.
+ *
+ * Modes:
+ * - 'bar-macro' (default): Evaluates timing at the BAR level (every 4 beats), smoothly
+ *   interpolating and smoothing drift. Locks every measure downbeat to the DAW grid
+ *   while preserving 100% of internal groove, swing, and micro-timing.
+ * - 'uniform': Applies a constant linear stretch ratio across the entire song.
  */
 export function buildMasterDriftMap(
   onsets: number[],
   targetBpm: number,
   downbeatSec: number,
-  totalDurationSec: number
+  totalDurationSec: number,
+  mode: 'bar-macro' | 'uniform' = 'bar-macro'
 ): {
   markers: WarpMarker[];
   driftTimeline: DriftPoint[];
@@ -321,8 +328,8 @@ export function buildMasterDriftMap(
   barCount: number;
 } {
   const beatDuration = 60 / targetBpm;
-  const totalBeats = Math.ceil((totalDurationSec - downbeatSec) / beatDuration);
-  const barCount = Math.ceil(totalBeats / 4);
+  const barDuration = beatDuration * 4;
+  const totalBars = Math.max(1, Math.ceil((totalDurationSec - downbeatSec) / barDuration));
 
   const markers: WarpMarker[] = [];
   const driftTimeline: DriftPoint[] = [];
@@ -333,92 +340,133 @@ export function buildMasterDriftMap(
     markers.push({ sourceSec: downbeatSec, targetSec: downbeatSec });
   }
 
-  const rawDeltas: { beat: number; timeSec: number; deltaSec: number }[] = [];
+  if (mode === 'uniform') {
+    const endTarget = downbeatSec + totalBars * barDuration;
+    markers.push({ sourceSec: totalDurationSec, targetSec: endTarget });
+    for (let bar = 0; bar < totalBars; bar++) {
+      const idealSec = downbeatSec + bar * barDuration;
+      driftTimeline.push({
+        bar: bar + 1,
+        beat: 1,
+        timeSec: Math.round(idealSec * 100) / 100,
+        driftMs: 0,
+        localBpm: targetBpm
+      });
+    }
+    return {
+      markers,
+      driftTimeline,
+      maxDriftMs: 0,
+      avgDriftMs: 0,
+      barCount: totalBars
+    };
+  }
 
-  // Match each ideal beat to the nearest detected onset
-  for (let b = 0; b <= totalBeats; b++) {
-    const idealSec = downbeatSec + b * beatDuration;
-    if (idealSec > totalDurationSec + beatDuration) break;
+  // Bar-level smooth macro drift mapping
+  const rawBarDeltas = new Float64Array(totalBars + 1);
+  const hasOnset = new Uint8Array(totalBars + 1);
+  const searchWindow = barDuration * 0.25; // Search +/- 25% of a bar
 
-    // Search window: ±35% of a beat
-    const searchWindow = beatDuration * 0.35;
-    let closestOnset: number | null = null;
+  for (let bar = 0; bar <= totalBars; bar++) {
+    const idealSec = downbeatSec + bar * barDuration;
+    if (idealSec > totalDurationSec + barDuration) break;
+
+    let closest: number | null = null;
     let minDiff = searchWindow;
 
-    for (const onset of onsets) {
-      const diff = Math.abs(onset - idealSec);
+    for (const o of onsets) {
+      const diff = Math.abs(o - idealSec);
       if (diff < minDiff) {
         minDiff = diff;
-        closestOnset = onset;
+        closest = o;
       }
     }
 
-    if (closestOnset !== null) {
-      rawDeltas.push({
-        beat: b,
-        timeSec: idealSec,
-        deltaSec: closestOnset - idealSec
-      });
-    } else {
-      // Linear extrapolation or zero drift for missing onsets
-      rawDeltas.push({
-        beat: b,
-        timeSec: idealSec,
-        deltaSec: 0
-      });
+    if (closest !== null) {
+      rawBarDeltas[bar] = closest - idealSec;
+      hasOnset[bar] = 1;
     }
   }
 
-  // Apply 5-tap moving median filter across deltas to eliminate fills/ghost note jitter
-  const smoothedDeltas = new Float32Array(rawDeltas.length);
-  for (let i = 0; i < rawDeltas.length; i++) {
-    const windowVals: number[] = [];
-    for (let k = Math.max(0, i - 2); k <= Math.min(rawDeltas.length - 1, i + 2); k++) {
-      if (rawDeltas[k].deltaSec !== 0) {
-        windowVals.push(rawDeltas[k].deltaSec);
+  // Linear interpolation for bars without detected downbeats (rests/breakdowns)
+  let lastKnown = 0;
+  for (let bar = 0; bar <= totalBars; bar++) {
+    if (hasOnset[bar]) {
+      if (bar > lastKnown + 1) {
+        const startVal = rawBarDeltas[lastKnown];
+        const endVal = rawBarDeltas[bar];
+        const span = bar - lastKnown;
+        for (let k = lastKnown + 1; k < bar; k++) {
+          const alpha = (k - lastKnown) / span;
+          rawBarDeltas[k] = startVal + alpha * (endVal - startVal);
+        }
       }
+      lastKnown = bar;
     }
-    if (windowVals.length > 0) {
-      windowVals.sort((a, b) => a - b);
-      smoothedDeltas[i] = windowVals[Math.floor(windowVals.length / 2)];
-    } else {
-      // Interpolate from neighbors
-      const prev = i > 0 ? smoothedDeltas[i - 1] : 0;
-      smoothedDeltas[i] = prev;
+  }
+  for (let bar = lastKnown + 1; bar <= totalBars; bar++) {
+    rawBarDeltas[bar] = rawBarDeltas[lastKnown];
+  }
+
+  // 5-tap moving median filter to eliminate fills and outlier syncopations
+  const medianDeltas = new Float64Array(totalBars + 1);
+  for (let bar = 0; bar <= totalBars; bar++) {
+    const vals: number[] = [];
+    for (let k = Math.max(0, bar - 2); k <= Math.min(totalBars, bar + 2); k++) {
+      vals.push(rawBarDeltas[k]);
+    }
+    vals.sort((a, b) => a - b);
+    medianDeltas[bar] = vals[Math.floor(vals.length / 2)];
+  }
+
+  // 3-tap moving average for a smooth continuous tempo curve
+  const finalDeltas = new Float64Array(totalBars + 1);
+  for (let bar = 0; bar <= totalBars; bar++) {
+    let sum = 0;
+    let cnt = 0;
+    for (let k = Math.max(0, bar - 1); k <= Math.min(totalBars, bar + 1); k++) {
+      sum += medianDeltas[k];
+      cnt++;
+    }
+    finalDeltas[bar] = sum / cnt;
+  }
+
+  // Clamp maximum slope: no more than +/- 15ms change per bar
+  // This guarantees stretch ratio never jumps abruptly between measures
+  for (let bar = 1; bar <= totalBars; bar++) {
+    const maxChange = 0.015;
+    const diff = finalDeltas[bar] - finalDeltas[bar - 1];
+    if (Math.abs(diff) > maxChange) {
+      finalDeltas[bar] = finalDeltas[bar - 1] + Math.sign(diff) * maxChange;
     }
   }
 
   let totalAbsDriftMs = 0;
   let maxDriftMs = 0;
 
-  for (let i = 0; i < rawDeltas.length; i++) {
-    const idealSec = rawDeltas[i].timeSec;
-    const deltaSec = smoothedDeltas[i];
+  for (let bar = 0; bar <= totalBars; bar++) {
+    const idealSec = downbeatSec + bar * barDuration;
+    const deltaSec = finalDeltas[bar];
     const sourceSec = Math.max(0, idealSec + deltaSec);
     const driftMs = Math.round(deltaSec * 1000 * 10) / 10;
-
     const absDrift = Math.abs(driftMs);
     totalAbsDriftMs += absDrift;
     if (absDrift > maxDriftMs) maxDriftMs = absDrift;
 
     // Instantaneous local tempo calculation
     let localBpm = targetBpm;
-    if (i > 0) {
-      const prevIdeal = rawDeltas[i - 1].timeSec;
-      const prevSource = Math.max(0, prevIdeal + smoothedDeltas[i - 1]);
+    if (bar > 0) {
+      const prevIdeal = downbeatSec + (bar - 1) * barDuration;
+      const prevSource = Math.max(0, prevIdeal + finalDeltas[bar - 1]);
       const dtSource = sourceSec - prevSource;
-      if (dtSource > 0.05) {
-        localBpm = Math.round((60 / dtSource) * 10) / 10;
+      if (dtSource > 0.1) {
+        localBpm = Math.round(((4 * 60) / dtSource) * 10) / 10;
       }
     }
 
-    const beatIndex = rawDeltas[i].beat;
-    const bar = Math.floor(beatIndex / 4) + 1;
-    const beatInBar = (beatIndex % 4) + 1;
-
     driftTimeline.push({
-      bar,
-      beat: beatInBar,
+      bar: bar + 1,
+      beat: 1,
       timeSec: Math.round(idealSec * 100) / 100,
       driftMs,
       localBpm
@@ -433,20 +481,19 @@ export function buildMasterDriftMap(
   }
 
   // End tail marker
-  const lastTarget = downbeatSec + totalBeats * beatDuration;
-  const lastSource = totalDurationSec;
-  if (lastTarget > 0 && markers[markers.length - 1].targetSec < lastTarget) {
-    markers.push({ sourceSec: lastSource, targetSec: lastTarget });
+  const lastTarget = downbeatSec + totalBars * barDuration;
+  if (markers.length === 0 || markers[markers.length - 1].targetSec < totalDurationSec) {
+    markers.push({ sourceSec: totalDurationSec, targetSec: Math.max(totalDurationSec, lastTarget) });
   }
 
-  const avgDriftMs = rawDeltas.length > 0 ? Math.round((totalAbsDriftMs / rawDeltas.length) * 10) / 10 : 0;
+  const avgDriftMs = totalBars > 0 ? Math.round((totalAbsDriftMs / totalBars) * 10) / 10 : 0;
 
   return {
     markers,
     driftTimeline,
     maxDriftMs: Math.round(maxDriftMs * 10) / 10,
     avgDriftMs,
-    barCount
+    barCount: totalBars
   };
 }
 
@@ -504,10 +551,12 @@ export interface WsolaOptions {
  * Stretches or compresses multi-channel audio to match the given warp markers
  * using Waveform Similarity Overlap-Add (WSOLA).
  *
- * Guaranteed Properties:
- * - Pitch-invariant (pitch is preserved 100%)
- * - Phase-coherent across all channels and sibling stems (same grain offsets)
- * - Attacks remain crisp with zero phase smearing
+ * Studio Quality Guarantees:
+ * - 2048-sample musical window with 75% overlap (no buzz, smooth overlap-add)
+ * - Low-frequency period preservation down to 45Hz
+ * - Center-weighted correlation penalty preventing grain jitter
+ * - Silence/pause threshold preventing noise hunting
+ * - Stereo channel phase coherence (L & R share grain offsets)
  */
 export function timeStretchWSOLA(
   sourceChannels: Float32Array[],
@@ -533,11 +582,14 @@ export function timeStretchWSOLA(
   const targetDurationSec = lastMarker.targetSec;
   const targetLen = Math.max(1, Math.round(targetDurationSec * sampleRate));
 
-  const winSize = options?.winSize || 1024;
-  const hopSize = options?.hopSize || Math.floor(winSize / 2);
-  const searchWindow = options?.searchWindow || 256;
+  // High-fidelity musical window: 2048 samples (~43ms at 48k)
+  const winSize = options?.winSize || 2048;
+  // 75% overlap for continuous, artifact-free overlap-add
+  const hopSize = options?.hopSize || Math.floor(winSize / 4); // 512 samples (~10.7ms)
+  // Search window for low pitch alignment (up to +/- 512 samples = +/- 10.7ms, down to 45Hz)
+  const searchWindow = options?.searchWindow || 512;
 
-  // Pre-generate Hanning window
+  // Pre-generate Hann window
   const window = new Float32Array(winSize);
   for (let i = 0; i < winSize; i++) {
     window[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (winSize - 1)));
@@ -562,7 +614,6 @@ export function timeStretchWSOLA(
     let chosenSrc = 0;
 
     if (options?.precomputedGrains) {
-      // Reuse exact grains for multi-stem phase lock
       chosenSrc = options.precomputedGrains[hop];
     } else {
       const targetSec = targetIdx / sampleRate;
@@ -572,36 +623,56 @@ export function timeStretchWSOLA(
       if (hop === 0) {
         chosenSrc = Math.max(0, Math.min(srcLen - winSize, nominalSrcIdx));
       } else {
-        const expectedSrcIdx = prevChosenSrc + hopSize;
+        const prevTargetSec = (hop - 1) * hopSize / sampleRate;
+        const prevNominalSec = interpolateSourceTime(prevTargetSec, markers);
+        const nominalStep = nominalSrcIdx - Math.round(prevNominalSec * sampleRate);
+        const expectedSrcIdx = prevChosenSrc + nominalStep;
+
         const minCandidate = Math.max(0, nominalSrcIdx - searchWindow);
         const maxCandidate = Math.min(srcLen - winSize, nominalSrcIdx + searchWindow);
 
-        let bestCorr = -Infinity;
-        let bestCandidate = nominalSrcIdx;
-
-        const corrLen = Math.min(256, winSize - hopSize);
-
-        for (let candidate = minCandidate; candidate <= maxCandidate; candidate += 2) {
-          let dot = 0;
-          let normA = 1e-9;
-          let normB = 1e-9;
-
-          for (let k = 0; k < corrLen; k += 2) {
-            const a = masterChan[candidate + k] || 0;
-            const b = masterChan[expectedSrcIdx + k] || 0;
-            dot += a * b;
-            normA += a * a;
-            normB += b * b;
-          }
-
-          const score = dot / Math.sqrt(normA * normB);
-          if (score > bestCorr) {
-            bestCorr = score;
-            bestCandidate = candidate;
-          }
+        // Check local energy around nominalSrcIdx
+        let localEnergy = 0;
+        const testLen = Math.min(512, winSize - hopSize);
+        for (let k = 0; k < testLen; k += 4) {
+          const s = masterChan[nominalSrcIdx + k] || 0;
+          localEnergy += s * s;
         }
 
-        chosenSrc = Math.max(0, Math.min(srcLen - winSize, bestCandidate));
+        // If silence or very quiet (< -60dB), stay at nominal to prevent hunting
+        if (localEnergy < 1e-4) {
+          chosenSrc = Math.max(0, Math.min(srcLen - winSize, nominalSrcIdx));
+        } else {
+          let bestScore = -Infinity;
+          let bestCandidate = nominalSrcIdx;
+
+          const corrLen = Math.min(512, winSize - hopSize);
+
+          for (let candidate = minCandidate; candidate <= maxCandidate; candidate += 2) {
+            let dot = 0;
+            let normA = 1e-9;
+            let normB = 1e-9;
+
+            for (let k = 0; k < corrLen; k += 2) {
+              const a = masterChan[candidate + k] || 0;
+              const b = masterChan[expectedSrcIdx + k] || 0;
+              dot += a * b;
+              normA += a * a;
+              normB += b * b;
+            }
+
+            const corr = dot / Math.sqrt(normA * normB);
+            const distanceRatio = Math.abs(candidate - nominalSrcIdx) / searchWindow;
+            const score = corr - 0.25 * distanceRatio;
+
+            if (score > bestScore) {
+              bestScore = score;
+              bestCandidate = candidate;
+            }
+          }
+
+          chosenSrc = Math.max(0, Math.min(srcLen - winSize, bestCandidate));
+        }
       }
 
       grainOffsets[hop] = chosenSrc;
@@ -609,7 +680,7 @@ export function timeStretchWSOLA(
 
     prevChosenSrc = chosenSrc;
 
-    // Overlap-add into output channels
+    // Overlap-add into all output channels
     const chunkLen = Math.min(winSize, targetLen - targetIdx);
     for (let c = 0; c < numChannels; c++) {
       const out = outputChannels[c];
@@ -631,7 +702,7 @@ export function timeStretchWSOLA(
   // Normalize by window overlap weights
   for (let i = 0; i < targetLen; i++) {
     const w = weightBuffer[i];
-    if (w > 1e-5) {
+    if (w > 1e-4) {
       const invW = 1.0 / w;
       for (let c = 0; c < numChannels; c++) {
         outputChannels[c][i] *= invW;

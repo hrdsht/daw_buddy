@@ -79,7 +79,7 @@ function testDriftMapGeneration() {
 
   const result = buildMasterDriftMap(onsets, targetBpm, downbeatSec, totalDuration);
 
-  assert.ok(result.markers.length > 50, 'Markers should be created');
+  assert.ok(result.markers.length >= 16, `Markers should be created per bar, got ${result.markers.length}`);
   assert.ok(result.maxDriftMs > 20, `Max drift ${result.maxDriftMs} should reflect cumulative drift`);
   assert.ok(result.avgDriftMs > 10, 'Average drift should be non-zero');
   assert.equal(result.barCount, 16);
