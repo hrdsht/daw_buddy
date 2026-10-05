@@ -7,13 +7,16 @@ import { DSP } from './dsp';
  * Supported message types:
  *   { type: 'analyse',                id, samples, sampleRate }
  *   { type: 'detectScaleModulations', id, samples, sampleRate }
+ *   { type: 'analyseLive',            id, samples, sampleRate }
  * (omitting `type` defaults to 'analyse' for backwards-compat)
  */
 (self as any).onmessage = (event) => {
   const { id, type, samples, sampleRate } = event.data || {};
   try {
     let result: any;
-    if (type === 'detectScaleModulations') {
+    if (type === 'analyseLive') {
+      result = DSP.analyseLive(samples, sampleRate);
+    } else if (type === 'detectScaleModulations') {
       result = DSP.detectScaleModulations(samples, sampleRate);
     } else {
       result = DSP.analyse(samples, sampleRate);

@@ -3337,6 +3337,39 @@ function analyse(channelData: Float32Array | Float64Array, sampleRate: number, o
   };
 }
 
+/**
+ * Lightweight pass for the Live Key listener: key, tuning and tempo over a
+ * short rolling window. Skips chord-progression and meter work so it can run
+ * every couple of seconds without starving the worker.
+ */
+function analyseLive(channelData: Float32Array | Float64Array, sampleRate: number) {
+  const { frames, binHz, hopSeconds } = spectra(channelData, sampleRate);
+  const tempo = detectTempo(frames, hopSeconds);
+  const key = detectKey(frames, binHz);
+
+  let sumSquares = 0;
+  for (let i = 0; i < channelData.length; i += 1) sumSquares += channelData[i] * channelData[i];
+  const rms = channelData.length ? Math.sqrt(sumSquares / channelData.length) : 0;
+
+  return {
+    bpm: tempo.bpm,
+    bpmConfidence: tempo.confidence,
+    key: key.key,
+    camelot: key.camelot,
+    keyConfidence: key.confidence,
+    keyAlternate: key.alternate,
+    tonic: key.tonic,
+    tonicPc: key.tonicPc,
+    mode: key.mode,
+    scale: key.scale,
+    modal: key.modal,
+    tuningA4: key.tuningA4,
+    tuningCents: key.tuningCents,
+    rms,
+    analysedSeconds: channelData.length / sampleRate
+  };
+}
+
 export interface GenreDefinition {
   id: string;
   name: string;
@@ -4009,6 +4042,7 @@ export function detectChordProgression(
 
 export const DSP = {
   analyse,
+  analyseLive,
   detectKey,
   detectTempo,
   detectMeter,
