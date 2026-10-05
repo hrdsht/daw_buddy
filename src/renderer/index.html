@@ -71,6 +71,20 @@
               <span id="bpmPillBadge" class="bpm-pill-badge">120</span>
             </button>
           </div>
+          <div class="live-key-anchor">
+            <button
+              id="liveKeyBtn"
+              class="pill live-key-pill"
+              type="button"
+              title="Live Key · Hear the key, Camelot and BPM of whatever is playing"
+              aria-haspopup="dialog"
+              aria-expanded="false"
+            >
+              <span class="live-key-pill__dot" aria-hidden="true"></span>
+              <span class="bpm-pill-label">Live Key</span>
+              <span id="liveKeyPillBadge" class="bpm-pill-badge">Off</span>
+            </button>
+          </div>
           <div class="topbar__right">
             <div id="sortMount" class="sortmount"></div>
             <button id="miniToggle" class="pill" title="Open floating Mini Player">
@@ -151,6 +165,69 @@
         </div>
       </footer>
     </div>
+
+    <!-- ================= LIVE KEY LISTENER ================= -->
+    <section
+      id="liveKeyPanel"
+      class="bpm-panel live-key-panel"
+      role="dialog"
+      aria-label="Live Key listener"
+      hidden
+    >
+      <header class="bpm-panel__head">
+        <div class="bpm-panel__head-titles">
+          <div class="bpm-panel__title-row">
+            <span class="bpm-panel__badge">LIVE</span>
+            <strong>Live Key &amp; Tempo</strong>
+          </div>
+          <span class="bpm-panel__subtitle">Listens locally · nothing is recorded or uploaded</span>
+        </div>
+        <div class="bpm-panel__head-actions">
+          <button id="liveKeyClose" class="bpm-btn-close" type="button" title="Close (Escape) — keeps listening" aria-label="Close">✕</button>
+        </div>
+      </header>
+
+      <div class="live-key-body">
+        <div class="live-key-source">
+          <label for="liveKeySource">Listen to</label>
+          <select id="liveKeySource"></select>
+          <p id="liveKeySourceHint" class="live-key-hint"></p>
+        </div>
+
+        <div class="live-key-hero">
+          <div id="liveKeyRing" class="live-key-ring" data-tone="off" data-state="idle" title="Ring fills and turns green as the reading settles">
+            <button type="button" class="live-key-ring__value" data-copy-part="key" title="Copy key">
+              <span id="liveKeyValue">—</span>
+            </button>
+          </div>
+          <div class="live-key-facts">
+            <button type="button" class="live-key-fact" data-copy-part="camelot" title="Copy Camelot code">
+              <span class="live-key-fact__label">Camelot</span>
+              <span id="liveKeyCamelot" class="live-key-fact__value">—</span>
+            </button>
+            <button type="button" class="live-key-fact" data-copy-part="bpm" title="Copy BPM">
+              <span class="live-key-fact__label">BPM</span>
+              <span id="liveKeyBpm" class="live-key-fact__value">—</span>
+            </button>
+            <span id="liveKeyRelative" class="live-key-meta"></span>
+            <span id="liveKeyTuning" class="live-key-meta"></span>
+          </div>
+        </div>
+
+        <div id="liveKeyStatus" class="live-key-status" role="status" aria-live="polite">Not listening</div>
+
+        <div class="live-key-actions">
+          <button id="liveKeyToggle" class="live-key-toggle" type="button">Start listening</button>
+          <button id="liveKeyCopy" class="bpm-util-btn" type="button" disabled>📋 Copy all</button>
+        </div>
+        <p class="live-key-hint">While listening, press <kbd>Ctrl/⌘</kbd> + <kbd>Alt</kbd> + <kbd>K</kbd> from any app to copy the locked reading.</p>
+
+        <div class="live-key-history-wrap">
+          <span class="live-key-fact__label">Recent locks</span>
+          <ol id="liveKeyHistory" class="live-key-history"></ol>
+        </div>
+      </div>
+    </section>
 
     <!-- ================= BPM TAP & DELAY CALCULATOR MODAL ================= -->
     <section

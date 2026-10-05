@@ -177,5 +177,9 @@ contextBridge.exposeInMainWorld('api', {
   crashlogDismiss: () => ipcRenderer.invoke('crashlog:dismiss'),
   crashlogOpenFolder: () => ipcRenderer.invoke('crashlog:openFolder'),
   crashlogReportRendererError: (errorData: any) => ipcRenderer.invoke('crashlog:reportRendererError', errorData),
-  crashlogSetEnabled: (enabled: boolean) => ipcRenderer.invoke('crashlog:setEnabled', enabled)
+  crashlogSetEnabled: (enabled: boolean) => ipcRenderer.invoke('crashlog:setEnabled', enabled),
+
+  liveKeySetActive: (active: boolean) => ipcRenderer.send('live-key:setActive', Boolean(active)),
+  liveKeyPublish: (text: string) => ipcRenderer.send('live-key:publish', String(text || '')),
+  onLiveKeyHotkey: (callback: any) => subscribe('live-key:hotkey', callback)
 });

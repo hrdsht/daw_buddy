@@ -116,6 +116,7 @@ import {
 } from './dom';
 import { startFeatureWalkthrough, startProjectWalkthrough, startToolWalkthrough } from './tour';
 import { initBpmTool } from './bpm-tool';
+import { initLiveKey } from './live-key';
 
 // Initialize saved appearance (Default: Minimalist, Dark, Cyan)
 const savedStyle = localStorage.getItem('dawBuddyThemeStyle') || 'minimalist';
@@ -14891,6 +14892,9 @@ const bpmTool = initBpmTool({
     return null;
   }
 });
+
+/* ---- Live Key listener (topbar tool) -------------------------------- */
+initLiveKey();
 
 /* ---- Search hint bubble (▾ button) --------------------------------- */
 (function () {

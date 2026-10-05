@@ -11490,3 +11490,92 @@ button.is-loading {
   color: #f87171;
 }
 
+
+/* ================= LIVE KEY LISTENER ================= */
+.live-key-anchor { display: inline-flex; }
+
+.live-key-pill { display: inline-flex; align-items: center; gap: 7px; padding: 5px 12px 5px 10px; font-weight: 600; cursor: pointer; border: 1px solid var(--line); border-radius: var(--r); background: var(--raised); color: var(--text); transition: all 0.15s ease; }
+.live-key-pill:hover,
+.live-key-pill.is-active { background: var(--hover); border-color: var(--amber); }
+.live-key-pill__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
+.live-key-pill.is-live .live-key-pill__dot { background: #ef4444; animation: live-key-pulse 1.4s ease-in-out infinite; }
+
+@keyframes live-key-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.live-key-panel { width: 440px; }
+
+.live-key-body { display: flex; flex-direction: column; gap: 14px; padding: 16px 18px 18px; }
+
+.live-key-source { display: grid; gap: 6px; }
+.live-key-source label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.live-key-source select { width: 100%; padding: 7px 10px; border-radius: var(--r); border: 1px solid var(--line); background: var(--surface); color: var(--text); font: inherit; }
+
+.live-key-hint { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+.live-key-hint kbd { padding: 1px 5px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); font-size: 10.5px; }
+
+.live-key-hero { display: flex; align-items: center; gap: 18px; }
+
+.live-key-ring {
+  --live-progress: 0;
+  --live-tone: var(--dim);
+  flex: none;
+  width: 132px;
+  height: 132px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: conic-gradient(var(--live-tone) calc(var(--live-progress) * 360deg), var(--line) 0);
+  transition: background 0.4s ease;
+}
+.live-key-ring[data-tone="red"] { --live-tone: #ef4444; }
+.live-key-ring[data-tone="amber"] { --live-tone: #f59e0b; }
+.live-key-ring[data-tone="green"] { --live-tone: #22c55e; }
+.live-key-ring[data-state="listening"],
+.live-key-ring[data-state="silent"] { animation: live-key-spin 2.4s linear infinite; }
+
+@keyframes live-key-spin {
+  to { transform: rotate(360deg); }
+}
+
+.live-key-ring__value {
+  width: 116px;
+  height: 116px;
+  border-radius: 50%;
+  border: none;
+  background: var(--raised);
+  color: var(--text);
+  font-size: 24px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.live-key-ring[data-state="listening"] .live-key-ring__value,
+.live-key-ring[data-state="silent"] .live-key-ring__value { animation: live-key-spin 2.4s linear infinite reverse; }
+
+.live-key-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex: 1; min-width: 0; }
+.live-key-fact { display: grid; gap: 2px; padding: 8px 10px; text-align: left; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); color: var(--text); cursor: pointer; font: inherit; }
+.live-key-fact:hover { border-color: var(--amber); }
+.live-key-fact__label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.live-key-fact__value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.live-key-meta { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
+.live-key-meta:empty { display: none; }
+
+.live-key-status { font-size: 12.5px; font-weight: 600; color: var(--muted); }
+
+.live-key-actions { display: flex; gap: 8px; }
+.live-key-toggle { flex: 1; padding: 9px 14px; border-radius: var(--r); border: 1px solid var(--amber); background: var(--amber); color: var(--amber-ink); font: inherit; font-weight: 700; cursor: pointer; }
+.live-key-toggle.is-live { background: transparent; color: var(--text); border-color: #ef4444; }
+
+.live-key-history-wrap { display: grid; gap: 6px; }
+.live-key-history { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 12.5px; }
+.live-key-history li { display: flex; gap: 10px; }
+.live-key-history:empty::after { content: 'Nothing locked yet'; color: var(--dim); }
+.live-key-history__time { color: var(--dim); font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) {
+  .live-key-ring,
+  .live-key-ring__value,
+  .live-key-pill.is-live .live-key-pill__dot { animation: none !important; }
+}

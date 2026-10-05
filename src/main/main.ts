@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, dialog, shell, Tray, Menu, nativeImage, utilityProcess } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Tray, Menu, nativeImage, utilityProcess, session, desktopCapturer, globalShortcut, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const fsp = require('fs/promises');
@@ -425,6 +425,7 @@ app.whenReady().then(async () => {
     revealWhen: isTest ? Promise.resolve() : splashState.finished
   });
   createTray();
+  setupLiveKeyCapture();
 
   // Output-folder checks and filesystem watching can wake external drives.
   // Let both renderers settle first, then initialise them independently.
@@ -590,6 +591,50 @@ ipcMain.on('player:command', (event, { cmd, arg }) => {
 ipcMain.handle('tray:toggleMini', () => {
   toggleMiniPlayer();
   return { success: true };
+});
+
+/* ---- Live Key: system-audio listener + copy hotkey ----------------- */
+
+// Copies the latest settled reading while another app (the DAW) has focus.
+const LIVE_KEY_HOTKEY = 'CommandOrControl+Alt+K';
+let liveKeyLatest = '';
+
+function setupLiveKeyCapture() {
+  // getDisplayMedia() from the window resolves here. Only the loopback audio
+  // track is used; the renderer stops the screen video track immediately.
+  session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
+    desktopCapturer
+      .getSources({ types: ['screen'] })
+      .then((sources) => {
+        if (!sources.length) return callback({});
+        callback({ video: sources[0], audio: 'loopback' });
+      })
+      .catch(() => callback({}));
+  });
+}
+
+ipcMain.on('live-key:publish', (event, text: unknown) => {
+  liveKeyLatest = typeof text === 'string' ? text.slice(0, 120) : '';
+});
+
+ipcMain.on('live-key:setActive', (event, active: unknown) => {
+  if (active) {
+    if (globalShortcut.isRegistered(LIVE_KEY_HOTKEY)) return;
+    globalShortcut.register(LIVE_KEY_HOTKEY, () => {
+      const copied = liveKeyLatest || null;
+      if (copied) clipboard.writeText(copied);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('live-key:hotkey', { copied });
+      }
+    });
+  } else {
+    globalShortcut.unregister(LIVE_KEY_HOTKEY);
+    liveKeyLatest = '';
+  }
+});
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
 });
 
 app.on('window-all-closed', () => {
