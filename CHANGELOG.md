@@ -5,6 +5,14 @@ All notable changes to DAW Buddy. Format follows
 [semantic versioning](https://semver.org/). Per-release detail (every merged PR)
 is auto-generated on each GitHub Release; this file is the curated summary.
 
+## [Unreleased]
+
+### Added
+- **Live Key listener** (topbar *Live Key* pill): hears whatever the computer is playing — system audio on Windows/macOS, or any input device (Linux "Monitor of …", BlackHole, interfaces) — and keeps a settled key, Camelot code, relative key, tuning offset and BPM on screen.
+  - Confidence ring turns red → amber → green as readings agree; a confidence-weighted vote over the last ~12 s windows stops a passing chord from flipping the key, and half/double-time tempos fold together.
+  - Click any value to copy it, or press `Ctrl/⌘ + Alt + K` from any app (e.g. while focused in the DAW) to copy `A min · 8A · 124 BPM`.
+  - Recent-locks history. Analysis runs in the existing DSP worker; audio only lives in a rolling in-memory buffer and is never recorded, stored or uploaded.
+
 ## [0.5.1-beta.12] — 2026-09-28
 
 ### Added
