@@ -11,6 +11,7 @@ const {
   foldTempo,
   LiveReadingTracker,
   LIVE_SAMPLE_RATE,
+  LIVE_CANDIDATE_COUNT,
   LIVE_WINDOW_SECONDS
 } = require('../src/renderer/live-key');
 
@@ -90,6 +91,39 @@ function testAnalyseLiveOnRollingWindow() {
   assert.ok(result.bpm >= 115 && result.bpm <= 125, `unexpected BPM: ${result.bpm}`);
   assert.ok(result.rms > 0.01);
   assert.equal('chordProgression' in result, false, 'live pass skips chord work');
+  assert.equal(result.candidates[0].key, 'A min', 'most probable candidate matches the key');
+  assert.ok(result.candidates[0].probability > 0.5);
+  assert.ok(result.candidates[1].probability > 0.01, 'contenders stay visible');
+  const all = DSP.keyCandidates(new Float64Array([1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1]));
+  assert.equal(all.length, 24);
+  assert.ok(Math.abs(all.reduce((a, c) => a + c.probability, 0) - 1) < 1e-9);
+}
+
+function testCandidateBarsFollowSettledKey() {
+  const tracker = new LiveReadingTracker(6);
+  const spread = [
+    { key: 'A min', camelot: '8A', probability: 0.55 },
+    { key: 'C maj', camelot: '8B', probability: 0.25 },
+    { key: 'E min', camelot: '9A', probability: 0.1 },
+    { key: 'D min', camelot: '7A', probability: 0.06 },
+    { key: 'A maj', camelot: '11B', probability: 0.04 }
+  ];
+  let r;
+  for (let i = 0; i < 3; i += 1) r = tracker.push({ ...reading('A min', '8A', 0.8, 124), candidates: spread });
+  assert.equal(r.candidates.length, LIVE_CANDIDATE_COUNT);
+  assert.equal(r.candidates[0].key, r.key, 'tallest bar is the settled key');
+  for (let i = 1; i < r.candidates.length; i += 1) {
+    assert.ok(r.candidates[i - 1].probability >= r.candidates[i].probability, 'bars are sorted');
+  }
+  const sum = r.candidates.reduce((a, c) => a + c.probability, 0);
+  assert.ok(Math.abs(sum - 1) < 1e-9);
+  assert.equal(r.candidates[1].key, 'C maj', 'relative major is the runner-up');
+
+  // Without spectral spread (older worker), bars fall back to the vote share.
+  const plain = new LiveReadingTracker(6);
+  r = plain.push(reading('G maj', '9B', 0.8, 120));
+  assert.equal(r.candidates[0].key, 'G maj');
+  assert.equal(r.candidates[0].probability, 1);
 }
 
 testDownsample();
@@ -97,4 +131,5 @@ testRollingBufferKeepsNewestInOrder();
 testKeyHelpers();
 testTrackerLocksAndResistsOutliers();
 testAnalyseLiveOnRollingWindow();
+testCandidateBarsFollowSettledKey();
 console.log('live-key tests passed');
