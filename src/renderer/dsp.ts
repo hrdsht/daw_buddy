@@ -3149,25 +3149,162 @@ export interface KeyCandidate {
   probability: number;
 }
 
-/**
- * All 24 major/minor keys ranked by Krumhansl profile correlation, turned into
- * probabilities with a softmax. `temperature` sets how peaky the spread is:
- * correlations of competing keys usually sit within ~0.1 of each other.
+/*
+ * Western key scoring.
+ *
+ * Profiles are Sha'ath's (KeyFinder), which were tuned on audio rather than
+ * symbolic scores, so they tolerate overtone energy far better than the
+ * Krumhansl probe-tone profiles. Scored against a log-compressed chroma
+ * (each frame normalised to its loudest note, so pads and drums can't swamp
+ * the melody) plus how much of the bass sits on each candidate tonic.
+ * Measured on test/bench/key-benchmark.ts (288 tracks, all 24 keys):
+ * 54.5% → 75.3% exact, MIREX 61.9% → 82.9%.
  */
-function keyCandidates(chroma: Float64Array, temperature = 0.15): KeyCandidate[] {
-  const raw: { key: string; camelot: string; score: number }[] = [];
+const KEY_PROFILE_MAJOR = [6.6, 2.0, 3.5, 2.3, 4.6, 4.0, 2.5, 5.2, 2.4, 3.7, 2.3, 3.4];
+const KEY_PROFILE_MINOR = [6.5, 2.7, 3.5, 5.4, 2.6, 3.5, 2.5, 5.2, 4.0, 2.7, 4.3, 3.2];
+const KEY_CHROMA_LOW_MIDI = 40; // E2
+const KEY_CHROMA_HIGH_MIDI = 96; // C7
+const KEY_BASS_LOW_MIDI = 28; // E1
+const KEY_BASS_HIGH_MIDI = 48; // C3
+const KEY_BASS_WEIGHT = 1.0;
+
+interface KeyFeatures {
+  chroma: Float64Array; // log-compressed, sums to 1
+  bass: Float64Array; // share of bass energy per pitch class, sums to 1
+  bassDominance: number; // share of frames whose loudest bass note is the most common one
+  bassDominantPc: number;
+}
+
+function keyFeatures(frames: Float32Array[], binHz: number, a4: number): KeyFeatures {
+  const chroma = new Float64Array(12);
+  const bass = new Float64Array(12);
+  const rootCounts = new Float64Array(12);
+  const notes = new Float64Array(KEY_CHROMA_HIGH_MIDI + 1);
+  let voiced = 0;
+
+  for (const frame of frames) {
+    let max = 0;
+    for (let midi = KEY_BASS_LOW_MIDI; midi <= KEY_CHROMA_HIGH_MIDI; midi += 1) {
+      const centre = a4 * Math.pow(2, (midi - 69) / 12);
+      const from = Math.max(1, Math.floor((centre * Math.pow(2, -0.5 / 12)) / binHz));
+      const to = Math.min(frame.length - 1, Math.ceil((centre * Math.pow(2, 0.5 / 12)) / binHz));
+      let energy = 0;
+      for (let bin = from; bin <= to; bin += 1) energy += frame[bin];
+      notes[midi] = energy;
+      if (energy > max) max = energy;
+    }
+    if (max <= 0) continue;
+
+    const frameBass = new Float64Array(12);
+    for (let midi = KEY_BASS_LOW_MIDI; midi <= KEY_CHROMA_HIGH_MIDI; midi += 1) {
+      const e = Math.log1p((10 * notes[midi]) / max);
+      const pc = midi % 12;
+      if (midi >= KEY_CHROMA_LOW_MIDI) chroma[pc] += e;
+      if (midi <= KEY_BASS_HIGH_MIDI) frameBass[pc] += e;
+    }
+    let root = 0;
+    for (let pc = 1; pc < 12; pc += 1) if (frameBass[pc] > frameBass[root]) root = pc;
+    if (frameBass[root] > 0) {
+      rootCounts[root] += 1;
+      voiced += 1;
+    }
+    for (let pc = 0; pc < 12; pc += 1) bass[pc] += frameBass[pc];
+  }
+
+  const sumTo1 = (v: Float64Array) => {
+    const total = v.reduce((a, b) => a + b, 0);
+    if (total > 0) for (let i = 0; i < 12; i += 1) v[i] /= total;
+    return v;
+  };
+  let dominant = 0;
+  for (let pc = 1; pc < 12; pc += 1) if (rootCounts[pc] > rootCounts[dominant]) dominant = pc;
+
+  return {
+    chroma: sumTo1(chroma),
+    bass: sumTo1(bass),
+    bassDominance: voiced ? rootCounts[dominant] / voiced : 0,
+    bassDominantPc: dominant
+  };
+}
+
+interface ScoredKey {
+  key: string;
+  tonic: string;
+  tonicPc: number;
+  mode: 'maj' | 'min';
+  camelot: string;
+  score: number;
+}
+
+/** All 24 major/minor keys, best first. */
+function scoreKeys(features: Pick<KeyFeatures, 'chroma' | 'bass'>): ScoredKey[] {
+  const out: ScoredKey[] = [];
   for (let root = 0; root < 12; root += 1) {
     const tonic = NOTES[root];
-    raw.push({ key: `${tonic} maj`, camelot: CAMELOT_MAJOR[tonic], score: correlate(chroma, rotate(MAJOR, root)) });
-    raw.push({ key: `${tonic} min`, camelot: CAMELOT_MINOR[tonic], score: correlate(chroma, rotate(MINOR, root)) });
+    for (const mode of ['maj', 'min'] as const) {
+      const profile = mode === 'maj' ? KEY_PROFILE_MAJOR : KEY_PROFILE_MINOR;
+      out.push({
+        key: `${tonic} ${mode}`,
+        tonic,
+        tonicPc: root,
+        mode,
+        camelot: (mode === 'maj' ? CAMELOT_MAJOR : CAMELOT_MINOR)[tonic],
+        score: correlate(features.chroma, rotate(profile, root)) + KEY_BASS_WEIGHT * features.bass[root]
+      });
+    }
   }
-  const top = Math.max(...raw.map((r) => r.score));
-  const weights = raw.map((r) => Math.exp((r.score - top) / temperature));
-  const total = weights.reduce((a, w) => a + w, 0);
-  return raw
-    .map((r, i) => ({ key: r.key, camelot: r.camelot, probability: weights[i] / total }))
-    .sort((a, b) => b.probability - a.probability);
+  return out.sort((a, b) => b.score - a.score);
 }
+
+/**
+ * Turns key scores into probabilities with a softmax. `temperature` sets how
+ * peaky the spread is: competing keys usually score within ~0.1 of each other.
+ */
+function keyCandidates(scored: ScoredKey[], temperature = 0.15): KeyCandidate[] {
+  if (!scored.length) return [];
+  const top = scored[0].score;
+  const weights = scored.map((k) => Math.exp((k.score - top) / temperature));
+  const total = weights.reduce((a, w) => a + w, 0);
+  return scored.map((k, i) => ({ key: k.key, camelot: k.camelot, probability: weights[i] / total }));
+}
+
+/** Scales a Western major/minor key may resolve to, canonical first. */
+const MODE_FAMILIES: Record<'maj' | 'min', string[]> = {
+  maj: ['major', 'mixolydian', 'lydian'],
+  min: ['minor', 'harmonicMinor', 'dorian', 'melodicMinor', 'phrygian']
+};
+
+/**
+ * Picks the scale within the key's mode family. The canonical major/minor is
+ * kept unless another mode explains clearly more of the energy — a borrowed
+ * note or two shouldn't turn every minor song Dorian.
+ */
+function findModeScale(chroma: Float64Array, tonicPc: number, mode: 'maj' | 'min') {
+  const fits = MODE_FAMILIES[mode].map((name) => {
+    const inScale = new Set(SCALES[name].map((d) => (tonicPc + d) % 12));
+    let outside = 0;
+    for (let pc = 0; pc < 12; pc += 1) if (!inScale.has(pc)) outside += chroma[pc];
+    return { name, outside };
+  });
+  const canonical = fits[0];
+  let best = canonical;
+  for (const fit of fits.slice(1)) {
+    if (fit.outside < best.outside - 0.015) best = fit;
+  }
+  const ranked = [...fits].sort((a, b) => a.outside - b.outside);
+  const runnerUp = ranked.find((f) => f.name !== best.name) || best;
+  return {
+    scale: best.name,
+    confidence: Math.max(0, Math.min(1, (runnerUp.outside - best.outside) * 12 + 0.4)),
+    alternatives: ranked.filter((f) => f.name !== best.name).slice(0, 3).map((f) => f.name)
+  };
+}
+
+/** Ragas/modes that have no Western major/minor equivalent (key is null). */
+const MODAL_SCALES = ['bhairav', 'todi', 'marwa', 'poorvi', 'charukesi', 'shivaranjani', 'malkauns'];
+
+/** A held drone: one bass note leads in most frames (tanpura, shruti box, pedal). */
+const DRONE_DOMINANCE = 0.7;
 
 function detectKey(frames: Float32Array[], binHz: number, options: any = {}) {
   if (frames.length === 0) {
@@ -3215,67 +3352,80 @@ function detectKey(frames: Float32Array[], binHz: number, options: any = {}) {
     ? averageChroma
     : suppressHarmonics(averageChroma);
 
-  const tonicResult = findTonic(clean, frameChromas, droneData);
-  const scaleResult = findScale(clean, tonicResult.tonicPc);
+  const features = keyFeatures(frames, binHz, a4);
+  const scored = scoreKeys(features);
+  const candidates = keyCandidates(scored);
+  const profileBest = krumhansl(clean);
 
-  // Krumhansl correlation
-  const profile = krumhansl(clean);
-  const agrees = profile.tonic === tonicResult.tonic;
+  // Drone-based music (Indian classical, pedal-point pieces): the drone names
+  // the tonic, and the scale may be a raga with no major/minor equivalent.
+  const droneTonic = findTonic(clean, frameChromas, droneData);
+  const hasDrone = features.bassDominance >= DRONE_DOMINANCE && features.bassDominantPc === droneTonic.tonicPc;
+  const droneScale = hasDrone ? findScale(clean, droneTonic.tonicPc) : null;
 
-  // Western Major / Minor resolution via profile score & tonic agreement
-  const isWesternMajor = agrees && profile.mode === 'maj' && profile.score > 0.45;
-  const isWesternMinor = agrees && profile.mode === 'min' && profile.score > 0.45;
-
-  let finalScale = scaleResult.scale;
-  if (isWesternMajor && !['major', 'lydian', 'mixolydian'].includes(finalScale)) {
-    finalScale = 'major';
-  } else if (isWesternMinor && !['minor', 'dorian', 'phrygian', 'harmonicMinor', 'melodicMinor'].includes(finalScale)) {
-    finalScale = 'minor';
+  if (droneScale && MODAL_SCALES.includes(droneScale.scale)) {
+    const confidence = droneTonic.confidence;
+    return {
+      key: null,
+      note: droneTonic.tonic,
+      mode: null,
+      camelot: null,
+      confidence,
+      alternate: droneTonic.runnerUp,
+      tonic: droneTonic.tonic,
+      tonicPc: droneTonic.tonicPc,
+      tonicConfidence: confidence,
+      tonicAlternative: droneTonic.runnerUp,
+      scale: droneScale.scale,
+      scaleConfidence: droneScale.confidence,
+      scaleAlternatives: droneScale.alternatives,
+      degrees: SCALES[droneScale.scale] || droneScale.degrees,
+      modal: true,
+      tuningA4: tuning.a4,
+      tuningCents: tuning.centsOffset,
+      thaat: THAAT_MAP[droneScale.scale] || null,
+      ragas: findMatchingRagas(clean, droneTonic.tonicPc),
+      profileSays: `${profileBest.tonic} ${profileBest.mode}`,
+      profileAgrees: profileBest.tonic === droneTonic.tonic,
+      ranked: droneTonic.ranked,
+      candidates
+    };
   }
 
-  const finalDegrees = SCALES[finalScale] || scaleResult.degrees;
-  const isModal = ['bhairav', 'todi', 'marwa', 'poorvi', 'charukesi', 'shivaranjani', 'malkauns'].includes(finalScale);
-
-  const isMajorMode = isWesternMajor || finalScale === 'major' || ['lydian', 'mixolydian'].includes(finalScale);
-
-  const keyString = !isModal
-    ? `${tonicResult.tonic} ${isMajorMode ? 'maj' : 'min'}`
-    : null;
-  const camelotCode = !isModal
-    ? (isMajorMode ? CAMELOT_MAJOR : CAMELOT_MINOR)[tonicResult.tonic]
-    : null;
+  // Western major/minor. With a drone, the tonic is pinned to it.
+  const best = hasDrone
+    ? scored.find((k) => k.tonicPc === droneTonic.tonicPc) || scored[0]
+    : scored[0];
+  const runnerUp = scored.find((k) => k.key !== best.key) || best;
+  // The chosen key's share of the candidate distribution — the same number the
+  // Live Key bars show, so the confidence and the chart always agree.
+  const confidence = candidates.find((c) => c.key === best.key)?.probability ?? 0;
+  const modeScale = findModeScale(features.chroma, best.tonicPc, best.mode);
 
   return {
-    key: keyString,
-    note: tonicResult.tonic,
-    mode: !isModal ? (isWesternMajor || finalScale === 'major' ? 'maj' : 'min') : null,
-    camelot: camelotCode,
-    confidence: agrees
-      ? Math.min(1, tonicResult.confidence + 0.2)
-      : tonicResult.confidence,
-    alternate: tonicResult.runnerUp,
-
-    tonic: tonicResult.tonic,
-    tonicPc: tonicResult.tonicPc,
-    tonicConfidence: agrees
-      ? Math.min(1, tonicResult.confidence + 0.2)
-      : tonicResult.confidence,
-    tonicAlternative: tonicResult.runnerUp,
-
-    scale: finalScale,
-    scaleConfidence: scaleResult.confidence,
-    scaleAlternatives: scaleResult.alternatives,
-    degrees: finalDegrees,
-
-    modal: isModal,
+    key: best.key,
+    note: best.tonic,
+    mode: best.mode,
+    camelot: best.camelot,
+    confidence,
+    alternate: runnerUp.tonic,
+    tonic: best.tonic,
+    tonicPc: best.tonicPc,
+    tonicConfidence: confidence,
+    tonicAlternative: runnerUp.tonic,
+    scale: modeScale.scale,
+    scaleConfidence: modeScale.confidence,
+    scaleAlternatives: modeScale.alternatives,
+    degrees: SCALES[modeScale.scale],
+    modal: false,
     tuningA4: tuning.a4,
     tuningCents: tuning.centsOffset,
-    thaat: THAAT_MAP[finalScale] || null,
-    ragas: findMatchingRagas(clean, tonicResult.tonicPc),
-    profileSays: `${profile.tonic} ${profile.mode}`,
-    profileAgrees: agrees,
-    ranked: tonicResult.ranked,
-    candidates: keyCandidates(clean)
+    thaat: THAAT_MAP[modeScale.scale] || null,
+    ragas: findMatchingRagas(clean, best.tonicPc),
+    profileSays: `${profileBest.tonic} ${profileBest.mode}`,
+    profileAgrees: profileBest.tonic === best.tonic && profileBest.mode === best.mode,
+    ranked: scored.slice(0, 4).map((k) => ({ pc: k.tonicPc, note: k.tonic, key: k.key, score: k.score })),
+    candidates
   };
 }
 
@@ -3370,6 +3520,19 @@ function analyse(channelData: Float32Array | Float64Array, sampleRate: number, o
  * short rolling window. Skips chord-progression and meter work so it can run
  * every couple of seconds without starving the worker.
  */
+/**
+ * Key and scale only, over the same centre slice `analyse` uses. Skips tempo,
+ * meter and chord work — used by the key benchmark and anything that needs a
+ * key without the full report.
+ */
+function analyseKey(channelData: Float32Array | Float64Array, sampleRate: number) {
+  const maxSeconds = 60;
+  const wanted = Math.min(channelData.length, maxSeconds * sampleRate);
+  const start = Math.max(0, Math.floor((channelData.length - wanted) / 2));
+  const { frames, binHz } = spectra(channelData.subarray(start, start + wanted), sampleRate);
+  return detectKey(frames, binHz);
+}
+
 /**
  * Short-frame spectra for onset/tempo work. The key front end picks 16384-
  * sample frames, which at low sample rates span ~1.5 s and smear every drum
@@ -4094,7 +4257,9 @@ export function detectChordProgression(
 
 export const DSP = {
   analyse,
+  analyseKey,
   analyseLive,
+  spectra,
   detectKey,
   detectTempo,
   detectMeter,
