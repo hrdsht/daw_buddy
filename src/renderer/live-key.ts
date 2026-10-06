@@ -27,7 +27,7 @@ export interface LiveKeyCandidate {
   probability: number;
 }
 
-export const LIVE_CANDIDATE_COUNT = 5;
+export const LIVE_CANDIDATE_COUNT = 7;
 
 export interface LiveRawReading {
   candidates?: LiveKeyCandidate[];

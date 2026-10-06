@@ -106,7 +106,9 @@ function testCandidateBarsFollowSettledKey() {
     { key: 'C maj', camelot: '8B', probability: 0.25 },
     { key: 'E min', camelot: '9A', probability: 0.1 },
     { key: 'D min', camelot: '7A', probability: 0.06 },
-    { key: 'A maj', camelot: '11B', probability: 0.04 }
+    { key: 'A maj', camelot: '11B', probability: 0.025 },
+    { key: 'F maj', camelot: '7B', probability: 0.01 },
+    { key: 'G maj', camelot: '9B', probability: 0.005 }
   ];
   let r;
   for (let i = 0; i < 3; i += 1) r = tracker.push({ ...reading('A min', '8A', 0.8, 124), candidates: spread });

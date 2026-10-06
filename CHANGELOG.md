@@ -10,7 +10,7 @@ is auto-generated on each GitHub Release; this file is the curated summary.
 ### Added
 - **Live Key listener** (topbar *Live Key* pill): hears whatever the computer is playing — system audio on Windows/macOS, or any input device (Linux "Monitor of …", BlackHole, interfaces) — and keeps a settled key, Camelot code, relative key, tuning offset and BPM on screen.
   - Confidence ring turns red → amber → green as readings agree; a confidence-weighted vote over the last ~12 s windows stops a passing chord from flipping the key, and half/double-time tempos fold together.
-  - Key-candidate bar chart: the five most likely keys side by side — the taller the bar, the higher the probability — so close contenders (relative, parallel, Camelot neighbours) are visible while it settles.
+  - Key-candidate bar chart: the seven most likely keys side by side — the taller the bar, the higher the probability — so close contenders (relative, parallel, Camelot neighbours) are visible while it settles.
   - Click any value to copy it, or press `Ctrl/⌘ + Alt + K` from any app (e.g. while focused in the DAW) to copy `A min · 8A · 124 BPM`.
   - Recent-locks history. Analysis runs in the existing DSP worker; audio only lives in a rolling in-memory buffer and is never recorded, stored or uploaded.
 
