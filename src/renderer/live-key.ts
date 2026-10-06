@@ -244,7 +244,10 @@ export class LiveReadingTracker {
         bestCamelot = entry.camelot;
       }
     }
-    const keyStability = totalWeight > 0 ? bestWeight / totalWeight : 0;
+    // One window always agrees with itself; ramp confidence over the first
+    // three so the ring doesn't show a full green on the first reading.
+    const evidence = Math.min(1, readings.length / 3);
+    const keyStability = totalWeight > 0 ? (bestWeight / totalWeight) * evidence : 0;
     const candidates = blendCandidates(spread, votes, totalWeight);
 
     // Tempo — median after folding into the dominant octave.
@@ -633,7 +636,7 @@ export class LiveKeyController {
 
     // Topbar pill mirrors the reading so the panel can stay closed.
     const badge = document.getElementById('liveKeyPillBadge');
-    if (badge) badge.textContent = listening && reading?.key ? `${reading.key} · ${reading.camelot ?? ''}`.trim() : listening ? '…' : 'Off';
+    if (badge) badge.textContent = listening && reading?.key ? `${reading.key} ${reading.camelot ?? ''}`.trim() : listening ? '…' : 'Off';
     this.btn?.classList.toggle('is-live', listening);
   }
 }
