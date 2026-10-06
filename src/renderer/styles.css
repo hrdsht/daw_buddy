@@ -11579,3 +11579,23 @@ button.is-loading {
   .live-key-ring__value,
   .live-key-pill.is-live .live-key-pill__dot { animation: none !important; }
 }
+
+/* Live Key — candidate bars (taller bar = more likely key) */
+.live-key-candidates { display: grid; gap: 8px; }
+.live-key-bars { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; align-items: end; }
+.live-key-bar { display: grid; justify-items: center; gap: 4px; min-width: 0; }
+.live-key-bar__pct { font-size: 11px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; min-height: 14px; }
+.live-key-bar__track { position: relative; width: 100%; height: 84px; border-radius: 6px; background: var(--surface); border: 1px solid var(--line); overflow: hidden; }
+.live-key-bar__fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: var(--dim); border-radius: 4px 4px 0 0; transition: height 0.6s cubic-bezier(0.16, 1, 0.3, 1), background 0.4s ease; }
+.live-key-bar__key { font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+.live-key-bar__camelot { font-size: 10.5px; color: var(--muted); min-height: 13px; }
+.live-key-bar.is-empty .live-key-bar__key { color: var(--dim); }
+.live-key-bar.is-top .live-key-bar__pct { color: var(--text); }
+.live-key-bar.is-top .live-key-bar__fill { background: var(--amber); }
+.live-key-bar.is-top[data-tone="red"] .live-key-bar__fill { background: #ef4444; }
+.live-key-bar.is-top[data-tone="amber"] .live-key-bar__fill { background: #f59e0b; }
+.live-key-bar.is-top[data-tone="green"] .live-key-bar__fill { background: #22c55e; }
+
+@media (prefers-reduced-motion: reduce) {
+  .live-key-bar__fill { transition: none; }
+}

@@ -21,7 +21,16 @@ export const LIVE_SILENCE_RMS = 0.003;
 export type LiveState = 'idle' | 'silent' | 'listening' | 'settling' | 'locked';
 export type ConfidenceTone = 'red' | 'amber' | 'green';
 
+export interface LiveKeyCandidate {
+  key: string;
+  camelot: string;
+  probability: number;
+}
+
+export const LIVE_CANDIDATE_COUNT = 5;
+
 export interface LiveRawReading {
+  candidates?: LiveKeyCandidate[];
   key: string | null;
   camelot: string | null;
   keyConfidence: number;
@@ -40,6 +49,7 @@ export interface LiveSettledReading {
   bpmStability: number;
   tuningCents: number;
   relative: string | null;
+  candidates: LiveKeyCandidate[]; // top contenders, probabilities sum to ≤ 1
 }
 
 /* ------------------------------------------------------------------ */
@@ -140,6 +150,35 @@ function median(values: number[]): number {
 }
 
 /**
+ * Bars for the candidate chart: half the smoothed profile-correlation spread,
+ * half the detector's own vote share, so the tallest bar always agrees with
+ * the settled key while close contenders (relative, parallel, neighbours on
+ * the Camelot wheel) still show up.
+ */
+export function blendCandidates(
+  spread: Map<string, { probability: number; camelot: string }>,
+  votes: Map<string, { weight: number; camelot: string | null }>,
+  totalWeight: number
+): LiveKeyCandidate[] {
+  if (totalWeight <= 0) return [];
+  const merged = new Map<string, LiveKeyCandidate>();
+  const hasSpread = spread.size > 0;
+  for (const [key, entry] of spread) {
+    merged.set(key, { key, camelot: entry.camelot, probability: (entry.probability / totalWeight) * 0.5 });
+  }
+  for (const [key, entry] of votes) {
+    const existing = merged.get(key) || { key, camelot: entry.camelot || '', probability: 0 };
+    existing.probability += (entry.weight / totalWeight) * (hasSpread ? 0.5 : 1);
+    merged.set(key, existing);
+  }
+  const ranked = Array.from(merged.values()).sort((a, b) => b.probability - a.probability);
+  const total = ranked.reduce((sum, c) => sum + c.probability, 0) || 1;
+  return ranked
+    .slice(0, LIVE_CANDIDATE_COUNT)
+    .map((c) => ({ ...c, probability: c.probability / total }));
+}
+
+/**
  * Smooths jittery per-window readings into one settled answer. A key is only
  * "locked" once it wins a confidence-weighted vote across recent windows, so
  * a passing borrowed chord doesn't flip the display.
@@ -172,17 +211,24 @@ export class LiveReadingTracker {
       bpm: null,
       bpmStability: 0,
       tuningCents: 0,
-      relative: null
+      relative: null,
+      candidates: []
     };
     if (!readings.length) return empty;
 
     // Key vote — confidence-weighted, newer windows count slightly more.
     const votes = new Map<string, { weight: number; camelot: string | null }>();
+    const spread = new Map<string, { probability: number; camelot: string }>();
     let totalWeight = 0;
     readings.forEach((r, index) => {
       const recency = 0.6 + 0.4 * ((index + 1) / readings.length);
       const weight = Math.max(0.05, r.keyConfidence) * recency;
       totalWeight += weight;
+      for (const c of r.candidates || []) {
+        const entry = spread.get(c.key) || { probability: 0, camelot: c.camelot };
+        entry.probability += c.probability * weight;
+        spread.set(c.key, entry);
+      }
       if (!r.key) return;
       const entry = votes.get(r.key) || { weight: 0, camelot: r.camelot };
       entry.weight += weight;
@@ -199,6 +245,7 @@ export class LiveReadingTracker {
       }
     }
     const keyStability = totalWeight > 0 ? bestWeight / totalWeight : 0;
+    const candidates = blendCandidates(spread, votes, totalWeight);
 
     // Tempo — median after folding into the dominant octave.
     const tempos = readings
@@ -229,7 +276,8 @@ export class LiveReadingTracker {
       bpm,
       bpmStability,
       tuningCents,
-      relative: relativeKey(bestKey)
+      relative: relativeKey(bestKey),
+      candidates
     };
   }
 }
@@ -515,6 +563,11 @@ export class LiveKeyController {
     this.render();
   }
 
+  private renderCandidates(candidates: LiveKeyCandidate[], tone: ConfidenceTone | null): void {
+    const list = document.getElementById('liveKeyCandidates');
+    if (list) renderCandidateBars(list, candidates, tone);
+  }
+
   private render(): void {
     const reading = this.latest;
     const listening = Boolean(this.stream);
@@ -558,6 +611,8 @@ export class LiveKeyController {
     };
     this.setStatus(this.statusOverride ?? statusText[state]);
 
+    this.renderCandidates(reading?.candidates ?? [], tone);
+
     const historyNode = document.getElementById('liveKeyHistory');
     if (historyNode) {
       historyNode.textContent = '';
@@ -581,6 +636,36 @@ export class LiveKeyController {
     if (badge) badge.textContent = listening && reading?.key ? `${reading.key} · ${reading.camelot ?? ''}`.trim() : listening ? '…' : 'Off';
     this.btn?.classList.toggle('is-live', listening);
   }
+}
+
+/**
+ * Draws the candidate columns. Nodes are reused so CSS can animate the bar
+ * heights between readings instead of redrawing them.
+ */
+function renderCandidateBars(list: HTMLElement, candidates: LiveKeyCandidate[], tone: ConfidenceTone | null): void {
+  while (list.children.length < LIVE_CANDIDATE_COUNT) {
+    const li = document.createElement('li');
+    li.className = 'live-key-bar';
+    li.innerHTML =
+      '<span class="live-key-bar__pct"></span>' +
+      '<span class="live-key-bar__track"><span class="live-key-bar__fill"></span></span>' +
+      '<span class="live-key-bar__key"></span>' +
+      '<span class="live-key-bar__camelot"></span>';
+    list.append(li);
+  }
+  Array.from(list.children).forEach((node, index) => {
+    const li = node as HTMLElement;
+    const candidate = candidates[index];
+    const pct = candidate ? Math.round(candidate.probability * 100) : 0;
+    li.classList.toggle('is-empty', !candidate);
+    li.classList.toggle('is-top', Boolean(candidate) && index === 0);
+    li.dataset.tone = tone ?? 'off';
+    li.title = candidate ? `${candidate.key} (${candidate.camelot}) — ${pct}% likely` : '';
+    (li.querySelector('.live-key-bar__pct') as HTMLElement).textContent = candidate ? `${pct}%` : '';
+    (li.querySelector('.live-key-bar__fill') as HTMLElement).style.height = `${candidate ? Math.max(3, pct) : 0}%`;
+    (li.querySelector('.live-key-bar__key') as HTMLElement).textContent = candidate ? candidate.key : '·';
+    (li.querySelector('.live-key-bar__camelot') as HTMLElement).textContent = candidate ? candidate.camelot : '';
+  });
 }
 
 let controller: LiveKeyController | null = null;
