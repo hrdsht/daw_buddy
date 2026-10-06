@@ -3143,6 +3143,32 @@ function krumhansl(chroma: Float64Array) {
   return best;
 }
 
+export interface KeyCandidate {
+  key: string;
+  camelot: string;
+  probability: number;
+}
+
+/**
+ * All 24 major/minor keys ranked by Krumhansl profile correlation, turned into
+ * probabilities with a softmax. `temperature` sets how peaky the spread is:
+ * correlations of competing keys usually sit within ~0.1 of each other.
+ */
+function keyCandidates(chroma: Float64Array, temperature = 0.15): KeyCandidate[] {
+  const raw: { key: string; camelot: string; score: number }[] = [];
+  for (let root = 0; root < 12; root += 1) {
+    const tonic = NOTES[root];
+    raw.push({ key: `${tonic} maj`, camelot: CAMELOT_MAJOR[tonic], score: correlate(chroma, rotate(MAJOR, root)) });
+    raw.push({ key: `${tonic} min`, camelot: CAMELOT_MINOR[tonic], score: correlate(chroma, rotate(MINOR, root)) });
+  }
+  const top = Math.max(...raw.map((r) => r.score));
+  const weights = raw.map((r) => Math.exp((r.score - top) / temperature));
+  const total = weights.reduce((a, w) => a + w, 0);
+  return raw
+    .map((r, i) => ({ key: r.key, camelot: r.camelot, probability: weights[i] / total }))
+    .sort((a, b) => b.probability - a.probability);
+}
+
 function detectKey(frames: Float32Array[], binHz: number, options: any = {}) {
   if (frames.length === 0) {
     return {
@@ -3161,7 +3187,8 @@ function detectKey(frames: Float32Array[], binHz: number, options: any = {}) {
       degrees: [],
       tuningA4: 440,
       tuningCents: 0,
-      thaat: null
+      thaat: null,
+      candidates: [] as KeyCandidate[]
     };
   }
 
@@ -3247,7 +3274,8 @@ function detectKey(frames: Float32Array[], binHz: number, options: any = {}) {
     ragas: findMatchingRagas(clean, tonicResult.tonicPc),
     profileSays: `${profile.tonic} ${profile.mode}`,
     profileAgrees: agrees,
-    ranked: tonicResult.ranked
+    ranked: tonicResult.ranked,
+    candidates: keyCandidates(clean)
   };
 }
 
@@ -3365,6 +3393,7 @@ function analyseLive(channelData: Float32Array | Float64Array, sampleRate: numbe
     modal: key.modal,
     tuningA4: key.tuningA4,
     tuningCents: key.tuningCents,
+    candidates: key.candidates.slice(0, 8),
     rms,
     analysedSeconds: channelData.length / sampleRate
   };
@@ -4059,6 +4088,7 @@ export const DSP = {
   findScale,
   findMatchingRagas,
   krumhansl,
+  keyCandidates,
   NOTES,
   SCALES,
   THAAT_MAP,
