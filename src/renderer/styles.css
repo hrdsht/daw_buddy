@@ -11494,7 +11494,7 @@ button.is-loading {
 /* ================= LIVE KEY LISTENER ================= */
 .live-key-anchor { display: inline-flex; }
 
-.live-key-pill { display: inline-flex; align-items: center; gap: 7px; padding: 5px 12px 5px 10px; font-weight: 600; cursor: pointer; border: 1px solid var(--line); border-radius: var(--r); background: var(--raised); color: var(--text); transition: all 0.15s ease; }
+.live-key-pill { display: inline-flex; align-items: center; gap: 7px; padding: 5px 10px; white-space: nowrap; flex: none; font-weight: 600; cursor: pointer; border: 1px solid var(--line); border-radius: var(--r); background: var(--raised); color: var(--text); transition: all 0.15s ease; }
 .live-key-pill:hover,
 .live-key-pill.is-active { background: var(--hover); border-color: var(--amber); }
 .live-key-pill__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
@@ -11598,4 +11598,12 @@ button.is-loading {
 
 @media (prefers-reduced-motion: reduce) {
   .live-key-bar__fill { transition: none; }
+}
+
+/* Topbar room for the Live Key pill: let search give up width first rather
+   than wrapping the right-hand buttons onto two lines. */
+.topbar .search-wrap { min-width: 140px; }
+.topbar .search { min-width: 0; }
+@media (min-width: 1400px) {
+  .topbar__right .pill { white-space: nowrap; }
 }
