@@ -14,6 +14,12 @@ is auto-generated on each GitHub Release; this file is the curated summary.
   - Click any value to copy it, or press `Ctrl/⌘ + Alt + K` from any app (e.g. while focused in the DAW) to copy `A min · 8A · 124 BPM`.
   - Recent-locks history. Analysis runs in the existing DSP worker; audio only lives in a rolling in-memory buffer and is never recorded, stored or uploaded.
 
+### Fixed
+- **Key & scale recognition rebuilt** for files, projects and Live Key. Western keys are now scored across all 24 keys with audio-tuned (KeyFinder/Sha'ath) profiles on a loudness-normalised chroma plus bass weighting, instead of a hand-tuned tonic guess. On the new 288-track benchmark (`npx tsx test/bench/key-benchmark.ts`): exact key 54.5% → 75.3%, MIREX score 61.9% → 82.9%; minor keys are no longer reported as major, and plain minor pop is no longer labelled a raga (Marwa, Todi) or Phrygian.
+  - Scales are chosen within the key's own mode family (major / Mixolydian / Lydian; minor / harmonic / Dorian / melodic / Phrygian) — correct for ~97% of correctly keyed tracks.
+  - The raga/modal path still runs, but only when a held drone is present, so Indian classical detection (Bhairav etc., A=431 tuning) is unchanged.
+  - Key confidence is now the chosen key's probability — the same figure the Live Key bars show.
+
 ## [0.5.1-beta.12] — 2026-09-28
 
 ### Added

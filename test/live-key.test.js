@@ -94,7 +94,7 @@ function testAnalyseLiveOnRollingWindow() {
   assert.equal(result.candidates[0].key, 'A min', 'most probable candidate matches the key');
   assert.ok(result.candidates[0].probability > 0.5);
   assert.ok(result.candidates[1].probability > 0.01, 'contenders stay visible');
-  const all = DSP.keyCandidates(new Float64Array([1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1]));
+  const all = DSP.analyseKey(samples, sampleRate).candidates;
   assert.equal(all.length, 24);
   assert.ok(Math.abs(all.reduce((a, c) => a + c.probability, 0) - 1) < 1e-9);
 }
