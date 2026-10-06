@@ -3370,10 +3370,33 @@ function analyse(channelData: Float32Array | Float64Array, sampleRate: number, o
  * short rolling window. Skips chord-progression and meter work so it can run
  * every couple of seconds without starving the worker.
  */
+/**
+ * Short-frame spectra for onset/tempo work. The key front end picks 16384-
+ * sample frames, which at low sample rates span ~1.5 s and smear every drum
+ * hit; tempo needs ~90 ms frames on a ~23 ms hop instead.
+ */
+function onsetSpectra(samples: Float32Array | Float64Array, sampleRate: number) {
+  const frameSize = Math.pow(2, Math.round(Math.log2(sampleRate * 0.093)));
+  const hopSize = Math.pow(2, Math.round(Math.log2(sampleRate * 0.023)));
+  const window = hann(frameSize);
+  const real = new Float64Array(frameSize);
+  const imag = new Float64Array(frameSize);
+  const frames: Float32Array[] = [];
+  for (let offset = 0; offset + frameSize <= samples.length; offset += hopSize) {
+    for (let i = 0; i < frameSize; i += 1) {
+      real[i] = samples[offset + i] * window[i];
+      imag[i] = 0;
+    }
+    frames.push(fftMagnitudes(real, imag));
+  }
+  return { frames, hopSeconds: hopSize / sampleRate };
+}
+
 function analyseLive(channelData: Float32Array | Float64Array, sampleRate: number) {
-  const { frames, binHz, hopSeconds } = spectra(channelData, sampleRate);
-  const tempo = detectTempo(frames, hopSeconds);
+  const { frames, binHz } = spectra(channelData, sampleRate);
   const key = detectKey(frames, binHz);
+  const onsets = onsetSpectra(channelData, sampleRate);
+  const tempo = detectTempo(onsets.frames, onsets.hopSeconds);
 
   let sumSquares = 0;
   for (let i = 0; i < channelData.length; i += 1) sumSquares += channelData[i] * channelData[i];

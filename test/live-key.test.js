@@ -128,10 +128,41 @@ function testCandidateBarsFollowSettledKey() {
   assert.equal(r.candidates[0].probability, 1);
 }
 
+function testLiveTempoWithRealisticKick() {
+  // A small E-minor groove at 124 BPM: kick, bass, chords, melody, offbeat
+  // hats. The long key frames used to smear these onsets and read ~99 BPM.
+  const sr = LIVE_SAMPLE_RATE;
+  const beat = 60 / 124;
+  const midi = (m) => 440 * Math.pow(2, (m - 69) / 12);
+  const prog = [[40, [64, 67, 71]], [45, [60, 64, 69]], [47, [63, 66, 71]], [40, [64, 67, 71]]];
+  const mel = [71, 67, 64, 66, 72, 69, 64, 69, 71, 66, 63, 66, 67, 66, 64, 64];
+  let seed = 2;
+  const noise = () => ((seed = (seed * 16807) % 2147483647) / 2147483647) * 2 - 1;
+  const samples = new Float32Array(sr * LIVE_WINDOW_SECONDS);
+  for (let i = 0; i < samples.length; i += 1) {
+    const t = i / sr;
+    const b = t / beat;
+    const bar = Math.floor(b / 4) % 4;
+    const [root, chord] = prog[bar];
+    let v = 0.22 * Math.sin(2 * Math.PI * midi(root) * t) + 0.08 * Math.sin(2 * Math.PI * midi(root + 12) * t);
+    for (const m of chord) v += 0.07 * (Math.sin(2 * Math.PI * midi(m) * t) + 0.3 * Math.sin(4 * Math.PI * midi(m) * t));
+    const ph = (b % 1) * beat;
+    v += 0.09 * Math.sin(2 * Math.PI * midi(mel[bar * 4 + (Math.floor(b) % 4)] + 12) * t) * Math.exp(-ph * 3);
+    if (ph < 0.12) v += 0.8 * Math.sin(2 * Math.PI * (50 + 90 * Math.exp(-ph * 40)) * ph) * Math.exp(-ph * 25);
+    const hp = ((b + 0.5) % 1) * beat;
+    if (hp < 0.03) v += 0.12 * noise() * Math.exp(-hp * 120);
+    samples[i] = Math.max(-1, Math.min(1, v * 0.7));
+  }
+  const result = DSP.analyseLive(samples, sr);
+  assert.ok(result.bpm >= 121 && result.bpm <= 127, `unexpected live BPM: ${result.bpm}`);
+  assert.equal(result.key, 'E min');
+}
+
 testDownsample();
 testRollingBufferKeepsNewestInOrder();
 testKeyHelpers();
 testTrackerLocksAndResistsOutliers();
 testAnalyseLiveOnRollingWindow();
 testCandidateBarsFollowSettledKey();
+testLiveTempoWithRealisticKick();
 console.log('live-key tests passed');
