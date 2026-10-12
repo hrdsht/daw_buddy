@@ -71,7 +71,8 @@ contextBridge.exposeInMainWorld('api', {
   dragMidi: (filename, data) => ipcRenderer.invoke('tools:dragMidi', { filename, data }),
   dragAudio: (filename, data) => ipcRenderer.invoke('tools:dragAudio', { filename, data }),
   dragFiles: (filePaths: string[]) => ipcRenderer.invoke('tools:dragFiles', { filePaths }),
-  saveMidi: (defaultName, data) => ipcRenderer.invoke('tools:saveMidi', { defaultName, data }),
+  saveMidi: (defaultName, data, options?: { title?: string; subfolder?: string }) =>
+    ipcRenderer.invoke('tools:saveMidi', { defaultName, data, title: options?.title, subfolder: options?.subfolder }),
   saveAudio: (defaultName: string, data: number[] | Uint8Array, format: 'wav' | 'mp3', subfolder?: string) =>
     ipcRenderer.invoke('tools:saveAudio', { defaultName, data, format, subfolder }),
   quickSaveAudio: (

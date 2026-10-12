@@ -1510,10 +1510,16 @@ ipcMain.handle('tools:dragAudio', async (event, { filename, data }: any) => {
   }
 });
 
-ipcMain.handle('tools:saveMidi', async (event, { defaultName, data }: any) => {
+// Tool output subfolders the window may ask for. The name comes from the
+// renderer, so it is matched against this list rather than joined as a path.
+const MIDI_TOOL_SUBFOLDERS = new Set(['Audio to MIDI']);
+
+ipcMain.handle('tools:saveMidi', async (event, { defaultName, data, title, subfolder }: any) => {
+  const toolFolder = MIDI_TOOL_SUBFOLDERS.has(subfolder) ? await ensureToolOutputFolder(subfolder) : null;
+  const name = defaultName || 'scale.mid';
   const result = await dialog.showSaveDialog(mainWindow, {
-    title: 'Export Scale MIDI',
-    defaultPath: defaultName || 'scale.mid',
+    title: typeof title === 'string' && title ? title : 'Export Scale MIDI',
+    defaultPath: toolFolder ? path.join(toolFolder, path.basename(name)) : name,
     filters: [{ name: 'MIDI Files', extensions: ['mid'] }]
   });
   if (result.canceled || !result.filePath) return null;

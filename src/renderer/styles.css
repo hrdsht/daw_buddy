@@ -11607,3 +11607,38 @@ button.is-loading {
 @media (min-width: 1400px) {
   .topbar__right .pill { white-space: nowrap; }
 }
+
+/* ================= AUDIO → MIDI ================= */
+.a2m-drop { margin-bottom: 16px; }
+
+.a2m-progress { width: min(360px, 80%); height: 6px; margin: 12px auto 4px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.a2m-progress__fill { height: 100%; width: 0; background: var(--amber); transition: width 0.25s ease; }
+
+.a2m-error { padding: 10px 12px; border: 1px solid #ef4444; border-radius: var(--r); color: var(--text); }
+
+.a2m-layout { display: grid; grid-template-columns: minmax(220px, 280px) 1fr; gap: 16px; align-items: start; }
+@media (max-width: 960px) {
+  .a2m-layout { grid-template-columns: 1fr; }
+}
+
+.a2m-settings { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); }
+.a2m-field { display: grid; gap: 5px; font-size: 12.5px; }
+.a2m-field__label { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-weight: 600; }
+.a2m-field__value { color: var(--text); font-variant-numeric: tabular-nums; }
+.a2m-field input[type="range"] { width: 100%; accent-color: var(--amber); }
+.a2m-field select,
+.a2m-field input[type="number"] { width: 100%; padding: 6px 8px; border-radius: var(--r); border: 1px solid var(--line); background: var(--raised); color: var(--text); font: inherit; }
+.a2m-check { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; color: var(--muted); }
+.a2m-check input { accent-color: var(--amber); margin-top: 2px; }
+
+.a2m-results { display: grid; gap: 12px; min-width: 0; }
+.a2m-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.a2m-stat { display: grid; gap: 2px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
+.a2m-stat__label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.a2m-stat__value { font-size: 17px; font-variant-numeric: tabular-nums; }
+
+.a2m-roll { width: 100%; height: 260px; display: block; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); }
+
+.a2m-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.a2m-actions .pill[draggable="true"] { cursor: grab; }
+.a2m-foot { margin: 0; font-size: 12px; }

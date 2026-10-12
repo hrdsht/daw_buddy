@@ -117,6 +117,7 @@ import {
 import { startFeatureWalkthrough, startProjectWalkthrough, startToolWalkthrough } from './tour';
 import { initBpmTool } from './bpm-tool';
 import { initLiveKey } from './live-key';
+import { mountAudioMidiTool, leaveAudioMidiTool } from './audio-midi-tool';
 
 // Initialize saved appearance (Default: Minimalist, Dark, Cyan)
 const savedStyle = localStorage.getItem('dawBuddyThemeStyle') || 'minimalist';
@@ -1206,6 +1207,7 @@ function render() {
     Player.draw();
   }
 
+  if (view !== 'audio-midi') leaveAudioMidiTool();
   if (view === 'thisweek') return renderThisWeek();
   if (view === 'tools') return renderStandaloneTools();
   if (view === 'slowed-reverb') return renderSlowedReverbTool();
@@ -1213,6 +1215,7 @@ function render() {
   if (view === 'convert') return renderStandaloneConverter();
   if (view === 'randomizer') return renderRandomizerTool();
   if (view === 'scale-tool') return renderScaleMidiTool();
+  if (view === 'audio-midi') return mountAudioMidiTool(viewEl);
   if (view === 'dedupe') return renderDedupe();
   if (view === 'disk') return renderDiskInsights();
   if (view === 'id3') return renderId3Editor();
@@ -1233,6 +1236,7 @@ const TOOL_TITLES: Record<string, string> = {
   convert: 'Format Converter & Splitter',
   randomizer: 'Music Randomizer',
   'scale-tool': 'Scale & Raaga Detector',
+  'audio-midi': 'Audio → MIDI',
   dedupe: 'Sample cleanup',
   disk: 'Disk insights',
   id3: 'ID3 editor',
@@ -14787,6 +14791,12 @@ function renderStandaloneTools() {
       icon: 'music',
       title: 'Scale & Raaga Detector',
       text: 'Drop any audio sample or MIDI file to instantly guess BPM, musical key, scale, tuning, and Indian Raagas.'
+    },
+    {
+      view: 'audio-midi',
+      icon: 'music',
+      title: 'Audio → MIDI',
+      text: 'Turn melodies, chords, bass lines and vocals into MIDI you can drag straight into your DAW. Runs locally with Spotify’s Basic Pitch.'
     },
     {
       view: 'dedupe',
