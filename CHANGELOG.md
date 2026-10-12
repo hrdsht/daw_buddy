@@ -7,6 +7,8 @@ is auto-generated on each GitHub Release; this file is the curated summary.
 
 ## [Unreleased]
 
+## [0.5.1-beta.13] — 2026-10-12
+
 ### Added
 - **Live Key listener** (topbar *Live Key* pill): hears whatever the computer is playing — system audio on Windows/macOS, or any input device (Linux "Monitor of …", BlackHole, interfaces) — and keeps a settled key, Camelot code, relative key, tuning offset and BPM on screen.
   - Confidence ring turns red → amber → green as readings agree; a confidence-weighted vote over the last ~12 s windows stops a passing chord from flipping the key, and half/double-time tempos fold together.
