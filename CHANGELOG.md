@@ -13,6 +13,10 @@ is auto-generated on each GitHub Release; this file is the curated summary.
   - Key-candidate bar chart: the seven most likely keys side by side — the taller the bar, the higher the probability — so close contenders (relative, parallel, Camelot neighbours) are visible while it settles.
   - Click any value to copy it, or press `Ctrl/⌘ + Alt + K` from any app (e.g. while focused in the DAW) to copy `A min · 8A · 124 BPM`.
   - Recent-locks history. Analysis runs in the existing DSP worker; audio only lives in a rolling in-memory buffer and is never recorded, stored or uploaded.
+- **Audio → MIDI** (Tools): transcribe a sample, loop, stem or vocal into MIDI with Spotify's Basic Pitch model, entirely on this computer — on the graphics card when available, otherwise the CPU.
+  - Live controls re-pick notes instantly without re-running the model: note sensitivity, shortest note, lowest/highest note, quantise (1/8, 1/16, 1/32) with strength, tempo (auto-detected) and optional pitch bends for single-line parts.
+  - Piano-roll preview with bar lines, synth playback, drag-to-DAW, and Save .mid (defaults to `DAW Buddy/Audio to MIDI/`).
+  - Third-party licences for the bundled model and TensorFlow.js ship in `THIRD_PARTY_NOTICES.txt`.
 
 ### Fixed
 - **Key & scale recognition rebuilt** for files, projects and Live Key. Western keys are now scored across all 24 keys with audio-tuned (KeyFinder/Sha'ath) profiles on a loudness-normalised chroma plus bass weighting, instead of a hand-tuned tonic guess. On the new 288-track benchmark (`npx tsx test/bench/key-benchmark.ts`): exact key 54.5% → 75.3%, MIREX score 61.9% → 82.9%; minor keys are no longer reported as major, and plain minor pop is no longer labelled a raga (Marwa, Todi) or Phrygian.
