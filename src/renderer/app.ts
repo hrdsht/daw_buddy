@@ -1101,10 +1101,18 @@ async function refresh() {
     showSpinner('Scanning', 'Reading your folders.');
   }
 
-  const result = browsing
-    ? await window.api.browse(browsing)
+  const browsedFolder = browsing;
+  const result = browsedFolder
+    ? await window.api.browse(browsedFolder)
     : await window.api.scan();
 
+  // A folder rescan is the result the user asked for — apply it. (Background
+  // updates skip folder views so they can't replace them with the root list.)
+  // If they navigated elsewhere while it ran, the result is stale; drop it.
+  if (browsedFolder) {
+    if (browsing === browsedFolder) applyProjectResult(result);
+    return;
+  }
   applyProjectResult(result, { background: true });
 }
 
