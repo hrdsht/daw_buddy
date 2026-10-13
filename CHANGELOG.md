@@ -7,6 +7,11 @@ is auto-generated on each GitHub Release; this file is the curated summary.
 
 ## [Unreleased]
 
+### Fixed
+- **Rescan now updates the saved project database when a folder is unavailable.** If any configured root couldn't be read (an unplugged drive, a moved folder), the scan result was never saved, so the catalogue on disk stopped updating for *every* root. Roots that were read are now saved fresh, and an unreadable root keeps its last known projects until it's back.
+- **Rescan always reflects the disk at the moment you click it.** If a background check was already running, Rescan returned that check's result, which could predate the change you just made; it now waits for it and scans again.
+- **Folder views update.** Opening or rescanning a folder fetched its contents and then discarded them, leaving the previous list on screen.
+
 ## [0.5.1-beta.13] — 2026-10-12
 
 ### Added
