@@ -91,6 +91,31 @@ class ProjectIndex {
       return false;
     }
   }
+
+  /**
+   * Saves the result of a full scan. A root that couldn't be read (unplugged
+   * drive, missing folder) used to block the save entirely, so one offline
+   * root froze the catalogue for every root. Now the roots that were read
+   * are saved fresh and the unreadable ones keep their last known projects.
+   * A truncated scan is still not saved — it's partial in unknown places.
+   */
+  async saveAfterScan(settings, entries, result: { errors?: { root: string }[]; truncated?: boolean } = {}) {
+    if (!Array.isArray(entries) || result.truncated) return false;
+    const failed = (result.errors || []).map((e) => e && e.root).filter(Boolean);
+    if (!failed.length) return this.save(settings, entries);
+    const previous = await this.load(settings);
+    return this.save(settings, mergeUnreadableRoots(previous ? previous.entries : [], entries, failed));
+  }
 }
 
-module.exports = { ProjectIndex, INDEX_FORMAT, signatureFor };
+/** Fresh entries plus the previous entries that belong to roots that failed. */
+function mergeUnreadableRoots(previous, fresh, failedRoots) {
+  const failed = new Set(failedRoots.map(normalisePath));
+  const seen = new Set(fresh.map((e) => normalisePath(e.sessionPath || e.path)));
+  const kept = previous.filter(
+    (e) => e && e.root && failed.has(normalisePath(e.root)) && !seen.has(normalisePath(e.sessionPath || e.path))
+  );
+  return [...fresh, ...kept];
+}
+
+module.exports = { ProjectIndex, INDEX_FORMAT, signatureFor, mergeUnreadableRoots };
