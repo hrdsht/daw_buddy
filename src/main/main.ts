@@ -375,6 +375,40 @@ if (!gotTheLock) {
   });
 }
 
+/* ---- Keyboard focus after native dialogs ---------------------------- */
+
+// On Windows, when a native dialog (folder picker, save, message box) closes,
+// the window comes back to the front but the page inside it can be left
+// without keyboard focus: text fields look normal and ignore typing until
+// the window is switched away from and back. Every dialog in the app goes
+// through Electron's dialog module, so wrap it once here — new dialogs get
+// the fix automatically — and hand focus back to the page when it closes.
+function refocusPage(win: any) {
+  const target = win && typeof win.isDestroyed === 'function' ? win : mainWindow;
+  if (!target || target.isDestroyed()) return;
+  target.focus();
+  if (!target.webContents.isDevToolsFocused()) target.webContents.focus();
+}
+
+for (const name of ['showOpenDialog', 'showSaveDialog', 'showMessageBox'] as const) {
+  const original = (dialog as any)[name].bind(dialog);
+  (dialog as any)[name] = async (...args: any[]) => {
+    try {
+      return await original(...args);
+    } finally {
+      refocusPage(args[0] instanceof BrowserWindow ? args[0] : null);
+    }
+  };
+}
+
+// Same symptom after alt-tabbing back on some systems: whenever one of our
+// windows regains focus, make sure its page has keyboard focus too.
+app.on('browser-window-focus', (event, win) => {
+  if (win && !win.isDestroyed() && !win.webContents.isDevToolsFocused()) {
+    win.webContents.focus();
+  }
+});
+
 app.whenReady().then(async () => {
   // Paint the splash before touching persisted data or configured drives.
   // Even a slow/unavailable disk must not prevent the first window appearing.
