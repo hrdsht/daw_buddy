@@ -8,6 +8,12 @@ is auto-generated on each GitHub Release; this file is the curated summary.
 ## [Unreleased]
 
 ### Fixed
+- **Text fields stay writeable everywhere.** Fields could stop accepting clicks or typing until you navigated away and back:
+  - *Smart renamer:* a category field's suggestion list opened on click and hung over the rows below, so clicking the next field picked a suggestion for the row above (sometimes resetting it to "Unresolved"). The list now opens only while typing, on ↓ or from ▼, and in renamer rows it opens inline, pushing rows down instead of covering them.
+  - Saving a row re-rendered the list and replaced the field being clicked or typed into. Saving now waits for the click to land, and re-renders (renamer rows, every tool view, the Suno quantizer) hand focus, caret position and unsaved text back to the field you were in.
+  - On Windows, closing a native dialog (folder picker, save, message box) could leave the page without keyboard focus. Every dialog now returns focus to the page, and so does switching back to the window.
+  - The five browser `confirm()` popups (delete duplicates/empty tracks, ID3 write/remove, overwrite stems) — a known cause of the same focus loss — are replaced by an in-app confirmation (Esc cancels; destructive actions start on Cancel).
+  - A first-visit tool tour now closes when you navigate away instead of leaving its click-blocking overlay behind.
 - **Rescan now updates the saved project database when a folder is unavailable.** If any configured root couldn't be read (an unplugged drive, a moved folder), the scan result was never saved, so the catalogue on disk stopped updating for *every* root. Roots that were read are now saved fresh, and an unreadable root keeps its last known projects until it's back.
 - **Rescan always reflects the disk at the moment you click it.** If a background check was already running, Rescan returned that check's result, which could predate the change you just made; it now waits for it and scans again.
 - **Folder views update.** Opening or rescanning a folder fetched its contents and then discarded them, leaving the previous list on screen.
