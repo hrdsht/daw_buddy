@@ -112,9 +112,11 @@ import {
   ABLETON_PALETTE_GRID,
   getAbletonProjectColor,
   isFlStudioArtifact,
-  formatStemOutputName
+  formatStemOutputName,
+  confirmAction,
+  preserveFocus
 } from './dom';
-import { startFeatureWalkthrough, startProjectWalkthrough, startToolWalkthrough } from './tour';
+import { startFeatureWalkthrough, startProjectWalkthrough, startToolWalkthrough, dismissTour } from './tour';
 import { initBpmTool } from './bpm-tool';
 import { initLiveKey } from './live-key';
 import { mountAudioMidiTool, leaveAudioMidiTool } from './audio-midi-tool';
@@ -1195,7 +1197,19 @@ function applyProjectResult(result, { background = false } = {}) {
 
 /* ============================ navigation =========================== */
 
+let lastRenderedLocation = '';
+
+/** Re-renders the current view. Typing in a field survives a same-view re-render. */
 function render() {
+  const location = `${view}|${browsing || ''}|${openProject ? openProject.path : ''}`;
+  const sameView = location === lastRenderedLocation;
+  lastRenderedLocation = location;
+  if (sameView) return preserveFocus(viewEl, renderView);
+  dismissTour();
+  return renderView();
+}
+
+function renderView() {
   backBtn.hidden = view === 'list' && !browsing;
   setPageTitle();
 
@@ -6155,9 +6169,13 @@ let activeOpenCombobox: { wrap: HTMLElement; close: () => void; commit: () => vo
 
 document.addEventListener('pointerdown', (e) => {
   if (activeOpenCombobox && !activeOpenCombobox.wrap.contains(e.target as Node)) {
-    activeOpenCombobox.commit();
-    activeOpenCombobox.close();
+    const { commit, close } = activeOpenCombobox;
+    close();
     activeOpenCombobox = null;
+    // Save after this click has finished moving focus. Saving re-renders the
+    // rows; doing it now would replace the field being clicked mid-click and
+    // leave nothing focused — the "text field won't type" bug.
+    setTimeout(commit, 0);
   }
 });
 
@@ -6225,6 +6243,8 @@ function createSmartCombobox(options: {
   placeholder?: string;
   categoriesList: Array<{ category: string; subtypes: string[] }>;
   isBatch?: boolean;
+  /** Stable id (e.g. the file path) so focus survives the row list re-rendering. */
+  focusKey?: string;
   onApply: (result: { category: string | null; subtype: string | null; customName?: string | null }) => void;
 }): HTMLElement {
   const wrap = el('div', `smart-combobox${options.isBatch ? ' smart-combobox--batch' : ''}`);
@@ -6236,6 +6256,7 @@ function createSmartCombobox(options: {
   input.setAttribute('autocorrect', 'off');
   input.setAttribute('autocapitalize', 'off');
   input.placeholder = options.placeholder || 'Type category or custom…';
+  if (options.focusKey) input.dataset.focusKey = options.focusKey;
 
   let initialDisplay = '';
   if (options.currentCustomName) {
@@ -6401,9 +6422,9 @@ function createSmartCombobox(options: {
     }
   });
 
-  input.addEventListener('focus', () => {
-    openMenu();
-  });
+  // Focusing a field never opens the menu: an open menu hangs over the rows
+  // below and swallows clicks meant for their fields. It opens while typing,
+  // on ArrowDown, or from the ▼ button.
 
   input.addEventListener('input', () => {
     renderMenuItems(input.value);
@@ -6417,6 +6438,11 @@ function createSmartCombobox(options: {
       commitCurrentInput();
     } else if (e.key === 'Escape') {
       input.value = initialDisplay;
+      closeMenu();
+    } else if (e.key === 'ArrowDown' && !menu.classList.contains('is-open')) {
+      e.preventDefault();
+      openMenu();
+    } else if (e.key === 'Tab') {
       closeMenu();
     }
   });
@@ -6674,7 +6700,7 @@ async function renderSmartRenameTab(entry: any = null) {
     deleteBtn.style.color = '#ffffff';
     deleteBtn.title = 'Safely move duplicate FL Studio Master and Current bounces to trash';
     deleteBtn.addEventListener('click', async () => {
-      const confirmDelete = window.confirm(`Permanently remove ${artifacts.length} FL Studio bounce duplicates (${artifacts.map(a => a.name).join(', ')})?`);
+      const confirmDelete = await confirmAction(`Permanently remove ${artifacts.length} FL Studio bounce duplicates (${artifacts.map(a => a.name).join(', ')})?`, { title: 'Delete duplicate bounces?', confirmLabel: 'Delete', danger: true });
       if (confirmDelete) {
         const res = await window.api.deleteFiles(artifacts.map(a => a.path), true);
         if (res.ok) {
@@ -6758,8 +6784,9 @@ async function renderSmartRenameTab(entry: any = null) {
     deleteBtn.style.color = '#ffffff';
     deleteBtn.title = 'Safely move empty / silent tracks to trash to conserve disk space';
     deleteBtn.addEventListener('click', async () => {
-      const confirmDelete = window.confirm(
-        `Permanently remove ${emptyTracks.length} empty/silent track(s) (${emptyTracks.map((a) => a.name).join(', ')}) to conserve ${formattedSpace} disk space?`
+      const confirmDelete = await confirmAction(
+        `Permanently remove ${emptyTracks.length} empty/silent track(s) (${emptyTracks.map((a) => a.name).join(', ')}) to conserve ${formattedSpace} disk space?`,
+        { title: 'Delete empty tracks?', confirmLabel: 'Delete', danger: true }
       );
       if (confirmDelete) {
         const res = await window.api.deleteFiles(emptyTracks.map((a) => a.path), true);
@@ -7028,6 +7055,10 @@ async function renderSmartRenameTab(entry: any = null) {
   let lastCheckedIndex: number | null = null;
 
   function renderPanes() {
+    preserveFocus(viewEl, renderPanesNow);
+  }
+
+  function renderPanesNow() {
     leftBody.innerHTML = '';
     rightBody.innerHTML = '';
     batchContainer.innerHTML = '';
@@ -7071,6 +7102,7 @@ async function renderSmartRenameTab(entry: any = null) {
         placeholder: 'Batch category (e.g. percs, drums / tom)…',
         categoriesList: smartCategoriesList,
         isBatch: true,
+        focusKey: 'smart-batch',
         onApply: (res) => {
           currentBatchChoice = res;
           applyBatchChoice(res);
@@ -7280,6 +7312,7 @@ async function renderSmartRenameTab(entry: any = null) {
         currentSubtype: sub,
         currentCustomName: item.customName,
         categoriesList: smartCategoriesList,
+        focusKey: `smart-row:${item.path}`,
         onApply: async (res) => {
           if (res.category) {
             saveUserCategory(res.category, smartCategoriesList);
@@ -9101,7 +9134,7 @@ function renderId3Editor() {
   writeBtn.addEventListener('click', async () => {
     const chosen = selectedFiles();
     if (!chosen.length) return;
-    if (!window.confirm(`Replace the metadata in ${chosen.length} selected MP3 file(s)?\n\nThe audio itself will not change.`)) return;
+    if (!(await confirmAction(`Replace the metadata in ${chosen.length} selected MP3 file(s)?\n\nThe audio itself will not change.`, { title: 'Write metadata?', confirmLabel: 'Replace metadata' }))) return;
 
     writeBtn.disabled = true;
     removeBtn.disabled = true;
@@ -9136,7 +9169,7 @@ function renderId3Editor() {
   removeBtn.addEventListener('click', async () => {
     const chosen = selectedFiles();
     if (!chosen.length) return;
-    if (!window.confirm(`Remove all metadata from ${chosen.length} selected MP3 file(s)?\n\nThe audio itself will not change.`)) return;
+    if (!(await confirmAction(`Remove all metadata from ${chosen.length} selected MP3 file(s)?\n\nThe audio itself will not change.`, { title: 'Remove metadata?', confirmLabel: 'Remove metadata', danger: true }))) return;
 
     writeBtn.disabled = true;
     removeBtn.disabled = true;
@@ -14026,8 +14059,9 @@ function buildSunoQuantizerInterface(container: HTMLElement) {
         updateStatus('Cannot overwrite: original stem file paths are unavailable. Please select subfolder or custom folder.', 'error');
         return;
       }
-      const confirmed = window.confirm(
-        `⚠️ OVERWRITE CONFIRMATION\n\nYou have selected "Overwrite Original Files".\n\nThis will replace ${pathsCount} stem file(s) directly on disk at their original locations with the ${sunoQuantizerState.targetBpm} BPM quantized audio.\n\nAre you sure you want to proceed?`
+      const confirmed = await confirmAction(
+        `You have selected "Overwrite Original Files".\n\nThis will replace ${pathsCount} stem file(s) directly on disk at their original locations with the ${sunoQuantizerState.targetBpm} BPM quantized audio.`,
+        { title: 'Overwrite original stems?', confirmLabel: 'Overwrite', danger: true }
       );
       if (!confirmed) {
         return;
@@ -14170,6 +14204,10 @@ function buildSunoQuantizerInterface(container: HTMLElement) {
   }
 
   function renderAll() {
+    preserveFocus(viewEl, renderAllNow);
+  }
+
+  function renderAllNow() {
     updateStatus();
 
     let processBtn: HTMLButtonElement | null = null;
