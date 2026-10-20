@@ -17,6 +17,13 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 
+# Python caches from bundled skill scripts
+__pycache__/
+*.py[cod]
+
+# Impeccable local consent / machine-only config
+.impeccable/config.local.json
+
 # Editor
 .vscode/
 .idea/
