@@ -100,7 +100,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload installers as artifacts (exe, dmg, linux packages)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: daw-buddy-${{ matrix.os }}
           path: |
