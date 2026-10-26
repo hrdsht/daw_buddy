@@ -16,6 +16,7 @@ const videos = require('../src/main/lib/videos');
 const id3 = require('../src/main/lib/id3');
 const versions = require('../src/main/lib/versions');
 const { ProjectStore } = require('../src/main/lib/notes');
+const daw = require('../src/main/lib/daw');
 
 async function withTempDir(run) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'daw-buddy-test-'));
@@ -591,13 +592,35 @@ async function run() {
     audioInAnotherBranchDoesNotEnablePlay,
     videosAreCountedAndListed,
     id3EditingNeverChangesAudioBytes,
-    audioAnalysisPersistsInStore
+    audioAnalysisPersistsInStore,
+    flpParserResilientToOverflowVarints
   ];
 
   for (const test of tests) {
     await test();
     console.log(`ok - ${test.name}`);
   }
+}
+
+async function flpParserResilientToOverflowVarints() {
+  await withTempDir(async (dir) => {
+    const flpPath = path.join(dir, 'Overflow.flp');
+    const header = Buffer.from('FLhd\x06\x00\x00\x00\x00\x00\x01\x00\x60\x00', 'binary');
+    const dataContent = Buffer.from([
+      0x9c, 0xc0, 0xd4, 0x01, 0x00, // event 156 (BPM 120000 = 120 BPM)
+      0xcb, 0xa8, 0x82, 0xb8, 0xe6, 0x3f, 0x00, 0x00 // event 203 + varint with high shift bit
+    ]);
+    const dtHeader = Buffer.alloc(8);
+    dtHeader.write('FLdt', 0, 'ascii');
+    dtHeader.writeUInt32LE(dataContent.length, 4);
+
+    const fullBuf = Buffer.concat([header, dtHeader, dataContent]);
+    await fs.writeFile(flpPath, fullBuf);
+
+    const format = daw.formatFor(flpPath);
+    const result = await format.readTempo(flpPath);
+    assert.equal(result.bpm, 120);
+  });
 }
 
 run().catch((error) => {

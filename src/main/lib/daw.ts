@@ -103,7 +103,13 @@ async function readFlpTempo(filePath) {
   let timeSigNum = null;
   let timeSigDenom = null;
 
+  let steps = 0;
+
   while (pos < end) {
+    if (++steps > 200000) {
+      return finishFlp(fallback, buf, timeSigNum, timeSigDenom);
+    }
+    const prevPos = pos;
     const id = buf[pos];
     pos += 1;
 
@@ -136,12 +142,22 @@ async function readFlpTempo(filePath) {
       do {
         if (pos >= end) return finishFlp(fallback, buf, timeSigNum, timeSigDenom);
         byte = buf[pos];
+        if (byte === undefined) return finishFlp(fallback, buf, timeSigNum, timeSigDenom);
         pos += 1;
-        length |= (byte & 0x7f) << shift;
+        length += (byte & 0x7f) * Math.pow(2, shift);
         shift += 7;
+        if (shift > 35) {
+          return finishFlp(fallback, buf, timeSigNum, timeSigDenom);
+        }
       } while (byte & 0x80);
+
+      if (length < 0 || pos + length > end || pos + length <= pos) {
+        return finishFlp(fallback, buf, timeSigNum, timeSigDenom);
+      }
       pos += length;
     }
+
+    if (pos <= prevPos) break;
   }
 
   return finishFlp(fallback, buf, timeSigNum, timeSigDenom);
@@ -542,7 +558,7 @@ async function countLogicBackups(packagePath) {
  */
 const PARSER_VERSIONS = {
   '.als': 3,
-  '.flp': 4, // 4 = time signature support
+  '.flp': 5, // 5 = resilient varint parser without 32-bit sign overflow
   '.rpp': 2, // 2 = time signature support
   '.bwproject': 1,
   '.ptx': 1,

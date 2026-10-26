@@ -205,7 +205,21 @@ function scanProjectsInUtility(current: any) {
   const id = `catalogue-${++catalogueRequestSequence}`;
   const child = ensureCatalogueProcess();
   return new Promise((resolve, reject) => {
-    pendingCatalogueRequests.set(id, { resolve, reject });
+    const timer = setTimeout(() => {
+      pendingCatalogueRequests.delete(id);
+      reject(new Error('Catalogue scan timed out after 60s in utility process'));
+    }, 60000);
+
+    pendingCatalogueRequests.set(id, {
+      resolve: (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      reject: (error) => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    });
     child.postMessage({
       id,
       type: 'SCAN_ROOTS',
