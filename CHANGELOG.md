@@ -7,6 +7,12 @@ is auto-generated on each GitHub Release; this file is the curated summary.
 
 ## [Unreleased]
 
+## [0.5.1-beta.14] — 2026-11-14
+
+### Fixed
+- **macOS: the app no longer reports as "damaged and can't be opened"** on Apple Silicon. Release builds were shipped with no code signature at all, which macOS refuses outright for a downloaded app. The app is now ad-hoc signed, so the first launch shows the usual "unidentified developer" prompt that you can approve under **System Settings → Privacy & Security → Open Anyway**. The release build now fails if a macOS app comes out unsigned.
+- **FL Studio projects**: a malformed tempo event could overflow or hang the scanner; it is now bounded.
+
 ## [0.5.1-beta.13] — 2026-10-12
 
 ### Added

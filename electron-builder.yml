@@ -33,6 +33,15 @@ mac:
         - x64
         - arm64
   category: public.app-category.music
+  # No Developer ID certificate yet (docs/proposals/0003-code-signing.md), so
+  # sign ad-hoc. Without any signature the bundle is unsealed and Apple Silicon
+  # reports a downloaded copy as "damaged and can't be opened", with no way to
+  # open it. An ad-hoc signature turns that into the normal "unidentified
+  # developer" prompt, which the user can approve.
+  identity: "-"
+  # Hardened runtime only matters for notarization; with an ad-hoc signature it
+  # makes library validation reject Electron's own frameworks at launch.
+  hardenedRuntime: false
 
 linux:
   maintainer: ba55ick <hpkalas@gmail.com>

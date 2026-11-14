@@ -104,7 +104,11 @@ Grab a ready-to-run installer from the **[Releases page](https://github.com/hrds
 Then run it:
 
 - **Windows** — run the `.exe`. It's **unsigned**, so SmartScreen warns on first launch: click **More info → Run anyway**.
-- **macOS** — open the `.dmg`, drag the app to Applications, then **right-click the app → Open** the first time (this clears Gatekeeper's warning for unsigned apps).
+- **macOS** — open the `.dmg` and drag the app to Applications. The app isn't notarized yet, so the first launch is blocked: open it once, then go to **System Settings → Privacy & Security**, scroll down and click **Open Anyway**. (On macOS 14 and earlier, **right-click the app → Open** also works.) Or skip the prompt from Terminal:
+
+  ```bash
+  xattr -dr com.apple.quarantine "/Applications/DAW Buddy.app"
+  ```
 - **Linux** — make the AppImage executable and run it:
 
   ```bash
@@ -114,7 +118,7 @@ Then run it:
 
   If it mentions FUSE, run `./DAW.Buddy-*.AppImage --appimage-extract-and-run`, or just install the `.deb` / `.rpm` instead.
 
-> Installers are **unsigned** for now, so that one-time OS warning is expected. Code signing is planned — see `docs/proposals/0003-code-signing.md`.
+> Installers aren't signed with a paid certificate yet (the macOS app is ad-hoc signed, not notarized), so that one-time OS warning is expected. Code signing is planned — see `docs/proposals/0003-code-signing.md`.
 
 > [!NOTE]
 > **📢 Help Test macOS & Linux Builds!**
@@ -210,9 +214,9 @@ npm run dist:linux    # Linux AppImage / .deb / .rpm
 ```
 
 The result lands in a `release/` folder. A macOS `.dmg` can only be built on
-macOS. The installers are currently **unsigned**, so Windows SmartScreen and
-macOS Gatekeeper will warn on first launch until code-signing certificates are
-added.
+macOS. The installers carry no paid certificate yet (the macOS app is
+ad-hoc signed, not notarized), so Windows SmartScreen and macOS Gatekeeper will
+warn on first launch until code-signing certificates are added.
 
 **Automated releases:** `.github/workflows/release.yml` builds all three
 platforms and attaches the installers to a GitHub Release whenever you publish

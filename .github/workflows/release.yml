@@ -84,6 +84,24 @@ jobs:
       - name: Build installers (exe, dmg, AppImage/deb/rpm)
         run: npm run dist -- --publish never
 
+      - name: Verify the macOS apps are signed
+        # An unsigned arm64 bundle is rejected as "damaged" once downloaded.
+        # Fail the build rather than ship one.
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          shopt -s nullglob
+          apps=(release/mac*/*.app)
+          if [ ${#apps[@]} -eq 0 ]; then
+            echo "::error::No .app bundle found under release/mac*"
+            exit 1
+          fi
+          for app in "${apps[@]}"; do
+            echo "Verifying $app"
+            codesign --verify --deep --strict --verbose=2 "$app"
+            codesign --display --verbose=2 "$app" 2>&1 | grep -E "^(Identifier|Signature|CodeDirectory)"
+          done
+
       - name: Attach installers to the release
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
