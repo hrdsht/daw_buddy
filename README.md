@@ -5,7 +5,7 @@
 [![Tests](https://img.shields.io/badge/tests-31%20passing-brightgreen.svg)](https://github.com/hrdsht/daw_buddy/actions)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue.svg)](https://github.com/hrdsht/daw_buddy/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/hrdsht/daw_buddy/blob/main/LICENSE)
-[![Version](https://img.shields.io/badge/version-v0.5.1--beta.8-orange.svg)](https://github.com/hrdsht/daw_buddy/releases)
+[![Version](https://img.shields.io/badge/version-v0.5.1--beta.13-orange.svg)](https://github.com/hrdsht/daw_buddy/releases)
 [![Gumroad](https://img.shields.io/badge/Gumroad-Get%20Free%20Download-ff90e8.svg?logo=gumroad&logoColor=white)](https://7675947827359.gumroad.com/l/daw_buddy)
 [![Website](https://img.shields.io/badge/Webpage-dawbuddy.ba55ick.com-2dd4bf.svg)](https://dawbuddy.ba55ick.com)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-ba55ick-FFDD00.svg?style=flat&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/ba55ick)
@@ -46,6 +46,7 @@ Whether you are mixing a multi-platinum album or producing your very first beat,
 - 🏷️ **Smart Stem Classifier & Bulk Renamer**: AI-assisted heuristic engine that categorizes messy bounce stems into mix-ready instrument groups (*Kicks, Snares, Basses, Leads, Vocals, FX*) with custom dictionary learning and reversible rollback manifests.
 - 🎛️ **Lossless Audio Finisher & Silence Stripper**: Peak/RMS normalization, beat/bar boundary fitting, and threshold-based leading/trailing silence removal with safety transient padding.
 - 🎙️ **Vocal Reconstruction Suite**: Split continuous vocal takes into isolated blocks for third-party pitch-correction or voice transformation (Melodyne, Auto-Tune, ElevenLabs), and re-assemble them with sample-accurate timing.
+- 🎼 **Audio → MIDI**: Turn melodies, chords, bass lines and vocals into MIDI with Spotify's Basic Pitch model, running 100% locally (GPU when available). Tune sensitivity and note length live, quantise to 1/8–1/32, add pitch bends, preview on a piano roll, and drag the `.mid` straight into your DAW.
 - 💾 **Duplicate Sample Auditor & Disk Insights**: Identifies duplicate sample copies across projects and reclaims gigabytes of disk space using safe filesystem hard links without breaking session references.
 - 🌐 **Cross-Platform Parity**: Full native support across **Windows, macOS (Apple Silicon & Intel), and Linux**.
 
@@ -384,6 +385,7 @@ and design decisions.
 - **Vision, Direction & Artist:** [BA55ICK](https://github.com/ba55ick) — Conceived, designed, and envisioned DAW Buddy from firsthand studio production workflows.
 - **Software Engineering & Collaboration:** [Shreyas Bhat](https://github.com/shreyasbhat0) — Enabled that dream by taking time off from his office work and providing deep software engineering insights, desktop architecture, and development time.
 - **Inspiration & Special Thanks:** [KSHMR](https://www.youtube.com/channel/UCFMjkrMT7Gvg84v0av-DIwA) & [XLNT Sound](https://www.youtube.com/@XLNTSOUND) — The idea for DAW Buddy germinated from their insightful podcast discussing in-house producer workflow tools and project cataloging.
+- **Audio → MIDI engine:** [Basic Pitch](https://github.com/spotify/basic-pitch) by Spotify's Audio Intelligence Lab (Apache-2.0), running on [TensorFlow.js](https://github.com/tensorflow/tfjs). Full licence texts ship with the app in `THIRD_PARTY_NOTICES.txt`.
 - **UI Design & Theme Assets Credit:** [Vijay Verma (@realvjy)](https://www.figma.com/@realvjy) — Huge thanks for creating the beautiful open-source [Bloo Lo-Fi Wireframe Kit](https://www.figma.com/community/file/960058803048298115/bloo-lo-fi-wireframe-kit) ([bloouikit.com](https://bloouikit.com)), which powers DAW Buddy's **Bloo Wireframe** theme.
 
 ---

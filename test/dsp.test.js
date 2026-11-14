@@ -2,6 +2,7 @@
 
 const assert = require('assert/strict');
 const { DSP } = require('../src/renderer/dsp');
+const { renderProgression, PROGRESSIONS } = require('./bench/key-benchmark');
 
 function automaticPlayAnalysisReturnsTempoAndKey() {
   const sampleRate = 11025;
@@ -266,8 +267,34 @@ function chordProgressionDetectorIdentifiesChanges() {
   assert.ok(report.romanSummary.includes('I'), 'Roman summary should contain I');
 }
 
+function westernKeysAndScalesOnArrangedProgressions() {
+  // Arranged loops (bass, pad, melody, drums) the old tonic heuristic got
+  // wrong — it read minor as major, picked the relative or V, or labelled
+  // plain minor pop as a raga (Marwa) or Phrygian.
+  const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  const cases = [
+    [10, 'i-VII-VI-VII', 'minor'], // old: no key, "marwa"
+    [4, 'i-VI-III-VII', 'minor'], // old: E min phrygian
+    [0, 'i-iv-v-i', 'minor'], // old: C maj
+    [7, 'i-iv-V-i', 'harmonicMinor'], // old: G maj
+    [0, 'ii-V-I-I', 'major'], // old: D min dorian
+    [11, 'i-VII-VI-VII', 'minor'] // old: A maj mixolydian
+  ];
+  for (const [pc, name, scale] of cases) {
+    const prog = PROGRESSIONS.find((p) => p.name === name);
+    const audio = renderProgression(pc, prog, { seconds: 12 });
+    const result = DSP.analyseKey(audio, 44100);
+    const want = `${NOTES[pc]} ${prog.mode}`;
+    assert.equal(result.key, want, `${want} ${name}: got ${result.key}`);
+    assert.equal(result.scale, scale, `${want} ${name}: scale ${result.scale}`);
+    assert.equal(result.modal, false, `${want} ${name} must not be read as a raga`);
+  }
+}
+
 automaticPlayAnalysisReturnsTempoAndKey();
 console.log('ok - automaticPlayAnalysisReturnsTempoAndKey');
+westernKeysAndScalesOnArrangedProgressions();
+console.log('ok - westernKeysAndScalesOnArrangedProgressions');
 ragaPerformanceIdentifiesTonicAndModalScale();
 console.log('ok - ragaPerformanceIdentifiesTonicAndModalScale');
 detunedIndianClassicalAudioIdentifiesTuningAndTonic();
