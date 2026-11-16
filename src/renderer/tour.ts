@@ -345,6 +345,17 @@ export function completeTour() {
   cleanupTour();
 }
 
+/**
+ * Ends any running tour when the user navigates to another view. The tour's
+ * full-window overlay blocks every click until it's closed; left behind on
+ * a view it wasn't made for, it made fields and buttons look dead. Leaving
+ * counts as skipping, so auto-started tours don't keep coming back — the
+ * ❓ Tutorial button still replays them.
+ */
+export function dismissTour() {
+  if (overlayEl) completeTour();
+}
+
 function cleanupTour() {
   if (overlayEl) {
     overlayEl.remove();

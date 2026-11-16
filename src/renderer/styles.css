@@ -11642,3 +11642,25 @@ button.is-loading {
 .a2m-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .a2m-actions .pill[draggable="true"] { cursor: grab; }
 .a2m-foot { margin: 0; font-size: 12px; }
+
+/* In-app confirmation (replaces window.confirm) */
+.confirm-overlay { z-index: 12000; }
+.confirm-box { width: min(460px, 100%); padding: 20px 22px 18px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--raised); color: var(--text); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55); }
+.confirm-box__title { margin: 0 0 8px; font-size: 16px; }
+.confirm-box__body { margin: 0 0 18px; font-size: 13.5px; line-height: 1.5; color: var(--muted); white-space: pre-line; overflow-wrap: anywhere; max-height: 50vh; overflow-y: auto; }
+.confirm-box__actions { display: flex; justify-content: flex-end; gap: 8px; }
+.confirm-box__danger { background: var(--alert); border-color: var(--alert); color: #fff; }
+
+/* Smart renamer rows: the suggestion list opens inline and pushes the rows
+   below down. A floating list covered the next rows' fields, so clicking a
+   field could pick a suggestion for the row above instead of focusing it. */
+.smart-row .smart-combobox { flex-wrap: wrap; }
+.smart-row .smart-combobox__menu.is-open {
+  position: static;
+  flex-basis: 100%;
+  min-width: 0;
+  max-height: 180px;
+  margin-top: 4px;
+  box-shadow: none;
+}
+.smart-row:has(.smart-combobox__menu.is-open) { align-items: flex-start; }

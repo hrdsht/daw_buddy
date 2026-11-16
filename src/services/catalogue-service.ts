@@ -199,10 +199,11 @@ export class CatalogueService {
       this.currentSnapshot = snapshot;
 
       // Save index to disk in background when complete
-      if (this.projectIndex && !payload.shallow && !result.truncated && (!result.errors || result.errors.length === 0)) {
-        await this.projectIndex.save(
+      if (this.projectIndex && !payload.shallow) {
+        await this.projectIndex.saveAfterScan(
           { roots: this.activeRoots, ignore: payload.ignore || [], followLinks: payload.followLinks },
-          entries
+          entries,
+          { errors: result.errors || [], truncated: Boolean(result.truncated) }
         );
       }
 

@@ -434,3 +434,150 @@ export function formatStemOutputName(
   // Default snake_case
   return `${base}_${index}${ext}`;
 }
+
+/**
+ * In-window confirmation, used instead of window.confirm().
+ *
+ * Electron's native confirm()/alert() can leave the page without keyboard
+ * focus on Windows: after the popup closes, text fields look normal but
+ * ignore typing until the window loses and regains focus. This modal never
+ * leaves the page, and it hands focus back to whatever was focused before.
+ * Escape cancels, Enter confirms.
+ */
+export function confirmAction(
+  message: string,
+  options: { title?: string; confirmLabel?: string; cancelLabel?: string; danger?: boolean } = {}
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    const previous = document.activeElement as HTMLElement | null;
+    const overlay = el('div', 'modal-overlay confirm-overlay');
+    const box = el('div', 'confirm-box');
+    box.setAttribute('role', 'alertdialog');
+    box.setAttribute('aria-modal', 'true');
+    const titleId = `confirm-title-${Date.now()}`;
+    box.setAttribute('aria-labelledby', titleId);
+
+    const title = el('h3', 'confirm-box__title', options.title || 'Are you sure?');
+    title.id = titleId;
+    const body = el('p', 'confirm-box__body', message);
+    const actions = el('div', 'confirm-box__actions');
+    const cancel = el('button', 'pill', options.cancelLabel || 'Cancel');
+    cancel.type = 'button';
+    const ok = el('button', `pill pill--solid${options.danger ? ' confirm-box__danger' : ''}`, options.confirmLabel || 'OK');
+    ok.type = 'button';
+    actions.append(cancel, ok);
+    box.append(title, body, actions);
+    overlay.append(box);
+
+    const finish = (answer: boolean) => {
+      document.removeEventListener('keydown', onKey, true);
+      overlay.remove();
+      if (previous && previous.isConnected && typeof previous.focus === 'function') previous.focus();
+      resolve(answer);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); }
+      else if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); finish(document.activeElement !== cancel); }
+      else if (e.key === 'Tab') {
+        // Keep focus inside the two buttons.
+        e.preventDefault();
+        (document.activeElement === ok ? cancel : ok).focus();
+      }
+    };
+    cancel.addEventListener('click', () => finish(false));
+    ok.addEventListener('click', () => finish(true));
+    overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) finish(false); });
+    document.addEventListener('keydown', onKey, true);
+    document.body.append(overlay);
+    // Destructive actions start on Cancel so a stray Enter can't delete.
+    (options.danger ? cancel : ok).focus();
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Keep typing alive across re-renders                                */
+/* ------------------------------------------------------------------ */
+
+function isTextField(node: Element | null): node is HTMLInputElement | HTMLTextAreaElement {
+  if (!node) return false;
+  if (node instanceof HTMLTextAreaElement) return true;
+  if (!(node instanceof HTMLInputElement)) return false;
+  return ['text', 'search', 'number', 'email', 'url', 'tel', 'password', ''].includes(node.type);
+}
+
+function domPath(node: Element, root: Element): number[] | null {
+  const path: number[] = [];
+  let current: Element | null = node;
+  while (current && current !== root) {
+    const parent: Element | null = current.parentElement;
+    if (!parent) return null;
+    path.unshift(Array.prototype.indexOf.call(parent.children, current));
+    current = parent;
+  }
+  return current === root ? path : null;
+}
+
+function signature(node: HTMLInputElement | HTMLTextAreaElement): string {
+  return `${node.tagName}|${(node as HTMLInputElement).type || ''}|${node.placeholder}|${node.className}|${node.name}`;
+}
+
+/**
+ * Runs `rebuild` (which may replace the DOM under `root`) without stealing
+ * the text field the user is typing in. If a text field inside `root` has
+ * focus, the matching field in the new DOM gets focus, the caret position
+ * and any not-yet-saved text back.
+ *
+ * Matching: an explicit `data-focus-key` when present; otherwise the same
+ * position in the tree *and* the same tag/type/placeholder/class, so text
+ * can never be dropped into an unrelated field.
+ */
+export function preserveFocus<T>(root: Element | null, rebuild: () => T): T {
+  const active = document.activeElement;
+  if (!root || !isTextField(active) || !root.contains(active)) return rebuild();
+
+  const key = active.dataset.focusKey || null;
+  const path = key ? null : domPath(active, root);
+  const sig = signature(active);
+  const value = active.value;
+  let start: number | null = null;
+  let end: number | null = null;
+  try {
+    start = active.selectionStart;
+    end = active.selectionEnd;
+  } catch {
+    /* number inputs have no selection */
+  }
+
+  const restore = () => {
+    if (document.activeElement && document.activeElement !== document.body && document.activeElement !== active) {
+      return; // something else took focus deliberately (a dialog, another field)
+    }
+    let target: Element | null = null;
+    if (key) {
+      target = root.querySelector(`[data-focus-key="${CSS.escape(key)}"]`);
+    } else if (path) {
+      target = root;
+      for (const index of path) {
+        target = target ? target.children[index] || null : null;
+      }
+    }
+    if (!isTextField(target) || target === active || !target.isConnected) return;
+    if (!key && signature(target) !== sig) return;
+    if (target.disabled || target.readOnly) return;
+    if (target.value !== value) target.value = value;
+    target.focus({ preventScroll: true });
+    try {
+      if (start !== null && end !== null) target.setSelectionRange(start, end);
+    } catch {
+      /* number inputs have no selection */
+    }
+  };
+
+  const result = rebuild();
+  if (result && typeof (result as any).then === 'function') {
+    (result as any).then(restore, restore);
+  } else {
+    restore();
+  }
+  return result;
+}

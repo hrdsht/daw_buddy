@@ -389,6 +389,40 @@ if (!gotTheLock) {
   });
 }
 
+/* ---- Keyboard focus after native dialogs ---------------------------- */
+
+// On Windows, when a native dialog (folder picker, save, message box) closes,
+// the window comes back to the front but the page inside it can be left
+// without keyboard focus: text fields look normal and ignore typing until
+// the window is switched away from and back. Every dialog in the app goes
+// through Electron's dialog module, so wrap it once here — new dialogs get
+// the fix automatically — and hand focus back to the page when it closes.
+function refocusPage(win: any) {
+  const target = win && typeof win.isDestroyed === 'function' ? win : mainWindow;
+  if (!target || target.isDestroyed()) return;
+  target.focus();
+  if (!target.webContents.isDevToolsFocused()) target.webContents.focus();
+}
+
+for (const name of ['showOpenDialog', 'showSaveDialog', 'showMessageBox'] as const) {
+  const original = (dialog as any)[name].bind(dialog);
+  (dialog as any)[name] = async (...args: any[]) => {
+    try {
+      return await original(...args);
+    } finally {
+      refocusPage(args[0] instanceof BrowserWindow ? args[0] : null);
+    }
+  };
+}
+
+// Same symptom after alt-tabbing back on some systems: whenever one of our
+// windows regains focus, make sure its page has keyboard focus too.
+app.on('browser-window-focus', (event, win) => {
+  if (win && !win.isDestroyed() && !win.webContents.isDevToolsFocused()) {
+    win.webContents.focus();
+  }
+});
+
 app.whenReady().then(async () => {
   // Paint the splash before touching persisted data or configured drives.
   // Even a slow/unavailable disk must not prevent the first window appearing.
@@ -1010,12 +1044,9 @@ async function scanProjects() {
   cache.prune(entries.map((e) => e.sessionPath));
   await cache.save();
 
-  // Only replace the last-known-good catalogue with a complete scan. If a
-  // drive is temporarily unreadable, the next launch should retain the good
-  // list rather than remember a partial one.
-  if (!truncated && errors.length === 0) {
-    await projectIndex.save(current, entries);
-  }
+  // Roots that were read are saved fresh; an unreadable root keeps its last
+  // known projects. A truncated scan is never saved.
+  await projectIndex.saveAfterScan(current, entries, { errors, truncated });
 
   return {
     entries,
@@ -1105,9 +1136,11 @@ ipcMain.handle('projects:scan', async () => {
     if (initialScanPromise === prefetched) initialScanPromise = null;
     return result;
   }
+  // A background check may have started before the user added or changed a
+  // project. Let it finish, then scan again so Rescan reflects the disk as
+  // it is now rather than as it was when that check began.
   if (backgroundScanPromise) {
-    const result = await backgroundScanPromise;
-    if (result) return result;
+    await backgroundScanPromise;
   }
   return scanProjects();
 });
