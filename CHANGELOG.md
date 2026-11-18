@@ -7,6 +7,9 @@ is auto-generated on each GitHub Release; this file is the curated summary.
 
 ## [Unreleased]
 
+### Fixed
+- **Windows release files.** v0.5.1-rust.0 shipped an extra combined x64 + arm64 installer (`DAW.Buddy.Setup.<version>.exe`, ~270 MB) next to the two per-architecture ones. Releases now contain only `…x64.exe` and `…arm64.exe`.
+
 ### Security
 - **Electron 43.4.1 → 43.8.7** — picks up the Chromium and Electron security fixes released since. Same major version; no behaviour changes.
 
