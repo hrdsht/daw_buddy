@@ -140,6 +140,13 @@ contextBridge.exposeInMainWorld('api', {
 
   auditSamples: (sessionPath) => ipcRenderer.invoke('audit:samples', sessionPath),
 
+  projectConvertTargets: () => ipcRenderer.invoke('projectConvert:targets'),
+  projectConvertSupports: (filePath) => ipcRenderer.invoke('projectConvert:supports', filePath),
+  projectConvertPickFile: () => ipcRenderer.invoke('projectConvert:pickFile'),
+  projectConvertInspect: (filePath) => ipcRenderer.invoke('projectConvert:inspect', filePath),
+  projectConvertRun: (filePath, target) => ipcRenderer.invoke('projectConvert:run', filePath, target),
+  onProjectConvertProgress: (callback) => subscribe('projectConvert:progress', callback),
+
   trimAnalyse: (inputPath) => ipcRenderer.invoke('trim:analyse', inputPath),
   trimProcess: (inputPath, startSec, endSec) =>
     ipcRenderer.invoke('trim:process', inputPath, startSec, endSec),

@@ -529,6 +529,17 @@ let smartSortMode: 'priority' | 'name' = 'priority';
 let smartManifests: any[] = [];
 
 let trimFolder: string | null = null;
+
+// Project converter (DAW → DAW)
+let pcFile: string | null = null;
+let pcSummary: any = null;
+let pcTarget: string | null = null;
+let pcBusy = false;
+let pcResult: any = null;
+let pcError: string | null = null;
+let pcProgress = '';
+let pcTargets: any[] | null = null;
+let pcFromProject: string | null = null;
 let trimFile: any = null; // { path, name, size }
 let trimStart = 0; // seconds
 let trimEnd: number | null = null; // seconds, null until a file's length is known
@@ -1235,6 +1246,7 @@ function renderView() {
   if (view === 'slowed-reverb') return renderSlowedReverbTool();
   if (view === 'suno-quantizer') return renderSunoQuantizerTool();
   if (view === 'convert') return renderStandaloneConverter();
+  if (view === 'project-convert') return renderProjectConverter(null);
   if (view === 'randomizer') return renderRandomizerTool();
   if (view === 'scale-tool') return renderScaleMidiTool();
   if (view === 'audio-midi') return mountAudioMidiTool(viewEl);
@@ -1256,6 +1268,7 @@ const TOOL_TITLES: Record<string, string> = {
   'slowed-reverb': 'Slowed + Reverb Studio',
   'suno-quantizer': 'Suno Stem Quantizer & BPM Lock',
   convert: 'Format Converter & Splitter',
+  'project-convert': 'Project converter',
   randomizer: 'Music Randomizer',
   'scale-tool': 'Scale & Raaga Detector',
   'audio-midi': 'Audio → MIDI',
@@ -4644,6 +4657,7 @@ function renderProjectToolsTab(entry) {
     if (projectTool === 'silence') return renderSilenceTab(entry);
     if (projectTool === 'trim') return renderTrimTab(entry);
     if (projectTool === 'qc') return renderQcTab(entry);
+    if (projectTool === 'convert-project') return renderProjectConverter(entry);
   }
 
   const section = el('div', 'section');
@@ -4674,6 +4688,12 @@ function renderProjectToolsTab(entry) {
       icon: 'crop',
       title: 'Trim audio',
       text: 'Drag handles on the waveform to crop a WAV to a chosen region, audition it, and save a copy.'
+    },
+    {
+      key: 'convert-project',
+      icon: 'repeat',
+      title: 'Convert to another DAW',
+      text: 'Rebuild this session for Bitwig, Studio One, Cubase, REAPER — or MIDI + stems for Ableton, FL Studio, Logic and Pro Tools.'
     },
     {
       key: 'qc',
@@ -7739,6 +7759,191 @@ async function selectTrimFile(file) {
   if (token !== trimLoadToken) return;
   if (decoded) trimPeaks = buildTrimPeaks(decoded, 1000);
   render();
+}
+
+/* ------------------------- project converter ---------------------- */
+
+/**
+ * DAW → DAW session conversion. The heavy lifting is in
+ * src/main/lib/projectconvert; this screen picks a file, shows what was found,
+ * picks a target and reports exactly what could not be carried.
+ */
+function renderProjectConverter(entry = null) {
+  // The standalone page owns the whole view; inside a project the tab already cleared it.
+  if (!entry) viewEl.innerHTML = '';
+
+  // Opening from a project defaults to that project's session file.
+  if (entry && pcFromProject !== entry.path) {
+    pcFromProject = entry.path;
+    pcSelectFile(entry.path, false);
+  }
+
+  const section = el('div', 'section');
+  section.append(headRow('Convert to another DAW', 'Rebuild a session for a different DAW — tracks, clips, MIDI, mixer and markers'));
+  section.append(
+    el(
+      'div',
+      'callout',
+      'Reads Ableton Live (.als), REAPER (.rpp) and DAWproject files. Carries tempo, time signature, markers, track names, faders, pan, mute, audio clip positions and trims, and every MIDI note. Plug-ins, automation, sends and warping are not carried — the log lists anything left behind. Your original is never touched.'
+    )
+  );
+
+  /* source */
+  const src = el('div', 'callout');
+  src.append(el('div', 'page__kicker', 'Project to convert'));
+  src.append(el('div', 'mono pc-path', pcFile || 'Choose a project file to begin'));
+  const bar = el('div', 'tabs');
+  const pick = el('button', `pill${pcFile ? ' pill--sm' : ' pill--solid'}`, pcFile ? 'Choose a different file' : 'Choose project file');
+  pick.addEventListener('click', async () => {
+    const chosen = await window.api.projectConvertPickFile();
+    if (chosen) pcSelectFile(chosen);
+  });
+  bar.append(pick);
+  if (entry && pcFile !== entry.path) {
+    const useThis = el('button', 'pill pill--sm', 'This project');
+    useThis.addEventListener('click', () => pcSelectFile(entry.path));
+    bar.append(useThis);
+  }
+  src.append(bar);
+  section.append(src);
+
+  if (pcError) section.append(el('div', 'callout callout--warn', pcError));
+
+  if (pcFile && !pcSummary && !pcError) section.append(el('p', 'muted', 'Reading project…'));
+
+  if (pcSummary) {
+    const s = pcSummary;
+    const found = el('div', 'pc-stats');
+    [
+      [s.source, 'Source'],
+      [`${formatBpm(s.bpm)} BPM`, s.timeSignature],
+      [String(s.tracks), `tracks (${s.audioTracks} audio, ${s.midiTracks} MIDI)`],
+      [String(s.audioClips), 'audio clips'],
+      [String(s.midiClips), `MIDI clips · ${s.notes} notes`],
+      [String(s.markers), 'markers']
+    ].forEach(([big, small]) => {
+      const cell = el('div', 'pc-stat');
+      cell.append(el('b', 'pc-stat__big', big), el('span', 'pc-stat__small', small));
+      found.append(cell);
+    });
+    section.append(found);
+    if (s.missingFiles) {
+      section.append(el('div', 'callout callout--warn', `${s.missingFiles} audio clip(s) point at files that could not be found. They are still placed in the new project, but will be offline until you relink them.`));
+    }
+
+    /* target */
+    section.append(el('div', 'page__kicker pc-kicker', 'Convert to'));
+    const grid = el('div', 'pc-targets');
+    (pcTargets || []).forEach((t) => {
+      const card = el('button', `pc-target${pcTarget === t.key ? ' is-on' : ''}`);
+      card.type = 'button';
+      card.setAttribute('aria-pressed', String(pcTarget === t.key));
+      card.append(el('b', 'pc-target__name', t.name));
+      card.append(el('span', 'pc-target__daws', t.daws));
+      card.append(el('span', 'pc-target__detail', t.detail));
+      card.addEventListener('click', () => {
+        pcTarget = t.key;
+        pcResult = null;
+        render();
+      });
+      grid.append(card);
+    });
+    section.append(grid);
+
+    const go = el('button', 'pill pill--solid', pcBusy ? pcProgress || 'Converting…' : 'Convert');
+    go.disabled = pcBusy || !pcTarget;
+    go.style.margin = '14px 0';
+    go.addEventListener('click', runProjectConvert);
+    section.append(go);
+  }
+
+  /* log */
+  const warnings = pcResult ? pcResult.warnings : pcSummary ? pcSummary.warnings : [];
+  if (pcResult) {
+    const done = el('div', 'callout');
+    done.append(el('div', 'page__kicker', 'Converted'));
+    done.append(el('div', 'mono pc-path', pcResult.outputPath));
+    const actions = el('div', 'tabs');
+    const reveal = el('button', 'pill pill--solid pill--sm', `Show in ${settings.fileManager}`);
+    reveal.addEventListener('click', () => window.api.reveal(pcResult.outputPath));
+    const log = el('button', 'pill pill--sm', 'Open conversion log');
+    log.addEventListener('click', () => window.api.open(pcResult.logPath));
+    actions.append(reveal, log);
+    done.append(actions);
+    section.append(done);
+  }
+  if (pcSummary) {
+    const logBox = el('div', 'callout');
+    logBox.append(el('div', 'page__kicker', warnings.length ? 'Not carried / check these' : 'Conversion log'));
+    if (!warnings.length) logBox.append(el('p', 'muted', 'Nothing in the arrangement will be left behind.'));
+    const list = el('ul', 'pc-log');
+    warnings.forEach((w) => list.append(el('li', '', w)));
+    logBox.append(list);
+    section.append(logBox);
+  }
+
+  viewEl.append(section);
+}
+
+async function pcSelectFile(filePath: string, rerender = true) {
+  pcFile = filePath;
+  pcSummary = null;
+  pcResult = null;
+  pcError = null;
+  if (!pcTargets) {
+    try {
+      pcTargets = await window.api.projectConvertTargets();
+    } catch {
+      pcTargets = [];
+    }
+  }
+  const support = await window.api.projectConvertSupports(filePath);
+  if (!support.ok) {
+    pcError = support.reason;
+    render();
+    return;
+  }
+  if (rerender) render();
+  try {
+    const summary = await window.api.projectConvertInspect(filePath);
+    if (pcFile !== filePath) return;
+    pcSummary = summary;
+  } catch (error) {
+    pcError = `Could not read this project: ${cleanIpcError(error)}`;
+  }
+  render();
+}
+
+async function runProjectConvert() {
+  if (!pcFile || !pcTarget || pcBusy) return;
+  pcBusy = true;
+  pcProgress = 'Converting…';
+  pcResult = null;
+  render();
+  try {
+    pcResult = await window.api.projectConvertRun(pcFile, pcTarget);
+    const target = (pcTargets || []).find((t) => t.key === pcTarget);
+    toast('Project converted', `${pcResult.summary.name} → ${target ? target.name : pcTarget}`);
+  } catch (error) {
+    toast('Conversion failed', cleanIpcError(error), true);
+  } finally {
+    pcBusy = false;
+    pcProgress = '';
+    render();
+  }
+}
+
+function cleanIpcError(error: any): string {
+  const message = (error && error.message) || String(error);
+  return message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+}
+
+if (window.api && window.api.onProjectConvertProgress) {
+  window.api.onProjectConvertProgress((data: { message: string }) => {
+    pcProgress = data.message;
+    const busyButton = viewEl && viewEl.querySelector('.pc-targets + button');
+    if (busyButton && pcBusy) busyButton.textContent = data.message;
+  });
 }
 
 function renderTrimTab(entry = null) {
@@ -14820,6 +15025,12 @@ function renderStandaloneTools() {
       text: 'Fix tempo drift in Suno/Udio generative stems. Auto-detects drum BPM, tracks drift, and phase-locks all stems.'
     },
     {
+      view: 'project-convert',
+      icon: 'repeat',
+      title: 'Project converter',
+      text: 'Move a session to another DAW. Opens Ableton, REAPER and DAWproject sets and writes DAWproject (Bitwig, Studio One, Cubase), REAPER, or MIDI + stems for any DAW.'
+    },
+    {
       view: 'convert',
       icon: 'scissors',
       title: 'Format Converter & Splitter',
@@ -15251,6 +15462,7 @@ const ICONS: Record<string, string> = {
   shuffle: '<polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/>',
   compass: '<circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>',
   youtube: '<path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"/><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"/>',
+  repeat: '<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>',
   settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 13.5a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-2.87 1.2V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 6 19.4l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 3.4 13.5H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.6 6l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 10.5 3.4V3a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 2.87 1.2l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.88z"/>'
 };
 

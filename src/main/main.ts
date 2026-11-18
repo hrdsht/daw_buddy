@@ -26,6 +26,7 @@ const vocalRebuild = require('./lib/vocalRebuild');
 const finisher = require('./lib/finisher');
 const audioqc = require('./lib/audioqc');
 const convert = require('./lib/convert');
+const projectConvert = require('./lib/projectconvert');
 const encoders = require('./lib/encoders');
 const { groupVersions } = require('./lib/versions');
 const dedupe = require('./lib/dedupe');
@@ -1833,6 +1834,44 @@ ipcMain.handle('output:openFolder', async (event, subfolderName?: string) => {
     return true;
   }
   return false;
+});
+
+/* ------------------------ project converter ----------------------- */
+
+ipcMain.handle('projectConvert:targets', () => projectConvert.TARGETS);
+
+ipcMain.handle('projectConvert:supports', (event, filePath: string) => projectConvert.supports(filePath));
+
+ipcMain.handle('projectConvert:pickFile', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Choose a project to convert',
+    buttonLabel: 'Convert this project',
+    filters: [
+      { name: 'Projects (Ableton, DAWproject, REAPER)', extensions: ['als', 'dawproject', 'rpp'] },
+      { name: 'All files', extensions: ['*'] }
+    ],
+    properties: ['openFile']
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  const chosen = path.resolve(result.filePaths[0]);
+  pickedFolders.add(path.dirname(chosen));
+  return chosen;
+});
+
+ipcMain.handle('projectConvert:inspect', async (event, filePath: string) => {
+  guardApproved(filePath);
+  return projectConvert.inspect(filePath);
+});
+
+ipcMain.handle('projectConvert:run', async (event, filePath: string, target: string) => {
+  guardApproved(filePath);
+  const outputRoot = await ensureToolOutputFolder('Converted Projects');
+  if (!outputRoot) throw new Error('No output folder — please set an output directory in Settings.');
+  return projectConvert.convert(filePath, target, outputRoot, (message: string) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('projectConvert:progress', { message });
+    }
+  });
 });
 
 /* --------------------------- convert ------------------------------ */
