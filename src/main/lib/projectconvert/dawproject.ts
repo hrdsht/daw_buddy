@@ -16,7 +16,7 @@ import os from 'os';
 import nodePath from 'path';
 import crypto from 'crypto';
 import { parseXml, child, children, findAll, num, attrs, escapeXml, XmlNode } from './xml';
-import { Project, Track, Clip, Note, AudioClip, emptyProject, secondsToBeats, beatsToSeconds, clamp } from './model';
+import { Project, Track, Clip, Note, AudioClip, AutoPoint, AutomationKind, emptyProject, secondsToBeats, beatsToSeconds, clamp, setLane } from './model';
 import { ZipWriter } from './zipwriter';
 import { audioInfo } from './audio';
 
@@ -51,6 +51,8 @@ export async function readDawproject(filePath: string): Promise<Project> {
 
   /* tracks by id */
   const byId = new Map<string, Track>();
+  // Mixer parameter id → which track and which lane, for automation targets.
+  const params = new Map<string, { track: Track; kind: AutomationKind; unit: string }>();
   const order: Track[] = [];
   const visitTracks = (node: XmlNode | null) => {
     for (const t of children(node, 'Track')) {
@@ -61,6 +63,10 @@ export async function readDawproject(filePath: string): Promise<Project> {
         const track = trackFromXml(t, channel);
         byId.set(t.attrs.id, track);
         if (channel?.attrs.id) byId.set(channel.attrs.id, track);
+        for (const [name, kind] of [['Volume', 'volume'], ['Pan', 'pan'], ['Mute', 'mute']] as const) {
+          const param = child(channel, name);
+          if (param?.attrs.id) params.set(param.attrs.id, { track, kind, unit: param.attrs.unit || '' });
+        }
         order.push(track);
       } else if (hasChildren) {
         project.warnings.push(`Folder "${t.attrs.name || 'Group'}" was flattened — its tracks are converted individually.`);
@@ -106,6 +112,47 @@ export async function readDawproject(filePath: string): Promise<Project> {
     project.warnings.push(`Tempo changes found — the converted project uses a constant ${project.bpm} BPM.`);
   }
 
+  let otherAutomation = 0;
+  const readPoints = (pointsNode: XmlNode, unit: string) => {
+    const target = child(pointsNode, 'Target');
+    const param = target?.attrs.parameter ? params.get(target.attrs.parameter) : null;
+    if (!param) {
+      if (pointsNode.children.length > 1) otherAutomation += 1;
+      return;
+    }
+    const timeUnit = pointsNode.attrs.timeUnit || unit;
+    const valueUnit = pointsNode.attrs.unit || param.unit;
+    const raw: { time: number; value: number; hold: boolean }[] = [];
+    for (const p of pointsNode.children) {
+      if (p.name !== 'RealPoint' && p.name !== 'BoolPoint') continue;
+      const rawTime = num(p.attrs.time);
+      let v: number;
+      if (p.name === 'BoolPoint') v = p.attrs.value === 'true' ? 1 : 0;
+      else {
+        v = num(p.attrs.value);
+        if (param.kind === 'volume' && valueUnit === 'decibel') v = 10 ** (v / 20);
+        if (param.kind === 'pan' && valueUnit !== 'linear') v = v * 2 - 1;
+        if (param.kind === 'mute') v = v >= 0.5 ? 1 : 0;
+      }
+      if (param.kind === 'volume') v = clamp(v, 0, 4);
+      if (param.kind === 'pan') v = clamp(v, -1, 1);
+      raw.push({
+        time: timeUnit === 'seconds' ? secondsToBeats(rawTime, project.bpm) : rawTime,
+        value: v,
+        hold: p.attrs.interpolation === 'hold'
+      });
+    }
+    // The model ramps volume and pan. A "hold" point keeps its value until the
+    // next point, so add a copy just before that point to make the step.
+    const points: AutoPoint[] = [];
+    raw.forEach((pt, i) => {
+      points.push({ time: pt.time, value: pt.value });
+      const next = raw[i + 1];
+      if (pt.hold && next && param.kind !== 'mute') points.push({ time: next.time, value: pt.value });
+    });
+    setLane(param.track, param.kind, points);
+  };
+
   const walkLanes = async (node: XmlNode, trackId: string | null, unit: string) => {
     const myUnit = node.attrs.timeUnit || unit;
     const myTrack = node.attrs.track || trackId;
@@ -117,12 +164,15 @@ export async function readDawproject(filePath: string): Promise<Project> {
         for (const clipNode of children(c, 'Clip')) {
           track.clips.push(...(await clipsFromXml(clipNode, 0, myUnit, project, resolveFile)));
         }
-      } else if (c.name === 'Points' && c.children.length > 1) {
-        project.warnings.push('Automation is not converted.');
+      } else if (c.name === 'Points') {
+        readPoints(c, myUnit);
       }
     }
   };
   for (const lanes of children(arrangement, 'Lanes')) await walkLanes(lanes, null, 'beats');
+  if (otherAutomation) {
+    project.warnings.push(`${otherAutomation} automation lane(s) (plug-ins, sends or MIDI expression) were not converted — only track volume, pan and mute automation is.`);
+  }
 
   project.tracks = order;
   if (findAll(child(root, 'Structure'), 'Devices').some((d) => d.children.length)) {
@@ -280,12 +330,15 @@ export async function writeDawproject(project: Project, outFile: string, options
   for (const track of project.tracks) {
     const trackId = id();
     const channelId = id();
+    const muteId = id();
+    const panId = id();
+    const volumeId = id();
     structure.push(
       `    <Track${attrs({ contentType: track.kind === 'audio' ? 'audio' : 'notes', loaded: 'true', id: trackId, name: track.name, color: track.color || undefined })}>\n` +
         `      <Channel${attrs({ audioChannels: 2, destination: masterChannelId, role: 'regular', solo: 'false', id: channelId })}>\n` +
-        `        <Mute${attrs({ value: track.mute, id: id(), name: 'Mute' })}/>\n` +
-        `        <Pan${attrs({ max: 1, min: 0, unit: 'normalized', value: fmt((track.pan + 1) / 2), id: id(), name: 'Pan' })}/>\n` +
-        `        <Volume${attrs({ max: 2, min: 0, unit: 'linear', value: fmt(track.volume), id: id(), name: 'Volume' })}/>\n` +
+        `        <Mute${attrs({ value: track.mute, id: muteId, name: 'Mute' })}/>\n` +
+        `        <Pan${attrs({ max: 1, min: 0, unit: 'normalized', value: fmt((track.pan + 1) / 2), id: panId, name: 'Pan' })}/>\n` +
+        `        <Volume${attrs({ max: 2, min: 0, unit: 'linear', value: fmt(track.volume), id: volumeId, name: 'Volume' })}/>\n` +
         `      </Channel>\n` +
         `    </Track>`
     );
@@ -319,9 +372,24 @@ export async function writeDawproject(project: Project, outFile: string, options
         if (Math.abs(clip.gain - 1) > 1e-3) notes.push('Clip gain is not part of DAWproject 1.0 — clip gain was dropped.');
       }
     }
+    const auto = track.automation || {};
+    const pointsXml: string[] = [];
+    const lane = (paramId: string, unit: string, body: string[]) =>
+      `        <Points${attrs({ id: id(), unit })}>\n          <Target${attrs({ parameter: paramId })}/>\n${body.join('\n')}\n        </Points>`;
+    if (auto.volume?.length) {
+      pointsXml.push(lane(volumeId, 'linear', auto.volume.map((p) => `          <RealPoint${attrs({ time: fmt(p.time), value: fmt(clamp(p.value, 0, 2)), interpolation: 'linear' })}/>`)));
+      if (auto.volume.some((p) => p.value > 2)) notes.push('Volume automation above +6 dB was limited to +6 dB (the DAWproject fader range).');
+    }
+    if (auto.pan?.length) {
+      pointsXml.push(lane(panId, 'normalized', auto.pan.map((p) => `          <RealPoint${attrs({ time: fmt(p.time), value: fmt((p.value + 1) / 2), interpolation: 'linear' })}/>`)));
+    }
+    if (auto.mute?.length) {
+      pointsXml.push(lane(muteId, 'linear', auto.mute.map((p) => `          <BoolPoint${attrs({ time: fmt(p.time), value: p.value >= 0.5 ? 'true' : 'false' })}/>`)));
+    }
     lanes.push(
       `      <Lanes${attrs({ track: trackId, id: id() })}>\n` +
         `        <Clips${attrs({ id: id() })}>\n${clipXml.join('\n')}${clipXml.length ? '\n' : ''}        </Clips>\n` +
+        (pointsXml.length ? pointsXml.join('\n') + '\n' : '') +
         `      </Lanes>`
     );
   }

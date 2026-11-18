@@ -9,6 +9,7 @@ is auto-generated on each GitHub Release; this file is the curated summary.
 
 ### Added
 - **Project converter — move a session to another DAW.** Open an Ableton Live set (`.als`), a REAPER project (`.rpp`) or a DAWproject file and rebuild it as a **DAWproject** (Bitwig Studio, Studio One, Cubase, Nuendo), a native **REAPER** project, or a **MIDI + stems** pack that opens in Ableton Live, FL Studio, Logic Pro, Pro Tools and any other DAW. Tempo, time signature, markers, track names, faders, pan, mute, audio clip positions and trims, and every MIDI note carry across; looped clips are unrolled. Plug-ins, automation, sends and warping don't, and the conversion log names everything left behind. Find it under **Tools → Project converter**, or on any project's **Tools** tab. FL Studio, Logic, Pro Tools, Cubase, Studio One and Bitwig sessions get a pointer to their own export path instead.
+- **Project converter now carries automation.** Track volume, pan and mute automation comes across from Ableton Live, REAPER and DAWproject into DAWproject and REAPER as editable automation. In **MIDI + stems** it is baked into each audio track's stem, and written as CC7 / CC10 on MIDI tracks. Automation that can't travel (plug-ins, sends, width, take envelopes, the Main track) is now named per track in the conversion log instead of being dropped quietly.
 
 ## [0.5.1-beta.14] — 2026-11-16
 

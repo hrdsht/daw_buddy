@@ -13,7 +13,24 @@
 
 import fsp from 'fs/promises';
 import nodePath from 'path';
-import { Project, AudioClip, beatsToSeconds, projectLength } from './model';
+import { Project, AudioClip, AutoPoint, Automation, beatsToSeconds, projectLength } from './model';
+
+/**
+ * Reads a lane at steadily increasing times without rescanning it from the
+ * start — a stem asks for a value every sample.
+ */
+export function laneCursor(points: AutoPoint[], hold: boolean): (time: number) => number {
+  let i = 0;
+  return (time: number) => {
+    while (i < points.length && points[i].time <= time) i += 1;
+    if (i === 0) return points[0].value;
+    if (i >= points.length) return points[points.length - 1].value;
+    const a = points[i - 1];
+    const b = points[i];
+    if (hold || b.time - a.time < 1e-12) return a.value;
+    return a.value + ((time - a.time) * (b.value - a.value)) / (b.time - a.time);
+  };
+}
 import { decodeWav, encodeWavFloat, Decoded } from './audio';
 
 /* ------------------------------ MIDI ------------------------------- */
@@ -51,7 +68,7 @@ function chunk(events: { tick: number; bytes: number[]; order: number }[]): Buff
 }
 
 /** Format 1 SMF: a conductor track, then one track per MIDI track. */
-export function projectToMidi(project: Project): Buffer | null {
+export function projectToMidi(project: Project, warn: (w: string) => void = () => {}): Buffer | null {
   const midiTracks = project.tracks.filter((t) => t.kind === 'midi' && t.clips.length);
   const conductor: { tick: number; bytes: number[]; order: number }[] = [];
   const usPerQuarter = Math.round(60000000 / project.bpm);
@@ -75,6 +92,10 @@ export function projectToMidi(project: Project): Buffer | null {
         events.push({ tick: off, order: 1, bytes: [0x80 | channel, n.pitch, 0] });
       }
     }
+    events.push(...controllerEvents(track.automation, channel));
+    if (track.automation?.mute?.length) {
+      warn(`Mute automation on MIDI track "${track.name}" can't be stored in a MIDI file and was left out.`);
+    }
     chunks.push(chunk(events));
   });
 
@@ -87,6 +108,36 @@ export function projectToMidi(project: Project): Buffer | null {
   return midiTracks.length || project.markers.length ? Buffer.concat([header, ...chunks]) : null;
 }
 
+/*
+ * Volume → CC7 and pan → CC10, the two controllers every DAW and General MIDI
+ * instrument understands. CC7 follows the GM curve (dB = 40·log10(cc/127)),
+ * so cc = 127·sqrt(gain); anything above unity is capped at 127. Ramps are
+ * sampled every 1/32 note and only changes are written.
+ */
+function controllerEvents(automation: Automation | undefined, channel: number) {
+  const out: { tick: number; bytes: number[]; order: number }[] = [];
+  const lanes: [AutoPoint[] | undefined, number, (v: number) => number][] = [
+    [automation?.volume, 7, (g) => Math.round(127 * Math.sqrt(Math.max(0, g)))],
+    [automation?.pan, 10, (p) => Math.round(64 + p * 63)]
+  ];
+  for (const [lane, cc, toCc] of lanes) {
+    if (!lane || !lane.length) continue;
+    const read = laneCursor(lane, false);
+    const step = 1 / 8; // beats
+    const end = lane[lane.length - 1].time;
+    let last = -1;
+    for (let t = 0; t <= end + step; t += step) {
+      const tt = Math.min(t, end);
+      const v = Math.min(127, Math.max(0, toCc(read(tt))));
+      if (v !== last) {
+        out.push({ tick: Math.round(tt * TPQ), order: 0, bytes: [0xb0 | channel, cc, v] });
+        last = v;
+      }
+    }
+  }
+  return out;
+}
+
 /* ------------------------------ stems ------------------------------ */
 
 /**
@@ -96,7 +147,13 @@ export function projectToMidi(project: Project): Buffer | null {
  * are listed in the report). Returns null when nothing on the track could be
  * rendered.
  */
-export async function renderStem(clips: AudioClip[], project: Project, totalSec: number, warn: (w: string) => void): Promise<Buffer | null> {
+export async function renderStem(
+  clips: AudioClip[],
+  project: Project,
+  totalSec: number,
+  warn: (w: string) => void,
+  automation: Automation = {}
+): Promise<Buffer | null> {
   const usable = clips.filter((c) => c.file && /\.wave?$/i.test(c.file));
   for (const c of clips) {
     if (!c.file) continue; // already reported as missing by the reader
@@ -121,7 +178,8 @@ export async function renderStem(clips: AudioClip[], project: Project, totalSec:
   const rate = [...rates.entries()].sort((a, b) => b[1] - a[1])[0][0];
   if (rates.size > 1) warn('Clips with different sample rates were resampled to match their track.');
   const stereo = [...decoded.values()].some((d) => d.channels.length > 1);
-  const outCh = stereo ? 2 : 1;
+  // Pan automation needs two channels to pan between.
+  const outCh = stereo || automation.pan?.length ? 2 : 1;
   const frames = Math.ceil(totalSec * rate);
   const out = Array.from({ length: outCh }, () => new Float32Array(frames));
 
@@ -149,14 +207,41 @@ export async function renderStem(clips: AudioClip[], project: Project, totalSec:
       }
     }
   }
+  applyAutomation(out, rate, project.bpm, automation);
   return encodeWavFloat(out, rate);
+}
+
+/**
+ * Bake volume, pan and mute automation into rendered audio. Pan is a balance
+ * control (turning right lowers the left side), the way most DAW stereo
+ * channel pans behave.
+ */
+export function applyAutomation(channels: Float32Array[], rate: number, bpm: number, automation: Automation): void {
+  const vol = automation.volume?.length ? laneCursor(automation.volume, false) : null;
+  const pan = automation.pan?.length && channels.length === 2 ? laneCursor(automation.pan, false) : null;
+  const mute = automation.mute?.length ? laneCursor(automation.mute, true) : null;
+  if (!vol && !pan && !mute) return;
+  const frames = channels[0].length;
+  const beatsPerFrame = bpm / 60 / rate;
+  for (let f = 0; f < frames; f += 1) {
+    const beat = f * beatsPerFrame;
+    let gain = vol ? vol(beat) : 1;
+    if (mute && mute(beat) >= 0.5) gain = 0;
+    if (pan) {
+      const p = pan(beat);
+      channels[0][f] *= gain * (p > 0 ? 1 - p : 1);
+      channels[1][f] *= gain * (p < 0 ? 1 + p : 1);
+    } else {
+      for (let c = 0; c < channels.length; c += 1) channels[c][f] *= gain;
+    }
+  }
 }
 
 export async function writeUniversal(project: Project, outDir: string, onProgress?: (msg: string) => void): Promise<string[]> {
   const notes: string[] = [];
   await fsp.mkdir(outDir, { recursive: true });
 
-  const midi = projectToMidi(project);
+  const midi = projectToMidi(project, (w) => notes.push(w));
   if (midi) await fsp.writeFile(nodePath.join(outDir, `${safe(project.name)}.mid`), midi);
 
   const totalSec = beatsToSeconds(projectLength(project), project.bpm) + 0.5;
@@ -168,7 +253,7 @@ export async function writeUniversal(project: Project, outDir: string, onProgres
     if (track.kind !== 'audio' || !track.clips.length) continue;
     onProgress?.(`Rendering stem: ${track.name}`);
     const audio = track.clips.filter((c): c is AudioClip => c.kind === 'audio');
-    const wav = await renderStem(audio, project, totalSec, (w) => notes.push(w));
+    const wav = await renderStem(audio, project, totalSec, (w) => notes.push(w), track.automation);
     if (wav) {
       await fsp.mkdir(stemsDir, { recursive: true });
       await fsp.writeFile(nodePath.join(stemsDir, `${String(index).padStart(2, '0')} ${safe(track.name)}.wav`), wav);
@@ -182,7 +267,14 @@ export async function writeUniversal(project: Project, outDir: string, onProgres
   }
 
   const mixer = project.tracks
-    .map((t) => `  ${t.name.padEnd(28)} ${gainDb(t.volume).padStart(8)}   pan ${panText(t.pan).padStart(5)}${t.mute ? '   MUTED' : ''}`)
+    .map((t) => {
+      const a = t.automation || {};
+      const how = t.kind === 'audio' ? 'in stem' : 'as CC';
+      const vol = a.volume?.length ? `auto (${how})` : gainDb(t.volume);
+      const pan = a.pan?.length ? `auto (${how})` : panText(t.pan);
+      const mute = a.mute?.length ? (t.kind === 'audio' ? '   mute auto (in stem)' : '') : t.mute ? '   MUTED' : '';
+      return `  ${t.name.padEnd(28)} ${vol.padStart(14)}   pan ${pan.padStart(13)}${mute}`;
+    })
     .join('\n');
   const readme = `${project.name} — converted from ${project.source} by DAW Buddy
 
@@ -200,8 +292,12 @@ HOW TO OPEN IN ANY DAW
    - Pro Tools: File > Import > MIDI (import tempo map from MIDI file).
 4. Add instruments to the MIDI tracks and set faders using the table below.
 
-Stems are 32-bit float WAV at unity gain — track faders and pan are not
-baked in so you keep full control.
+Stems are 32-bit float WAV. Track faders and pan are NOT baked in, so you
+keep full control — set them from the table below. The exception is
+automation: where a track had volume, pan or mute automation, the moves are
+baked into its stem ("in stem" below) — leave that fader at 0 dB and that
+pan centred. On MIDI tracks, volume and pan automation is written into the
+MIDI file as CC7 / CC10 ("as CC").
 
 MIXER (from the original project)
 ${mixer}

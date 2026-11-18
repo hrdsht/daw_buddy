@@ -61,11 +61,37 @@ function alsXml() {
     <Tracks>
       <AudioTrack Id="1">
         <Name><EffectiveName Value="Drums &amp; Perc" /><UserName Value="" /></Name>
+        <AutomationEnvelopes><Envelopes>
+          <AutomationEnvelope Id="0">
+            <EnvelopeTarget><PointeeId Value="100" /></EnvelopeTarget>
+            <Automation><Events>
+              <FloatEvent Id="1" Time="-63072000" Value="1" />
+              <FloatEvent Id="2" Time="4" Value="1" />
+              <FloatEvent Id="3" Time="8" Value="0.25" />
+            </Events></Automation>
+          </AutomationEnvelope>
+          <AutomationEnvelope Id="1">
+            <EnvelopeTarget><PointeeId Value="102" /></EnvelopeTarget>
+            <Automation><Events>
+              <BoolEvent Id="4" Time="-63072000" Value="true" />
+              <BoolEvent Id="5" Time="9" Value="false" />
+              <BoolEvent Id="6" Time="9.5" Value="true" />
+            </Events></Automation>
+          </AutomationEnvelope>
+          <AutomationEnvelope Id="2">
+            <EnvelopeTarget><PointeeId Value="999" /></EnvelopeTarget>
+            <Automation><Events><FloatEvent Id="7" Time="0" Value="0.1" /><FloatEvent Id="8" Time="4" Value="0.9" /></Events></Automation>
+          </AutomationEnvelope>
+          <AutomationEnvelope Id="3">
+            <EnvelopeTarget><PointeeId Value="101" /></EnvelopeTarget>
+            <Automation><Events><FloatEvent Id="9" Time="-63072000" Value="0.3" /></Events></Automation>
+          </AutomationEnvelope>
+        </Envelopes></AutomationEnvelopes>
         <DeviceChain>
           <Mixer>
-            <Volume><Manual Value="0.5" /></Volume>
-            <Pan><Manual Value="-0.25" /></Pan>
-            <Speaker><Manual Value="true" /></Speaker>
+            <Volume><Manual Value="0.5" /><AutomationTarget Id="100"><LockEnvelope Value="0" /></AutomationTarget></Volume>
+            <Pan><Manual Value="-0.25" /><AutomationTarget Id="101" /></Pan>
+            <Speaker><Manual Value="true" /><AutomationTarget Id="102" /></Speaker>
           </Mixer>
           <MainSequencer>
             <ClipSlotList />
@@ -97,11 +123,21 @@ function alsXml() {
       </AudioTrack>
       <MidiTrack Id="2">
         <Name><EffectiveName Value="Keys" /><UserName Value="Lead Keys" /></Name>
+        <AutomationEnvelopes><Envelopes>
+          <AutomationEnvelope Id="0">
+            <EnvelopeTarget><PointeeId Value="201" /></EnvelopeTarget>
+            <Automation><Events>
+              <FloatEvent Id="1" Time="-63072000" Value="0" />
+              <FloatEvent Id="2" Time="0" Value="-1" />
+              <FloatEvent Id="3" Time="4" Value="1" />
+            </Events></Automation>
+          </AutomationEnvelope>
+        </Envelopes></AutomationEnvelopes>
         <DeviceChain>
           <Mixer>
-            <Volume><Manual Value="1" /></Volume>
-            <Pan><Manual Value="0" /></Pan>
-            <Speaker><Manual Value="false" /></Speaker>
+            <Volume><Manual Value="1" /><AutomationTarget Id="200" /></Volume>
+            <Pan><Manual Value="0" /><AutomationTarget Id="201" /></Pan>
+            <Speaker><Manual Value="false" /><AutomationTarget Id="202" /></Speaker>
           </Mixer>
           <MainSequencer>
             <ClipSlotList>
@@ -208,6 +244,19 @@ async function fixture() {
     assert.equal(s.missingFiles, 0, 'stale absolute path falls back to the project folder');
     assert.ok(s.warnings.some((w) => /Session View/.test(w)));
     assert.ok(s.warnings.some((w) => /Return track "A-Reverb"/.test(w)));
+    assert.equal(s.automationLanes, 3, 'audio volume + mute, MIDI pan; the flat pan lane folds into the fader');
+    assert.ok(s.warnings.some((w) => /1 automation lane\(s\) on "Drums & Perc"/.test(w)), 'unsupported lanes are named, not dropped');
+  });
+
+  await test('automation lanes: pre-song point clamps, flat lane becomes the fader', async () => {
+    const { readAbleton } = require('../src/main/lib/projectconvert/read-ableton');
+    const p = await readAbleton(fx.als);
+    const drums = p.tracks[0];
+    assert.deepEqual(drums.automation.volume, [{ time: 0, value: 1 }, { time: 4, value: 1 }, { time: 8, value: 0.25 }]);
+    assert.deepEqual(drums.automation.mute, [{ time: 0, value: 0 }, { time: 9, value: 1 }, { time: 9.5, value: 0 }]);
+    assert.equal(drums.automation.pan, undefined);
+    near(drums.pan, 0.3);
+    assert.deepEqual(p.tracks[1].automation.pan, [{ time: 0, value: -1 }, { time: 4, value: 1 }]);
   });
 
   await test('Ableton → REAPER keeps names, positions, offsets and notes', async () => {
@@ -217,15 +266,28 @@ async function fixture() {
     assert.match(text, /NAME "Drums & Perc"/);
     assert.match(text, /NAME "Lead Keys"/);
     assert.match(text, /MARKER 2 4 "Drop"/);
-    assert.match(text, /VOLPAN 0.5 -0.25/);
+    assert.match(text, /VOLPAN 0.5 0.3/, "the flat pan lane wins over the parked fader");
     assert.match(text, /MUTESOLO 1 0 0/);
     // Unwarped clip: at beat 4 = 2 s, starts 1 s into the file.
     assert.match(text, /POSITION 2\n\s+LENGTH 2\n\s+NAME "Unwarped"\n\s+SOFFS 1\n/);
     // Warped clip: content beat 2 → 1 s through the warp markers.
     assert.match(text, /POSITION 4\n\s+LENGTH 1\n\s+NAME "Warped"\n\s+SOFFS 1\n\s+VOLPAN 0.5/);
 
+    // Envelopes, in seconds at 120 BPM.
+    assert.match(text, /<VOLENV2\n[\s\S]*?PT 0 1 0\n\s+PT 2 1 0\n\s+PT 4 0.25 0\n/);
+    const { PAN_ENV_SIGN, MUTE_ENV_MUTED } = require('../src/main/lib/projectconvert/reaper');
+    assert.ok(text.includes(`PT 0 ${-1 * PAN_ENV_SIGN} 0`), 'pan envelope written with REAPER sign');
+    assert.ok(text.includes(`PT 4.5 ${MUTE_ENV_MUTED} 1`), 'mute envelope is a square step');
+
+    const { readReaper } = require('../src/main/lib/projectconvert/reaper');
+    const rp = await readReaper(r.outputPath);
+    assert.deepEqual(rp.tracks[0].automation.volume, [{ time: 0, value: 1 }, { time: 4, value: 1 }, { time: 8, value: 0.25 }]);
+    assert.deepEqual(rp.tracks[0].automation.mute, [{ time: 0, value: 0 }, { time: 9, value: 1 }, { time: 9.5, value: 0 }]);
+    assert.deepEqual(rp.tracks[1].automation.pan, [{ time: 0, value: -1 }, { time: 4, value: 1 }]);
+
     const back = await pc.inspect(r.outputPath);
     assert.equal(back.tracks, 2);
+    assert.equal(back.automationLanes, 3);
     assert.equal(back.notes, 5);
     assert.equal(back.audioClips, 2);
     assert.equal(back.missingFiles, 0);
@@ -241,6 +303,15 @@ async function fixture() {
     const xml = zip.readEntry(buf, zip.listEntries(buf).find((e) => e.name === 'project.xml')).toString('utf8');
     assert.match(xml, /<TimeSignature denominator="4" numerator="3"/);
     assert.match(xml, /<Marker time="8" name="Drop"\/>/);
+    const volId = xml.match(/<Volume [^>]*id="(id\d+)" name="Volume"\/>/)[1];
+    assert.match(xml, new RegExp(`<Points id="id\\d+" unit="linear">\\s*<Target parameter="${volId}"/>\\s*<RealPoint time="0" value="1" interpolation="linear"/>`));
+    assert.match(xml, /<BoolPoint time="9" value="true"\/>/);
+
+    const { readDawproject } = require('../src/main/lib/projectconvert/dawproject');
+    const dp = await readDawproject(r.outputPath);
+    assert.deepEqual(dp.tracks[0].automation.volume, [{ time: 0, value: 1 }, { time: 4, value: 1 }, { time: 8, value: 0.25 }]);
+    assert.deepEqual(dp.tracks[0].automation.mute, [{ time: 0, value: 0 }, { time: 9, value: 1 }, { time: 9.5, value: 0 }]);
+    assert.deepEqual(dp.tracks[1].automation.pan, [{ time: 0, value: -1 }, { time: 4, value: 1 }]);
 
     const back = await pc.inspect(r.outputPath);
     assert.equal(back.bpm, 120);
@@ -272,9 +343,15 @@ async function fixture() {
     near(at(1.5), 0, 1e-9); // before any clip: silence
     // Unwarped clip starts at 2 s with source offset 1 s → source frame 1000 → ramp value 0.
     near(at(2), ((1000 % 1000) * 10) / 32768, 1e-6);
-    near(at(2.25), ((1250 % 1000) * 10) / 32768, 1e-6);
-    // Warped clip at 4 s, offset 1 s, gain 0.5.
-    near(at(4.1), (((1100 % 1000) * 10) / 32768) * 0.5, 1e-6);
+    near(at(2.25), (((1250 % 1000) * 10) / 32768) * (1 - 0.75 * (0.5 / 4)), 1e-6); // ramp has begun
+    // Volume automation is baked in: beat 6.2 (3.1 s) is part-way down the
+    // 1 → 0.25 ramp between beats 4 and 8.
+    near(at(3.1), ((2100 % 1000) * 10 / 32768) * (1 - 0.75 * (2.2 / 4)), 1e-6);
+    // Warped clip at 4 s, offset 1 s, clip gain 0.5, automation at 0.25.
+    near(at(4.1), (((1100 % 1000) * 10) / 32768) * 0.5 * 0.25, 1e-6);
+    // Mute automation: silent between beat 9 and 9.5 (4.5–4.75 s), back after.
+    near(at(4.6), 0, 1e-12);
+    assert.ok(Math.abs(at(4.8)) > 0, 'unmuted again after the mute step');
 
     const mid = await fs.readFile(path.join(r.outputPath, 'Song.mid'));
     assert.equal(mid.toString('ascii', 0, 4), 'MThd');
@@ -282,6 +359,54 @@ async function fixture() {
     assert.equal(mid.readUInt16BE(10), 2, 'conductor + one MIDI track');
     assert.ok(mid.includes(Buffer.from('Lead Keys')));
     assert.ok(mid.includes(Buffer.from('Drop')));
+    // Pan automation on the MIDI track becomes CC10: hard left (1) at the start …
+    assert.ok(mid.includes(Buffer.from([0x00, 0xb0, 10, 1])), 'CC10 starts hard left');
+    // … and reaches hard right (127) by beat 4.
+    assert.ok(mid.includes(Buffer.from([0xb0, 10, 127])), 'CC10 reaches hard right');
+    const readme = await fs.readFile(path.join(r.outputPath, 'READ ME — how to open.txt'), 'utf8');
+    assert.match(readme, /Drums & Perc\s+auto \(in stem\)/);
+  });
+
+  await test('DAWproject from other DAWs: hold steps, decibel volume, other lanes named', async () => {
+    const { ZipWriter } = require('../src/main/lib/projectconvert/zipwriter');
+    const xml = `<?xml version="1.0"?>
+<Project version="1.0">
+  <Transport><Tempo unit="bpm" value="100"/></Transport>
+  <Structure>
+    <Track contentType="audio" id="t1" name="Vox">
+      <Channel role="regular" id="c1">
+        <Volume unit="decibel" value="0" id="v1"/>
+        <Pan unit="normalized" value="0.5" id="p1"/>
+        <Mute value="false" id="m1"/>
+        <Devices><Vst3Plugin id="fx1"><Parameters><RealParameter id="fxp1" value="0.2"/></Parameters></Vst3Plugin></Devices>
+      </Channel>
+    </Track>
+  </Structure>
+  <Arrangement>
+    <Lanes timeUnit="beats">
+      <Lanes track="t1">
+        <Points unit="decibel"><Target parameter="v1"/>
+          <RealPoint time="0" value="-6.0206" interpolation="hold"/>
+          <RealPoint time="4" value="0" interpolation="linear"/>
+        </Points>
+        <Points><Target parameter="fxp1"/><RealPoint time="0" value="0"/><RealPoint time="1" value="1"/></Points>
+      </Lanes>
+    </Lanes>
+  </Arrangement>
+</Project>`;
+    const z = new ZipWriter();
+    z.add('project.xml', Buffer.from(xml));
+    const file = path.join(fx.dir, 'Other.dawproject');
+    await fs.writeFile(file, z.toBuffer());
+    const { readDawproject } = require('../src/main/lib/projectconvert/dawproject');
+    const p = await readDawproject(file);
+    const vol = p.tracks[0].automation.volume;
+    assert.equal(vol.length, 3, 'hold adds a step point');
+    near(vol[0].value, 0.5, 1e-4);
+    near(vol[1].value, 0.5, 1e-4);
+    assert.equal(vol[1].time, 4);
+    near(vol[2].value, 1, 1e-9);
+    assert.ok(p.warnings.some((w) => /1 automation lane\(s\) \(plug-ins/.test(w)));
   });
 
   await test('closed formats explain the way out', () => {
