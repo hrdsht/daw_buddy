@@ -8,7 +8,7 @@
   "scripts": {
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "build": "npm run clean && tsc && npm run build:renderer && node scripts/copy-assets.js && node scripts/third-party-notices.js",
-    "build:renderer": "esbuild src/renderer/app.ts src/renderer/mini.ts src/renderer/splash.ts src/renderer/analysis-worker.ts src/renderer/audio-midi-worker.ts --bundle --outdir=dist/renderer --format=iife --platform=browser --target=es2020 --loader:.bin=binary",
+    "build:renderer": "esbuild src/renderer/tauri-bridge.ts src/renderer/app.ts src/renderer/mini.ts src/renderer/splash.ts src/renderer/analysis-worker.ts src/renderer/audio-midi-worker.ts --bundle --outdir=dist/renderer --format=iife --platform=browser --target=es2020 --loader:.bin=binary",
     "start": "node scripts/launch.js",
     "start:dev": "npm run build && electron .",
     "start:debug": "npm run build && electron --remote-debugging-port=9222 .",
@@ -20,7 +20,11 @@
     "dist": "npm run build && electron-builder",
     "dist:win": "npm run build && electron-builder --win",
     "dist:mac": "npm run build && electron-builder --mac",
-    "dist:linux": "npm run build && electron-builder --linux"
+    "dist:linux": "npm run build && electron-builder --linux",
+    "rust:test": "cargo test --workspace --exclude daw-buddy",
+    "rust:parity": "tsx scripts/rust-parity.js",
+    "rust:run": "npm run build:renderer && node scripts/copy-assets.js && cargo run -p daw-buddy",
+    "rust:smoke": "npm run build:renderer && node scripts/copy-assets.js && cargo build -p daw-buddy && node scripts/tauri-smoke.js"
   },
   "dependencies": {
     "chokidar": "^5.0.0",

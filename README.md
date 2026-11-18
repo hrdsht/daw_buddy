@@ -384,6 +384,20 @@ npm run dist     package an installer
 See `docs/BUILD_NOTES.md` and `docs/proposals/` for the architecture, roadmap,
 and design decisions.
 
+### The Rust build (in progress)
+
+DAW Buddy is moving to a Rust back end with [Tauri](https://tauri.app): the same screens, a much smaller and faster app. The Electron app keeps shipping until the Rust build can do everything it does — see [proposal 0007](docs/proposals/0007-rust-tauri-port.md) for the plan and what's ported so far.
+
+To try it you need [Rust](https://rustup.rs). On Linux you also need the WebKitGTK libraries (`sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev`).
+
+```
+npm run rust:run      # build the UI and start the Rust app
+npm run rust:test     # Rust unit tests
+npm run rust:parity   # check Rust and TypeScript give identical results
+```
+
+The Rust build shares your settings and notes with the Electron app. Don't run both at once.
+
 ## 🤝 Authors & Credits
 
 - **Vision, Direction & Artist:** [BA55ICK](https://github.com/ba55ick) — Conceived, designed, and envisioned DAW Buddy from firsthand studio production workflows.

@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'; media-src 'self' blob:"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'; media-src 'self' blob:; connect-src 'self' ipc: http://ipc.localhost"
     />
     <title>DAW Buddy</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -948,6 +948,7 @@
 
     <div id="toasts" class="toasts" aria-live="assertive"></div>
 
+    <script src="tauri-bridge.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

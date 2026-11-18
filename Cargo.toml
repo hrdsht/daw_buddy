@@ -1,0 +1,12 @@
+[workspace]
+resolver = "2"
+members = ["crates/projectconvert", "src-tauri"]
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
