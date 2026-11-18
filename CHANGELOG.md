@@ -7,6 +7,10 @@ is auto-generated on each GitHub Release; this file is the curated summary.
 
 ## [Unreleased]
 
+## [0.5.1-rust.0] — 2026-11-18
+
+First release since the Rust port began. The installers are still the Electron app; the Rust (Tauri) build is a developer preview — see proposal 0007.
+
 ### Added
 - **Native Windows on ARM.** Releases now include a separate `arm64` Windows installer for Snapdragon / Copilot+ PCs, which previously ran DAW Buddy through x64 emulation. The x64 installer is now named with its architecture too.
 - **Rust build (preview, for developers).** DAW Buddy is moving to a Rust back end with Tauri — same screens, smaller and faster app (proposal 0007). This first slice runs the app shell, settings, notes and the whole **project converter** in Rust, byte-for-byte identical to the current converter. Everything else still lives in the Electron app, which keeps shipping until the Rust build catches up. Try it with `npm run rust:run`.
@@ -358,7 +362,8 @@ First public (pre-release) build.
 - Bounce watcher with optional Discord/Slack/Zapier webhooks.
 - Cross-platform installers built automatically per release.
 
-[Unreleased]: https://github.com/hrdsht/daw_buddy/compare/v0.5.1-beta.11...HEAD
+[Unreleased]: https://github.com/hrdsht/daw_buddy/compare/v0.5.1-rust.0...HEAD
+[0.5.1-rust.0]: https://github.com/hrdsht/daw_buddy/releases/tag/v0.5.1-rust.0
 [0.5.1-beta.11]: https://github.com/hrdsht/daw_buddy/releases/tag/v0.5.1-beta.11
 [0.5.1-beta.10]: https://github.com/hrdsht/daw_buddy/releases/tag/v0.5.1-beta.10
 [0.5.1-beta.9]: https://github.com/hrdsht/daw_buddy/releases/tag/v0.5.1-beta.9
