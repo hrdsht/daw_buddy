@@ -12,11 +12,11 @@
  * file itself knows nothing about beats.
  *
  * What travels: tempo, time signature, markers, tracks (name, volume, pan,
- * mute, colour), audio clips (file, position, length, start offset, gain) and
- * MIDI clips (notes with velocity). What doesn't: plugins and their settings,
- * automation, sends/routing, warping/time-stretch and tempo changes. Those are
- * proprietary per DAW and no converter — paid or not — moves them reliably.
- * Every reader records what it had to leave behind in `warnings`.
+ * mute, colour), track volume / pan / mute automation, audio clips (file,
+ * position, length, start offset, gain) and MIDI clips (notes with velocity).
+ * What doesn't: plug-ins and their settings or automation, sends/routing,
+ * warping/time-stretch and tempo changes. Every reader records what it had to
+ * leave behind in `warnings`.
  */
 
 export interface Note {
@@ -52,6 +52,27 @@ export interface MidiClip {
 
 export type Clip = AudioClip | MidiClip;
 
+/**
+ * One automation breakpoint. `value` is in the same unit as the matching Track
+ * field: volume = linear gain, pan = -1..1, mute = 1 (muted) or 0 (playing).
+ */
+export interface AutoPoint {
+  time: number; // beats
+  value: number;
+}
+
+/**
+ * Volume and pan ramp linearly between points; mute holds each value until
+ * the next point. Two points at the same time make an instant jump.
+ */
+export interface Automation {
+  volume?: AutoPoint[];
+  pan?: AutoPoint[];
+  mute?: AutoPoint[];
+}
+
+export type AutomationKind = keyof Automation;
+
 export interface Track {
   name: string;
   kind: 'audio' | 'midi';
@@ -63,6 +84,7 @@ export interface Track {
   /** '#rrggbb' or null. */
   color: string | null;
   clips: Clip[];
+  automation?: Automation;
 }
 
 export interface Marker {
@@ -102,12 +124,67 @@ export function projectLength(project: Project): number {
   return end;
 }
 
+/** Sort and clamp to the start of the song. */
+export function cleanLane(points: AutoPoint[]): AutoPoint[] | undefined {
+  const sorted = points
+    .filter((p) => Number.isFinite(p.time) && Number.isFinite(p.value))
+    .map((p, i) => ({ ...p, time: Math.max(0, p.time), i }))
+    .sort((a, b) => a.time - b.time || a.i - b.i)
+    .map(({ time, value }) => ({ time, value }));
+  // Keep only the LAST point among several that clamped to time 0 — earlier
+  // ones (Ableton's "before the song" default) are overridden by it.
+  let firstAfterZero = 0;
+  while (firstAfterZero + 1 < sorted.length && sorted[firstAfterZero + 1].time === 0) firstAfterZero += 1;
+  const lane = sorted.slice(firstAfterZero);
+  return lane.length ? lane : undefined;
+}
+
+/**
+ * Attach a lane to a track. One point is not movement, just a level: it
+ * becomes the track's static value. When the automation is active the DAW
+ * ignores the fader, so the lane's value wins either way.
+ */
+export function setLane(track: Track, kind: AutomationKind, points: AutoPoint[]): void {
+  const lane = cleanLane(points);
+  if (!lane) return;
+  const flat = lane.every((p) => Math.abs(p.value - lane[0].value) < 1e-9);
+  if (flat) {
+    if (kind === 'volume') track.volume = lane[0].value;
+    else if (kind === 'pan') track.pan = lane[0].value;
+    else track.mute = lane[0].value >= 0.5;
+    return;
+  }
+  track.automation = track.automation || {};
+  track.automation[kind] = lane;
+}
+
+/** Value of a lane at a time. `hold` = step (mute); otherwise linear. */
+export function valueAt(points: AutoPoint[], time: number, hold: boolean): number {
+  if (time <= points[0].time) return points[0].value;
+  for (let i = 1; i < points.length; i += 1) {
+    const b = points[i];
+    if (time < b.time) {
+      const a = points[i - 1];
+      if (hold || b.time - a.time < 1e-12) return a.value;
+      return a.value + ((time - a.time) * (b.value - a.value)) / (b.time - a.time);
+    }
+  }
+  return points[points.length - 1].value;
+}
+
+export function hasAutomation(track: Track): boolean {
+  const a = track.automation;
+  return !!a && !!((a.volume && a.volume.length) || (a.pan && a.pan.length) || (a.mute && a.mute.length));
+}
+
 export function summarise(project: Project) {
   let audioClips = 0;
   let midiClips = 0;
   let notes = 0;
   let missingFiles = 0;
+  let automationLanes = 0;
   for (const track of project.tracks) {
+    for (const lane of Object.values(track.automation || {})) if (lane && lane.length) automationLanes += 1;
     for (const clip of track.clips) {
       if (clip.kind === 'audio') {
         audioClips += 1;
@@ -130,6 +207,7 @@ export function summarise(project: Project) {
     midiClips,
     notes,
     markers: project.markers.length,
+    automationLanes,
     missingFiles,
     lengthBeats: projectLength(project),
     warnings: project.warnings

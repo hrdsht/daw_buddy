@@ -7784,7 +7784,7 @@ function renderProjectConverter(entry = null) {
     el(
       'div',
       'callout',
-      'Reads Ableton Live (.als), REAPER (.rpp) and DAWproject files. Carries tempo, time signature, markers, track names, faders, pan, mute, audio clip positions and trims, and every MIDI note. Plug-ins, automation, sends and warping are not carried — the log lists anything left behind. Your original is never touched.'
+      'Reads Ableton Live (.als), REAPER (.rpp) and DAWproject files. Carries tempo, time signature, markers, track names, faders, pan, mute, volume / pan / mute automation, audio clip positions and trims, and every MIDI note. Plug-ins and their automation, sends and warping are not carried — the log lists anything left behind. Your original is never touched.'
     )
   );
 
@@ -7820,7 +7820,8 @@ function renderProjectConverter(entry = null) {
       [String(s.tracks), `tracks (${s.audioTracks} audio, ${s.midiTracks} MIDI)`],
       [String(s.audioClips), 'audio clips'],
       [String(s.midiClips), `MIDI clips · ${s.notes} notes`],
-      [String(s.markers), 'markers']
+      [String(s.markers), 'markers'],
+      [String(s.automationLanes || 0), 'automation lanes']
     ].forEach(([big, small]) => {
       const cell = el('div', 'pc-stat');
       cell.append(el('b', 'pc-stat__big', big), el('span', 'pc-stat__small', small));

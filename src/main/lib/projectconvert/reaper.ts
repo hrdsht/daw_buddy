@@ -11,7 +11,20 @@
 
 import fsp from 'fs/promises';
 import nodePath from 'path';
-import { Project, Track, AudioClip, MidiClip, Note, emptyProject, secondsToBeats, beatsToSeconds, clamp } from './model';
+import { Project, Track, AudioClip, MidiClip, Note, AutoPoint, AutomationKind, emptyProject, secondsToBeats, beatsToSeconds, clamp, setLane } from './model';
+
+/*
+ * Envelope value conventions. Volume (VOLENV2) is linear gain, as in VOLPAN.
+ * Pan and mute envelopes do not use the same sense as the track's VOLPAN /
+ * MUTESOLO lines. These two constants hold that mapping in one place.
+ *
+ *   PAN_ENV_SIGN   envelope value = PAN_ENV_SIGN × model pan (-1 left … 1 right)
+ *   MUTE_ENV_MUTED envelope value that means "muted" (the other is 1 - it)
+ */
+export const PAN_ENV_SIGN = -1;
+export const MUTE_ENV_MUTED = 0;
+
+const ENVELOPES: Record<string, AutomationKind> = { VOLENV2: 'volume', PANENV2: 'pan', MUTEENV: 'mute' };
 import { FileFinder } from './files';
 
 /* ================================================================== */
@@ -117,6 +130,8 @@ export async function readReaper(filePath: string): Promise<Project> {
       project.warnings.push('Instruments and effects are not converted — re-insert them in the new DAW.');
     }
 
+    readEnvelopes(tb, track, project);
+
     let midi = 0;
     let audio = 0;
     for (const ib of tb.blocks.filter((b) => b.head[0] === 'ITEM')) {
@@ -219,6 +234,49 @@ async function itemToClip(ib: Block, project: Project, finder: FileFinder, track
   };
 }
 
+function readEnvelopes(tb: Block, track: Track, project: Project): void {
+  let other = 0;
+  let curved = false;
+  for (const env of tb.blocks) {
+    const kind = ENVELOPES[env.head[0]];
+    if (!kind) continue;
+    if (n(line(env, 'ACT')?.[1], 1) === 0) continue; // envelope switched off
+    if (kind === 'volume' && n(line(env, 'VOLTYPE')?.[1]) === 1) {
+      project.warnings.push(`Volume automation on "${track.name}" uses fader scaling and was not converted.`);
+      continue;
+    }
+    const points: AutoPoint[] = [];
+    const pts = env.lines.filter((l) => l[0] === 'PT');
+    pts.forEach((l, i) => {
+      const time = secondsToBeats(n(l[1]), project.bpm);
+      const raw = n(l[2]);
+      const shape = n(l[3]);
+      let value: number;
+      if (kind === 'volume') value = clamp(raw, 0, 4);
+      else if (kind === 'pan') value = clamp(raw * PAN_ENV_SIGN, -1, 1);
+      else value = Math.abs(raw - MUTE_ENV_MUTED) < 0.5 ? 1 : 0;
+      points.push({ time, value });
+      // Shape 1 is "square": hold until the next point.
+      const next = pts[i + 1];
+      if (shape === 1 && next && kind !== 'mute') points.push({ time: secondsToBeats(n(next[1]), project.bpm), value });
+      if (shape !== 0 && shape !== 1) curved = true;
+    });
+    setLane(track, kind, points);
+  }
+  const countOther = (b: Block) => {
+    for (const child of b.blocks) {
+      const name = child.head[0];
+      if (!ENVELOPES[name] && /ENV/.test(name) && child.lines.some((l) => l[0] === 'PT')) other += 1;
+      countOther(child);
+    }
+  };
+  countOther(tb);
+  if (curved) project.warnings.push(`Curved automation on "${track.name}" was converted as straight ramps.`);
+  if (other) {
+    project.warnings.push(`${other} automation lane(s) on "${track.name}" (plug-ins, sends, width, pre-FX or take envelopes) were not converted — only volume, pan and mute automation is.`);
+  }
+}
+
 /* ================================================================== */
 /* write                                                              */
 /* ================================================================== */
@@ -267,6 +325,27 @@ export function writeReaperText(project: Project): string {
     }
     out.push(`    VOLPAN ${f(track.volume)} ${f(track.pan)} -1 -1 1`);
     out.push(`    MUTESOLO ${track.mute ? 1 : 0} 0 0`);
+    const auto = track.automation || {};
+    for (const [block, kind] of Object.entries(ENVELOPES)) {
+      const lane = auto[kind];
+      if (!lane || !lane.length) continue;
+      const hold = kind === 'mute';
+      out.push(`    <${block}`);
+      out.push('      ACT 1 -1');
+      out.push('      VIS 1 1 1');
+      out.push('      LANEHEIGHT 0 0');
+      out.push('      ARM 0');
+      out.push(`      DEFSHAPE ${hold ? 1 : 0} -1 -1`);
+      for (const p of lane) {
+        const sec = f(beatsToSeconds(p.time, project.bpm));
+        let v: number;
+        if (kind === 'volume') v = p.value;
+        else if (kind === 'pan') v = p.value * PAN_ENV_SIGN;
+        else v = p.value >= 0.5 ? MUTE_ENV_MUTED : 1 - MUTE_ENV_MUTED;
+        out.push(`      PT ${sec} ${f(v)} ${hold ? 1 : 0}`);
+      }
+      out.push('    >');
+    }
     for (const clip of track.clips) {
       out.push('    <ITEM');
       out.push(`      POSITION ${f(beatsToSeconds(clip.start, project.bpm))}`);

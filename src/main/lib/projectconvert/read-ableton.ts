@@ -20,7 +20,7 @@ import fsp from 'fs/promises';
 import nodePath from 'path';
 import zlib from 'zlib';
 import { parseXml, child, children, path, findAll, value, num, XmlNode } from './xml';
-import { Project, Track, AudioClip, MidiClip, Note, emptyProject, clamp } from './model';
+import { Project, Track, AudioClip, MidiClip, Note, AutoPoint, emptyProject, clamp, setLane } from './model';
 import { FileFinder } from './files';
 
 const STRETCH_TOLERANCE = 0.002;
@@ -48,6 +48,14 @@ export async function readAbleton(filePath: string): Promise<Project> {
   }
   const sig = num(value(masterMixer, 'TimeSignature', 'Manual'), NaN);
   if (Number.isFinite(sig)) project.timeSignature = decodeTimeSignature(sig);
+
+  const masterOther = envelopesOf(master).filter((env) => {
+    const id = pointeeId(env);
+    return id !== automationTargetId(path(masterMixer, 'Tempo')) && id !== automationTargetId(path(masterMixer, 'TimeSignature'));
+  });
+  if (masterOther.length) {
+    project.warnings.push(`${masterOther.length} automation lane(s) on the Main track were not converted — only track volume, pan and mute automation is.`);
+  }
 
   /* locators */
   for (const locator of findAll(path(liveSet, 'Locators', 'Locators'), 'Locator')) {
@@ -104,6 +112,8 @@ export async function readAbleton(filePath: string): Promise<Project> {
         if (clip) track.clips.push(clip);
       }
     }
+
+    readTrackAutomation(trackNode, mixer, track, project);
 
     if (findAll(trackNode, 'PluginDevice').length || findAll(path(trackNode, 'DeviceChain', 'DeviceChain'), 'Devices').some((d) => d.children.length)) {
       project.warnings.push('Instruments and effects (plugins and Live devices) are not converted — re-insert them in the new DAW.');
@@ -356,4 +366,63 @@ function stripExt(name: string): string {
 
 function round(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+/* ---------------------------- automation --------------------------- */
+
+/*
+ * Automation lives beside the mixer, not inside it: each mixer parameter has
+ * an <AutomationTarget Id="N">, and the track's <AutomationEnvelopes> holds
+ * envelopes whose <EnvelopeTarget><PointeeId Value="N"/> point back at it.
+ * Events are in arrangement beats. The first event usually sits at a huge
+ * negative time — that's the value "before the song", clamped to 0 here.
+ */
+
+function automationTargetId(param: XmlNode | null): string | null {
+  const target = child(param, 'AutomationTarget');
+  return target ? target.attrs.Id || null : null;
+}
+
+function envelopesOf(trackNode: XmlNode | null): XmlNode[] {
+  return findAll(path(trackNode, 'AutomationEnvelopes', 'Envelopes'), 'AutomationEnvelope');
+}
+
+function pointeeId(env: XmlNode): string | null {
+  return value(env, 'EnvelopeTarget', 'PointeeId');
+}
+
+function readTrackAutomation(trackNode: XmlNode, mixer: XmlNode | null, track: Track, project: Project): void {
+  const ids = {
+    volume: automationTargetId(path(mixer, 'Volume')),
+    pan: automationTargetId(path(mixer, 'Pan')),
+    mute: automationTargetId(path(mixer, 'Speaker'))
+  };
+  let other = 0;
+  let curved = false;
+  for (const env of envelopesOf(trackNode)) {
+    const id = pointeeId(env);
+    const kind = id === null ? null : id === ids.volume ? 'volume' : id === ids.pan ? 'pan' : id === ids.mute ? 'mute' : null;
+    if (!kind) {
+      other += 1;
+      continue;
+    }
+    const points: AutoPoint[] = [];
+    if (kind === 'mute') {
+      for (const ev of findAll(env, 'BoolEvent')) {
+        // Speaker on = playing, so muted is the opposite.
+        points.push({ time: num(ev.attrs.Time), value: ev.attrs.Value === 'true' ? 0 : 1 });
+      }
+    } else {
+      for (const ev of findAll(env, 'FloatEvent')) {
+        if (ev.attrs.CurveControl1X !== undefined || ev.attrs.CurveControl1Y !== undefined) curved = true;
+        const v = num(ev.attrs.Value);
+        points.push({ time: num(ev.attrs.Time), value: kind === 'volume' ? clamp(v, 0, 4) : clamp(v, -1, 1) });
+      }
+    }
+    setLane(track, kind, points);
+  }
+  if (curved) project.warnings.push(`Curved automation on "${track.name}" was converted as straight ramps.`);
+  if (other) {
+    project.warnings.push(`${other} automation lane(s) on "${track.name}" (plug-ins, devices or sends) were not converted — only volume, pan and mute automation is.`);
+  }
 }

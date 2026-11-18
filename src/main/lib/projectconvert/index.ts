@@ -10,6 +10,9 @@
  *           REAPER      → REAPER
  *           MIDI+stems  → Ableton Live, FL Studio, Logic, Pro Tools, any DAW
  *
+ * Track volume, pan and mute automation travels to every target (baked into
+ * stems / written as CC7 and CC10 for MIDI + stems).
+ *
  * Every conversion writes a log naming what could not be carried, instead of
  * dropping it quietly.
  */
@@ -133,15 +136,15 @@ function logText(source: string, target: string, s: ReturnType<typeof summarise>
     '',
     `Tempo ${s.bpm} BPM · ${s.timeSignature}`,
     `${s.tracks} tracks (${s.audioTracks} audio, ${s.midiTracks} MIDI)`,
-    `${s.audioClips} audio clips · ${s.midiClips} MIDI clips · ${s.notes} notes · ${s.markers} markers`,
+    `${s.audioClips} audio clips · ${s.midiClips} MIDI clips · ${s.notes} notes · ${s.markers} markers · ${s.automationLanes} automation lanes`,
     '',
     warnings.length ? 'NOT CARRIED / CHECK THESE' : 'Everything in the arrangement was carried.',
     ...warnings.map((w) => `  - ${w}`),
     '',
     'Always carried when present: tempo, time signature, markers, track names,',
-    'fader, pan, mute, colours (where the source has them), audio clip positions',
-    'and trims, MIDI notes and velocities.',
-    'Never carried by this converter: plug-ins and their settings, automation,',
+    'fader, pan, mute, colours (where the source has them), track volume / pan /',
+    'mute automation, audio clip positions and trims, MIDI notes and velocities.',
+    'Never carried by this converter: plug-ins and their settings or automation,',
     'sends/buses, warping/time-stretch, tempo changes.',
     ''
   ].join('\n');
