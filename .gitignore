@@ -44,6 +44,12 @@ website/
 *.aiff
 *.flac
 
+# AI agent / editor tooling — kept locally, never published
+.agents/
+.cursor/
+.impeccable/
+skills-lock.json
+
 # Local memory & AI conversation files
 CLAUDE.md
 memory.md
@@ -66,7 +72,7 @@ TREE-*.md
 DAW_Buddy_Interactive_Showcase.html
 *.showcase.html
 
-# External media never belongs in the repo (see .agents/rules/assets-policy.md).
+# External media never belongs in the repo (see the local assets policy).
 # Keep sample/audio assets in $DAWBUDDY_ASSETS, outside every project checkout.
 *.wav
 *.mp3
