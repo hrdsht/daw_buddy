@@ -96,7 +96,8 @@ Grab a ready-to-run installer from the **[Releases page](https://github.com/hrds
 | Platform | File to download |
 |---|---|
 | **1-Click Free Package (All OS)** | **[Get on Gumroad](https://7675947827359.gumroad.com/l/daw_buddy)** |
-| **Windows** | `DAW.Buddy.Setup.<version>.exe` (or run `scripts/DAW Buddy.bat`) |
+| **Windows (most PCs)** | `DAW.Buddy.Setup.<version>.x64.exe` (or run `scripts/DAW Buddy.bat`) |
+| **Windows on ARM** (Snapdragon / Surface Pro X / Copilot+ PCs) | `DAW.Buddy.Setup.<version>.arm64.exe` |
 | **macOS — Apple Silicon** | `DAW.Buddy-<version>-arm64.dmg` (or run `scripts/DAW Buddy.command`) |
 | **macOS — Intel** | `DAW.Buddy-<version>.dmg` |
 | **Linux** | `.AppImage` (portable), or `.deb` / `.rpm` (or run `scripts/DAW Buddy.sh`) |
