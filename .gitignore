@@ -85,3 +85,9 @@ DAW_Buddy_Interactive_Showcase.html
 # Whitelist bundled app assets
 !src/renderer/assets/metronome/**
 !src/renderer/assets/**
+
+# Rust build output
+/target/
+
+# Tauri generated schemas
+/src-tauri/gen/
