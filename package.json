@@ -35,7 +35,7 @@
     "@playwright/test": "^1.62.1",
     "@spotify/basic-pitch": "^1.0.1",
     "@types/node": "^26.2.0",
-    "electron": "^43.4.1",
+    "electron": "^43.8.7",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.2",
     "tsx": "^4.23.12",
