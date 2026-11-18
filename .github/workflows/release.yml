@@ -81,8 +81,19 @@ jobs:
           npm run typecheck
           npm test
 
-      - name: Build installers (exe, dmg, AppImage/deb/rpm)
+      - name: Build installers (dmg, AppImage/deb/rpm)
+        if: runner.os != 'Windows'
         run: npm run dist -- --publish never
+
+      - name: Build Windows installers (x64 and arm64, one each)
+        # Two runs: asked for both archs at once, electron-builder makes one
+        # combined installer twice the size.
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          npm run build
+          npx electron-builder --win --x64 --publish never
+          npx electron-builder --win --arm64 --publish never
 
       - name: Verify the macOS apps are signed
         # An unsigned arm64 bundle is rejected as "damaged" once downloaded.

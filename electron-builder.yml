@@ -15,8 +15,13 @@ win:
     - target: nsis
       arch:
         - x64
+        - arm64
 
 nsis:
+  # One installer per architecture, named by it. Built as two separate runs
+  # (see dist:win and release.yml): asked for both archs in one run,
+  # electron-builder makes a single combined installer twice the size.
+  artifactName: ${productName} Setup ${version} ${arch}.${ext}
   oneClick: false
   allowToChangeInstallationDirectory: true
   shortcutName: DAW Buddy
