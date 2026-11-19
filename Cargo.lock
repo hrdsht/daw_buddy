@@ -436,6 +436,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "catalogue"
+version = "0.1.0"
+dependencies = [
+ "flate2",
+ "projectconvert",
+ "regex",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "cc"
 version = "1.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -709,6 +720,7 @@ dependencies = [
 name = "daw-buddy"
 version = "0.0.0"
 dependencies = [
+ "catalogue",
  "dirs",
  "projectconvert",
  "serde",
