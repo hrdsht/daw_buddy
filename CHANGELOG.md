@@ -7,6 +7,12 @@ is auto-generated on each GitHub Release; this file is the curated summary.
 
 ## [Unreleased]
 
+### Fixed
+- **Windows release files.** v0.5.1-rust.0 shipped an extra combined x64 + arm64 installer (`DAW.Buddy.Setup.<version>.exe`, ~270 MB) next to the two per-architecture ones. Releases now contain only `…x64.exe` and `…arm64.exe`.
+
+### Security
+- **Electron 43.4.1 → 43.8.7** — picks up the Chromium and Electron security fixes released since. Same major version; no behaviour changes.
+
 ## [0.5.1-rust.0] — 2026-11-18
 
 First release since the Rust port began. The installers are still the Electron app; the Rust (Tauri) build is a developer preview — see proposal 0007.

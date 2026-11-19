@@ -11,16 +11,15 @@ files:
   - package.json
 
 win:
+  # No arch list here on purpose: an arch list in the config overrides the
+  # --x64 / --arm64 command-line flags, and with two archs NSIS also emits a
+  # combined installer twice the size. dist:win and release.yml run one
+  # build per arch (x64, then arm64) instead.
   target:
     - target: nsis
-      arch:
-        - x64
-        - arm64
 
 nsis:
-  # One installer per architecture, named by it. Built as two separate runs
-  # (see dist:win and release.yml): asked for both archs in one run,
-  # electron-builder makes a single combined installer twice the size.
+  # One installer per architecture, named by it.
   artifactName: ${productName} Setup ${version} ${arch}.${ext}
   oneClick: false
   allowToChangeInstallationDirectory: true
