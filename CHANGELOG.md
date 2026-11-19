@@ -7,6 +7,9 @@ is auto-generated on each GitHub Release; this file is the curated summary.
 
 ## [Unreleased]
 
+### Added
+- **Rust build: the project list.** The Rust (Tauri) preview now finds your projects, reads their tempo and time signature, counts backups, renders and videos, and groups versions — identical results to the current app, roughly 250× faster on a large drive (6,000 sessions: 0.7 s instead of 2.7 minutes). Still a developer preview (`npm run rust:run`).
+
 ### Fixed
 - **Windows release files.** v0.5.1-rust.0 shipped an extra combined x64 + arm64 installer (`DAW.Buddy.Setup.<version>.exe`, ~270 MB) next to the two per-architecture ones. Releases now contain only `…x64.exe` and `…arm64.exe`.
 

@@ -22,7 +22,7 @@
     "dist:mac": "npm run build && electron-builder --mac",
     "dist:linux": "npm run build && electron-builder --linux",
     "rust:test": "cargo test --workspace --exclude daw-buddy",
-    "rust:parity": "tsx scripts/rust-parity.js",
+    "rust:parity": "tsx scripts/rust-parity.js && tsx scripts/rust-parity-scanner.js",
     "rust:run": "npm run build:renderer && node scripts/copy-assets.js && cargo run -p daw-buddy",
     "rust:smoke": "npm run build:renderer && node scripts/copy-assets.js && cargo build -p daw-buddy && node scripts/tauri-smoke.js"
   },

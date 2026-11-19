@@ -21,3 +21,4 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.154", features = ["preserve_order"] }
 dirs = "7.0.0"
 projectconvert = { path = "../crates/projectconvert" }
+catalogue = { path = "../crates/catalogue" }

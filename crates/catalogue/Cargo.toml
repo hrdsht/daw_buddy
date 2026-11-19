@@ -1,0 +1,16 @@
+[package]
+name = "catalogue"
+version = "0.1.0"
+description = "DAW Buddy's project scanner: finds DAW sessions, reads tempo/time signature, counts backups and audio, groups versions"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+flate2 = "1.1.10"
+regex = "1.13.1"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.154", features = ["preserve_order"] }
+projectconvert = { path = "../projectconvert" }
+
+[[example]]
+name = "scan"

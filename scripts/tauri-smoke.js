@@ -8,7 +8,8 @@
  *   1. checks the window booted and window.api is the Tauri bridge,
  *   2. runs the project converter through the bridge for every target and
  *      checks the files land,
- *   3. checks an un-ported method fails loudly, not silently,
+ *   3. lists the fixture project through the Rust scanner and shows it in
+ *      the project list, and checks an un-ported method fails loudly,
  *   4. opens Tools → Project converter and saves a screenshot.
  *
  * Needs: a debug build (cargo build -p daw-buddy), tauri-driver
@@ -114,13 +115,37 @@ async function wd(method, url, body) {
     assert.match(outside, /outside your approved folders/);
     console.log('  ✓ files outside approved folders are refused');
 
-    // 3. un-ported methods fail loudly
+    // 3. the project list comes from the Rust scanner
+    const scan = await run(`const done = arguments[arguments.length - 1];
+      window.api.scan().then((r) => done({ names: r.entries.map((e) => e.name), rows: r.grouped.length, bpm: r.entries[0] && r.entries[0].bpm, errors: r.errors }), (e) => done({ error: String(e) }));`);
+    assert.ok(!scan.error, scan.error);
+    assert.deepEqual(scan.names, ['Song'], JSON.stringify(scan));
+    assert.equal(scan.bpm, 120);
+    assert.deepEqual(scan.errors, []);
+    console.log('  ✓ scan() lists projects from the Rust scanner');
+
+    // 3b. un-ported methods fail loudly
     const notPorted = await run(`const done = arguments[arguments.length - 1];
-      window.api.scan().then(() => done('resolved'), (e) => done(String(e)));`);
+      window.api.id3Inspect('/tmp').then(() => done('resolved'), (e) => done(String(e)));`);
     assert.match(notPorted, /isn't available in the Rust build yet/);
     console.log('  ✓ un-ported calls fail with a clear message');
 
     // 4. the converter screen
+    // 3c. the project list renders the scanned project
+    const listed = await run(`const done = arguments[arguments.length - 1];
+      document.querySelectorAll('.onboarding-overlay, [class*=tour]').forEach((n) => n.remove());
+      let tries = 0;
+      (function poll() {
+        const hit = [...document.querySelectorAll('*')].some((n) => n.children.length === 0 && n.textContent.trim() === 'Song');
+        if (hit || ++tries > 40) done(hit); else setTimeout(poll, 250);
+      })();`);
+    assert.ok(listed, 'project "Song" appears in the list');
+    if (shotPath) {
+      const listPng = await wd('GET', `/session/${session}/screenshot`);
+      fs.writeFileSync(shotPath.replace(/\.png$/, '-list.png'), Buffer.from(listPng, 'base64'));
+    }
+    console.log('  ✓ the project list shows it');
+
     if (shotPath) {
       await run(`const done = arguments[arguments.length - 1];
         document.querySelectorAll('.onboarding-overlay, [class*=tour]').forEach((n) => n.remove());

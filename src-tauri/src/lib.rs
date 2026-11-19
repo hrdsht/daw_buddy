@@ -74,6 +74,17 @@ fn guard_approved(state: &State<AppState>, target: &str) -> Result<(), String> {
     }
 }
 
+/// Roots plus the walk options, read from settings.json like main.ts does.
+fn scan_settings(state: &State<AppState>) -> (Vec<PathBuf>, catalogue::Options) {
+    let s = state.settings.lock().unwrap();
+    let v = s.get();
+    let options = catalogue::Options {
+        ignore: v["ignore"].as_array().map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect()).unwrap_or_default(),
+        follow_links: v["followLinks"].as_bool().unwrap_or(false),
+    };
+    (s.roots(), options)
+}
+
 async fn pick(app: &AppHandle, folder: bool, title: &str, filters: &[(&str, &[&str])]) -> Option<PathBuf> {
     let mut dialog = app.dialog().file().set_title(title);
     for (name, exts) in filters {
@@ -109,6 +120,42 @@ async fn api(app: AppHandle, state: State<'_, AppState>, method: String, args: V
             Ok(full_settings(&app, &s))
         }
         "crashlogGetLatest" => Ok(Value::Null),
+
+        /* ------------------------------ projects --------------------------- */
+        "scan" => {
+            let (roots, options) = scan_settings(&state);
+            if roots.is_empty() {
+                return Ok(json!({ "entries": [], "errors": [], "roots": [] }));
+            }
+            let roots2 = roots.clone();
+            let result = tauri::async_runtime::spawn_blocking(move || catalogue::scan_roots(&roots2, &options))
+                .await
+                .map_err(|e| e.to_string())?;
+            let grouped = catalogue::group_versions(&result.entries);
+            let mut out = json!(result);
+            out["grouped"] = Value::Array(grouped);
+            out["roots"] = json!(roots.iter().map(|r| r.to_string_lossy()).collect::<Vec<_>>());
+            Ok(out)
+        }
+        "browse" => {
+            let target = args.first().and_then(Value::as_str).unwrap_or("").to_string();
+            let (roots, options) = scan_settings(&state);
+            let root = roots.iter().find(|r| !target.is_empty() && paths::is_inside(Path::new(&target), r)).cloned();
+            let Some(root) = root else {
+                return Ok(json!({ "entries": [], "errors": [{ "root": target, "message": "That folder is outside your list." }] }));
+            };
+            let dir = PathBuf::from(&target);
+            let root2 = root.clone();
+            let result = tauri::async_runtime::spawn_blocking(move || catalogue::scan_folder(&dir, &root2, &options))
+                .await
+                .map_err(|e| e.to_string())?;
+            let grouped = catalogue::group_versions(&result.entries);
+            let mut out = json!(result);
+            out["grouped"] = Value::Array(grouped);
+            out["root"] = json!(root.to_string_lossy());
+            out["browsing"] = json!(target);
+            Ok(out)
+        }
 
         /* ------------------------------ records ---------------------------- */
         "getRecords" => Ok(state.records.lock().unwrap().all()),
