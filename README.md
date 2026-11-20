@@ -2,10 +2,11 @@
 
 > **The fast, private desktop workstation companion for music producers, audio engineers, and sound designers.**
 
-[![Tests](https://img.shields.io/badge/tests-31%20passing-brightgreen.svg)](https://github.com/hrdsht/daw_buddy/actions)
+[![Tests](https://img.shields.io/badge/tests-38%20suites-brightgreen.svg)](https://github.com/hrdsht/daw_buddy/actions)
+[![Rust](https://img.shields.io/badge/Rust%20%2B%20Tauri-preview-dea584.svg?logo=rust&logoColor=white)](docs/proposals/0007-rust-tauri-port.md)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue.svg)](https://github.com/hrdsht/daw_buddy/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/hrdsht/daw_buddy/blob/main/LICENSE)
-[![Version](https://img.shields.io/badge/version-v0.5.1--beta.13-orange.svg)](https://github.com/hrdsht/daw_buddy/releases)
+[![Release](https://img.shields.io/github/v/release/hrdsht/daw_buddy?include_prereleases&label=release&color=orange)](https://github.com/hrdsht/daw_buddy/releases/latest)
 [![Gumroad](https://img.shields.io/badge/Gumroad-Get%20Free%20Download-ff90e8.svg?logo=gumroad&logoColor=white)](https://7675947827359.gumroad.com/l/daw_buddy)
 [![Website](https://img.shields.io/badge/Webpage-dawbuddy.ba55ick.com-2dd4bf.svg)](https://dawbuddy.ba55ick.com)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-ba55ick-FFDD00.svg?style=flat&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/ba55ick)
@@ -39,6 +40,11 @@ Whether you are mixing a multi-platinum album or producing your very first beat,
 
 ### 🏆 For Pro Producers, Mix Engineers & Sound Designers:
 - ⚡ **Instant Session Indexing**: Reads BPM, key, version count, and save timelines across Ableton Live, FL Studio, Logic Pro, Pro Tools, Cubase, Bitwig, Studio One, and REAPER in milliseconds without touching your CPU.
+- 🔀 **Project Converter — move a session to another DAW**: Rebuild an Ableton Live set (`.als`), REAPER project (`.rpp`) or DAWproject as a **DAWproject** (Bitwig Studio, Studio One, Cubase, Nuendo), a native **REAPER** project, or a **MIDI + stems** pack for Ableton, FL Studio, Logic Pro and Pro Tools. Tempo, time signature, markers, track names, faders, pan, mute, clip positions, every MIDI note, and volume/pan/mute automation come across; the conversion log names anything left behind (plug-ins, sends, warping).
+- 🎧 **Live Key Listener**: Hears whatever your computer is playing (system audio or any input) and keeps a settled key, Camelot code, relative key, tuning offset and BPM on screen, with a confidence ring and a bar chart of the closest candidate keys. Press `Ctrl/⌘ + Alt + K` from inside your DAW to copy `A min · 8A · 124 BPM`. Audio stays in memory and is never recorded.
+- ⏩ **Suno / AI Stem BPM Lock & Drift Quantizer**: Fixes the tempo drift in generated stems (Suno, Udio). Maps drift bar by bar against a fixed grid and time-stretches every stem together with a phase-locked WSOLA engine, so downbeats land on your DAW grid while groove and swing survive.
+- 🔑 **Key & Scale Matcher & Transposer**: Detect key, scale, tuning and full chord progressions (with Roman numerals) from audio or MIDI, then remap MIDI to another scale, transpose it, or pitch-shift a sample into your project's key, and drag the result into your DAW.
+- 🥁 **BPM Tool & Delay Calculator**: Always-on BPM button by the search bar with tap tempo, plus delay / pre-delay times from 1/1 to 1/256 (straight, dotted, triplet) in ms, Hz and samples.
 - 🎚️ **Audio Format Converter & Splitter**: Convert WAV/MP3 audio and automatically partition long recordings into parts that fit upload limits (e.g. 50 MB / 5 minutes for ElevenLabs voice cloning, cloud services, and Discord) with live byte size and duration bound estimation, natural silence gap cutting, and digital silence padding.
 - ✨ **Slowed + Reverb Studio**: Resample tracks by speed (%) or pitch semitones, convolve with algorithmic stereo Freeverb, normalize loudness, preview on an interactive seekable waveform, and export directly to `Slowed + Reverb/` in 16/24/32-bit WAV or 128–320kbps MP3.
 - 📁 **Central Output Storage & Per-Tool Subfolders**: Choose where to store renders on first run or update (defaulting to OS Music folder: `C:\Users\<user>\Music\DAW Buddy`), with automatic organization into `Format Converter/`, `Slowed + Reverb/`, `Audio Finishing/`, `Trimmed/`, and `Vocal Stems/`.
@@ -48,7 +54,8 @@ Whether you are mixing a multi-platinum album or producing your very first beat,
 - 🎙️ **Vocal Reconstruction Suite**: Split continuous vocal takes into isolated blocks for third-party pitch-correction or voice transformation (Melodyne, Auto-Tune, ElevenLabs), and re-assemble them with sample-accurate timing.
 - 🎼 **Audio → MIDI**: Turn melodies, chords, bass lines and vocals into MIDI with Spotify's Basic Pitch model, running 100% locally (GPU when available). Tune sensitivity and note length live, quantise to 1/8–1/32, add pitch bends, preview on a piano roll, and drag the `.mid` straight into your DAW.
 - 💾 **Duplicate Sample Auditor & Disk Insights**: Identifies duplicate sample copies across projects and reclaims gigabytes of disk space using safe filesystem hard links without breaking session references.
-- 🌐 **Cross-Platform Parity**: Full native support across **Windows, macOS (Apple Silicon & Intel), and Linux**.
+- 🌐 **Cross-Platform Parity**: Full native support across **Windows (x64 & ARM), macOS (Apple Silicon & Intel), and Linux**.
+- 🦀 **Rust Edition (preview)**: A smaller, faster build on Rust + Tauri ships next to the Electron app on every release — see [The Rust build](#the-rust-build-preview).
 
 <p align="center">
   <img src="docs/assets/daw-buddy-tools.png" alt="Integrated Audio Tools Suite" width="90%" />
@@ -73,6 +80,12 @@ Whether you are mixing a multi-platinum album or producing your very first beat,
 
 ### 🌟 Key Features Summary
 
+- **🔀 Project Converter**: Ableton / REAPER / DAWproject → DAWproject, REAPER, or MIDI + stems, with automation.
+- **🎧 Live Key Listener**: Key, Camelot, tuning and BPM of whatever is playing, with a global copy shortcut.
+- **⏩ AI Stem BPM Lock**: Bar-level drift quantizer that locks Suno/Udio stems to the grid together.
+- **🔑 Key Matcher & Transposer**: Chord progression analysis, MIDI scale remapping and in-key sample pitch-shifting.
+- **🎼 Audio → MIDI**: Local Basic Pitch transcription with a piano-roll preview and drag-to-DAW.
+- **🥁 BPM Tool & Delay Calculator**: Tap tempo and note-length timings in ms, Hz and samples.
 - **🎚️ Format Converter & Splitter**: High-performance audio converter and smart 50MB/5-minute partition splitter with silence gap detection.
 - **📁 Structured Tool Output Storage**: Centralized render library in `Music/DAW Buddy/` with automatic subfolders for each tool.
 - **✨ Slowed + Reverb Studio**: High-quality offline DSP resampler, Freeverb algorithmic stereo reverb, loudness normalization, seekable waveform player, and 16/24/32-bit WAV & MP3 export.
@@ -101,6 +114,17 @@ Grab a ready-to-run installer from the **[Releases page](https://github.com/hrds
 | **macOS — Apple Silicon** | `DAW.Buddy-<version>-arm64.dmg` (or run `scripts/DAW Buddy.command`) |
 | **macOS — Intel** | `DAW.Buddy-<version>.dmg` |
 | **Linux** | `.AppImage` (portable), or `.deb` / `.rpm` (or run `scripts/DAW Buddy.sh`) |
+
+**🦀 Rust Edition (preview)** — the same release also carries the new Rust + Tauri build, every file starting `DAW.Buddy.Rust_`. It is much smaller and starts faster, but not every tool has moved over yet ([what's ported](docs/proposals/0007-rust-tauri-port.md)), so most people should take the regular installer above.
+
+| Platform | Rust Edition file |
+|---|---|
+| **Windows** | `DAW.Buddy.Rust_<version>_x64-setup.exe` (ARM: `…_arm64-setup.exe`) |
+| **macOS — Apple Silicon** | `DAW.Buddy.Rust_<version>_aarch64.dmg` |
+| **macOS — Intel** | `DAW.Buddy.Rust_<version>_x64.dmg` |
+| **Linux** | `DAW.Buddy.Rust_<version>_amd64.AppImage`, or the `.deb` (`.rpm` on non-preview versions) |
+
+The two editions share settings and notes; don't run both at once.
 
 Then run it:
 
@@ -219,9 +243,11 @@ macOS. The installers carry no paid certificate yet (the macOS app is
 ad-hoc signed, not notarized), so Windows SmartScreen and macOS Gatekeeper will
 warn on first launch until code-signing certificates are added.
 
-**Automated releases:** `.github/workflows/release.yml` builds all three
-platforms and attaches the installers to a GitHub Release whenever you publish
-one — no local build needed.
+**Automated releases:** pushing a version tag (`npm version …` then
+`git push origin main --follow-tags`, see [`RULES.md`](RULES.md)) runs
+`.github/workflows/release.yml`, which builds the Electron and Rust installers
+for all three platforms and attaches them to the GitHub Release — no local build
+needed.
 
 ---
 
@@ -385,11 +411,11 @@ npm run dist     package an installer
 See `docs/BUILD_NOTES.md` and `docs/proposals/` for the architecture, roadmap,
 and design decisions.
 
-### The Rust build (in progress)
+### The Rust build (preview)
 
-DAW Buddy is moving to a Rust back end with [Tauri](https://tauri.app): the same screens, a much smaller and faster app. The Electron app keeps shipping until the Rust build can do everything it does — see [proposal 0007](docs/proposals/0007-rust-tauri-port.md) for the plan and what's ported so far.
+DAW Buddy is moving to a Rust back end with [Tauri](https://tauri.app): the same screens, a much smaller and faster app. The app shell, settings, notes and the whole project converter already run in Rust, byte-for-byte identical to the TypeScript version. The Electron app keeps shipping until the Rust build can do everything it does — see [proposal 0007](docs/proposals/0007-rust-tauri-port.md) for the plan and what's ported so far.
 
-To try it you need [Rust](https://rustup.rs). On Linux you also need the WebKitGTK libraries (`sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev`).
+Ready-made Rust installers are attached to every [release](https://github.com/hrdsht/daw_buddy/releases/latest) (`DAW.Buddy.Rust_…`). To build it yourself you need [Rust](https://rustup.rs). On Linux you also need the WebKitGTK libraries (`sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev`).
 
 ```
 npm run rust:run      # build the UI and start the Rust app

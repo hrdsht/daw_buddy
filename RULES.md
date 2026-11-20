@@ -52,12 +52,18 @@ people/agents bumped the version independently, without thinking. Stop that.
 
    Pushing the `vX.Y.Z` tag triggers `.github/workflows/release.yml`, which
    **refuses to release if the tag ≠ `package.json` version** (no drift, ever),
-   then creates the pre-release with auto-generated notes and builds + attaches
-   installers for macOS / Windows / Linux. **Never run `gh release create` by
-   hand** — that's what let versions race.
+   then creates the release (marked **Latest**) with auto-generated notes and
+   builds + attaches the Electron **and** Rust (Tauri) installers for macOS /
+   Windows / Linux. **Never run `gh release create` by hand** — that's what let
+   versions race. To add the Rust installers to a release that predates them,
+   run the Release workflow by hand with that release's tag; it never creates a
+   release or tag.
 
-8. **Releases stay `--prerelease` until the app is code-signed** (macOS
-   Gatekeeper / Windows SmartScreen). See `docs/proposals/0003-code-signing.md`.
+8. **Releases are published as Latest, not `--prerelease`** — GitHub never shows
+   a pre-release on the repository page, so releases were invisible. The apps
+   are still not code-signed (macOS Gatekeeper / Windows SmartScreen warn on
+   first launch); the README's install steps explain the one-time prompt. See
+   `docs/proposals/0003-code-signing.md`.
 
 9. **Keep `CHANGELOG.md` current.** Note user-facing changes under
    `[Unreleased]` as you go; on release, move them under the new version.
