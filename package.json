@@ -27,7 +27,7 @@
     "rust:smoke": "npm run build:renderer && node scripts/copy-assets.js && cargo build -p daw-buddy && node scripts/tauri-smoke.js"
   },
   "dependencies": {
-    "chokidar": "^5.0.0",
+    "chokidar": "^6.0.0",
     "lamejs": "^1.2.1"
   },
   "devDependencies": {
