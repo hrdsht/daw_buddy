@@ -31,14 +31,14 @@
     "lamejs": "^1.2.1"
   },
   "devDependencies": {
-    "@axe-core/playwright": "^4.13.0",
-    "@playwright/test": "^1.62.1",
+    "@axe-core/playwright": "^4.14.0",
+    "@playwright/test": "^1.65.1",
     "@spotify/basic-pitch": "^1.0.1",
-    "@types/node": "^26.2.0",
-    "electron": "^43.8.7",
-    "electron-builder": "^26.15.3",
+    "@types/node": "^26.6.6",
+    "electron": "^45.3.3",
+    "electron-builder": "^26.18.0",
     "esbuild": "^0.28.2",
-    "tsx": "^4.23.12",
+    "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   }
 }
