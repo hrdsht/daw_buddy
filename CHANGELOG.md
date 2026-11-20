@@ -7,6 +7,12 @@ is auto-generated on each GitHub Release; this file is the curated summary.
 
 ## [Unreleased]
 
+### Added
+- **Rust (Tauri) installers on every release.** Each release now carries the Rust build next to the Electron one, named `DAW.Buddy.Rust_…`: `.dmg` / `.app.zip` for Apple Silicon and Intel Macs, a setup `.exe` for Windows x64 and ARM, and `.AppImage` / `.deb` for Linux (plus `.rpm` on non-preview versions). It is a preview — see proposal 0007 for what is ported so far.
+
+### Changed
+- **Releases show as Latest on the repository page.** They were published as pre-releases, which GitHub never lists as Latest, so the newest release was hidden behind an older one.
+
 ### Fixed
 - **Windows release files.** v0.5.1-rust.0 shipped an extra combined x64 + arm64 installer (`DAW.Buddy.Setup.<version>.exe`, ~270 MB) next to the two per-architecture ones. Releases now contain only `…x64.exe` and `…arm64.exe`.
 
